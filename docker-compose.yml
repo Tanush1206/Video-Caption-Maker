@@ -51,6 +51,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vcm}:${POSTGRES_PASSWORD:-vcm_dev_password}@postgres:5432/${POSTGRES_DB:-vcm}
       REDIS_URL: redis://redis:6379/0
       CHROMADB_URL: http://chromadb:8000
+      # Same inotify limitation as the frontend — uvicorn --reload needs polling.
+      WATCHFILES_FORCE_POLLING: "true"
     ports:
       - "8000:8000"
     volumes:
@@ -102,6 +104,9 @@ services:
     env_file: .env
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Windows bind mounts don't deliver inotify events into the container,
+      # so the dev-server file watcher must poll to see host edits.
+      WATCHPACK_POLLING: "true"
     ports:
       - "3000:3000"
     volumes:
