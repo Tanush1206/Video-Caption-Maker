@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.8.0",
     "pydantic-settings>=2.4.0",
+    "email-validator>=2.2.0",  # backs pydantic's EmailStr
 
     # Database
     "sqlalchemy[asyncio]>=2.0.30",
@@ -21,7 +22,10 @@ dependencies = [
 
     # Auth
     "python-jose[cryptography]>=3.3.0",
-    "passlib[bcrypt]>=1.7.4",
+    # bcrypt directly, not via passlib: passlib 1.7.4 (2020, unmaintained)
+    # probes the backend with an over-length test password, which bcrypt >= 5
+    # rejects instead of truncating, breaking every hash call.
+    "bcrypt>=4.0.0",
     "python-multipart>=0.0.9",
     "authlib>=1.3.0",
     "httpx>=0.27.0",

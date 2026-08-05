@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
+    # Must exactly match an Authorized redirect URI in the Google Cloud console.
+    google_oauth_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+
+    # Where to send the browser after an OAuth round-trip completes.
+    frontend_url: str = "http://localhost:3000"
+
+    # Name of the httpOnly cookie carrying the refresh token.
+    refresh_cookie_name: str = "vcm_refresh"
+
+    # Failed auth attempts allowed per bucket before 429s start.
+    auth_rate_limit_attempts: int = 10
+    auth_rate_limit_window_seconds: int = 300
 
     # ── LLM (Gemini) ─────────────────────────────────────
     gemini_api_key: str = ""

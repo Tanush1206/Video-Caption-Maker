@@ -8,8 +8,9 @@ from sqlalchemy import pool
 from app.config import get_settings
 from app.database import Base
 
-# Import all models here so Alembic's autogenerate can see them.
-# Milestone 2+: from app.models import user  # noqa
+# Importing the models package registers every table on Base.metadata, which
+# is what autogenerate diffs against the live database.
+import app.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
