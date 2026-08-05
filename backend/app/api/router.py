@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.api import auth
+
 api_router = APIRouter(prefix="/api")
 
 
@@ -9,6 +11,6 @@ async def health_check() -> dict[str, str]:
     return {"status": "healthy"}
 
 
-# Milestone 2+: auth, videos, captions, search sub-routers get included here, e.g.
-# from app.api import auth
-# api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# Milestone 3+: videos, captions, and search sub-routers get included here.
