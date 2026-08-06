@@ -8,7 +8,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     build-essential \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Optional extra CA certificates, for machines where antivirus or a corporate
+# proxy inspects TLS and re-signs it with a private root the container doesn't
+# trust (pip then fails with CERTIFICATE_VERIFY_FAILED). The bracket glob makes
+# this a no-op when backend/certs/ is absent, which is the normal case —
+# the directory is gitignored because such certs are machine-specific.
+COPY cert[s]/ /usr/local/share/ca-certificates/
+RUN update-ca-certificates
+
+# pip ships its own certifi bundle and ignores the system store, so point it
+# at the system bundle explicitly.
+ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app
 

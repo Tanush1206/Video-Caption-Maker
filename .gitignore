@@ -3,6 +3,11 @@
 .env.local
 .env.*.local
 
+# Local TLS-inspection CA certs (antivirus/corporate proxy). Machine-specific
+# and must never be committed — see "TLS interception" in the README.
+certs/
+
+
 # Python
 __pycache__/
 *.py[cod]
