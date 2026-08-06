@@ -70,6 +70,15 @@ See `docs/architecture.md` for the full system design and security notes.
 
 ## Roadmap
 
-This is Milestone 1 of 10. Next up: **Milestone 2 — Authentication**
-(JWT, Google OAuth, protected routes, user model, rate limiting on
-auth endpoints).
+See [docs/roadmap.md](docs/roadmap.md) for all ten milestones.
+
+Milestones 1 and 2 are done. Next up: **Milestone 3 — Video upload &
+library** (chunked upload, `Video` model, dashboard grid).
+
+### Google sign-in (optional)
+
+Email/password auth works without this. To enable the Google button,
+create an OAuth client in the Google Cloud console with the redirect URI
+`http://localhost:8000/api/auth/google/callback`, then set
+`GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`.
+Until then those endpoints return 503.

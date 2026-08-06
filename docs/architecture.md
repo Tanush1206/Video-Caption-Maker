@@ -33,10 +33,24 @@ responsive regardless of how long a video takes to process.
 
 - JWT access token (short-lived, ~30 min) + refresh token (long-lived, ~7
   days) stored in an httpOnly cookie — never in localStorage, to reduce XSS
-  token theft risk.
-- Google OAuth as an alternative sign-in path via Authlib.
-- Passwords hashed with bcrypt (via passlib), never stored or logged in
-  plaintext.
+  token theft risk. The access token is held in memory on the client for the
+  same reason.
+- Access tokens carry a `type` claim, so a refresh token cannot be presented
+  as an access token, and a `jti`, so individual tokens can be revoked.
+- Logout revokes the refresh token through a Redis denylist keyed by `jti`
+  and expiring with the token. Clearing the cookie alone would leave a
+  captured token working until it expired.
+- Google OAuth as an alternative sign-in path. Implemented with `httpx`
+  directly and CSRF state in Redis, rather than Authlib's Starlette
+  integration, which would need session middleware and wouldn't survive
+  running more than one API instance.
+- Passwords hashed with **bcrypt directly**, never stored or logged in
+  plaintext. Not via passlib: its final release (1.7.4, 2020) probes the
+  backend with an over-length test password, which bcrypt >= 5 rejects
+  rather than truncating, so every hash call raised.
+- Login returns an identical response for a wrong password and an unknown
+  email, and performs a dummy hash comparison when no user is found, so the
+  endpoint is not an account-existence oracle by status or by timing.
 
 ## Security notes (ongoing, not a separate milestone)
 
@@ -47,5 +61,10 @@ responsive regardless of how long a video takes to process.
 - Secrets (`JWT_SECRET_KEY`, `GEMINI_API_KEY`, DB password) live only in
   `.env`, which is gitignored. Rotate `JWT_SECRET_KEY` before any real
   deployment — the `.env.example` placeholder is not safe to use as-is.
-- Rate limiting on auth endpoints (login, register) — to be added in
-  Milestone 2 to prevent brute force.
+- Rate limiting on auth endpoints (login, register), backed by Redis rather
+  than per-process counters — otherwise an attacker gets N times the
+  allowance by spreading requests across workers. Login is limited per IP
+  *and* per email: the IP bucket stops one host spraying many accounts, the
+  email bucket stops many hosts spraying one account. It fails open, since a
+  Redis blip taking down login entirely is worse than the brute-force window
+  it protects; the token denylist fails closed, for the opposite reason.
