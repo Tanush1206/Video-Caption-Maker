@@ -32,6 +32,10 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -e ".[dev]"
 
+# CTranslate2 loads libcublas/libcudnn by soname at runtime and does not look
+# inside pip's nvidia/* package directories on its own.
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib
+
 COPY . .
 
 EXPOSE 8000

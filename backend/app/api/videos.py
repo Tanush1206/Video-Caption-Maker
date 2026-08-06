@@ -8,6 +8,8 @@ from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.dependencies import CurrentUser, DbSession
+from app.models.video import VideoStatus
+from app.schemas.caption import CaptionList, CaptionRead
 from app.schemas.video import VideoList, VideoRead, VideoUpdate
 from app.services import media, storage
 from app.services import video as video_service
@@ -32,9 +34,29 @@ def _to_read(video) -> VideoRead:
         status=video.status,
         error_message=video.error_message,
         has_thumbnail=bool(video.thumbnail_path),
+        progress=video.progress,
+        stage=video.stage,
         created_at=video.created_at,
         updated_at=video.updated_at,
     )
+
+
+def _enqueue_transcription(video_id: int) -> bool:
+    """
+    Hand the video to the worker.
+
+    Imported here rather than at module scope so the API process never pulls
+    in the worker's heavy ML dependencies. A queue failure is logged and
+    swallowed: the upload itself succeeded, and the user can retry from the UI.
+    """
+    try:
+        from app.workers.transcription import transcribe_video
+
+        transcribe_video.delay(video_id)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Could not enqueue transcription for video %s: %s", video_id, exc)
+        return False
 
 
 async def _stream_to_disk(upload: UploadFile, destination: Path) -> int:
@@ -130,6 +152,8 @@ async def upload_video(
             db, video, duration_ms=duration_ms, thumbnail_path=thumbnail_relative
         )
 
+    _enqueue_transcription(video.id)
+
     return _to_read(video)
 
 
@@ -172,6 +196,43 @@ async def rename_video(
 async def delete_video(video_id: int, user: CurrentUser, db: DbSession) -> None:
     video = await _require_owned(db, video_id, user.id)
     await video_service.delete_video(db, video)
+
+
+@router.post("/{video_id}/transcribe", response_model=VideoRead)
+async def retranscribe(video_id: int, user: CurrentUser, db: DbSession) -> VideoRead:
+    """
+    Queue (or re-queue) transcription.
+
+    Safe to call on a completed video: the task clears existing captions and
+    vectors before writing new ones.
+    """
+    video = await _require_owned(db, video_id, user.id)
+
+    if video.status == VideoStatus.PROCESSING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This video is already being transcribed",
+        )
+
+    video = await video_service.mark_queued(db, video)
+
+    if not _enqueue_transcription(video.id):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not reach the processing queue. Please try again.",
+        )
+
+    return _to_read(video)
+
+
+@router.get("/{video_id}/captions", response_model=CaptionList)
+async def list_captions(video_id: int, user: CurrentUser, db: DbSession) -> CaptionList:
+    await _require_owned(db, video_id, user.id)
+    captions = await video_service.list_captions(db, video_id)
+    return CaptionList(
+        items=[CaptionRead.model_validate(caption) for caption in captions],
+        total=len(captions),
+    )
 
 
 @router.get("/{video_id}/thumbnail")

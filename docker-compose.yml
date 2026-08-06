@@ -84,16 +84,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # --pool=solo: one task at a time. Whisper loads a multi-GB model onto the
+    # GPU, so concurrent workers would each want their own copy and exhaust
+    # VRAM. Transcription is GPU-bound anyway; parallelism buys nothing here.
     command: celery -A app.workers.celery_app worker --loglevel=info --pool=solo
-    # GPU passthrough for faster-whisper (requires nvidia-container-toolkit on host).
-    # Uncomment once nvidia-container-toolkit is installed:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    # GPU passthrough for faster-whisper. Docker Desktop's WSL2 backend
+    # provides this through the Windows NVIDIA driver — no separate
+    # nvidia-container-toolkit install is needed on this setup.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   frontend:
     build:

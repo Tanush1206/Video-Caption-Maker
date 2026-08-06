@@ -3,6 +3,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.caption import Caption
 from app.models.video import Video, VideoStatus
 from app.services import storage
 
@@ -89,6 +90,24 @@ async def rename(db: AsyncSession, video: Video, title: str) -> Video:
     return video
 
 
+async def mark_queued(db: AsyncSession, video: Video) -> Video:
+    """Reset processing state before handing the video back to the worker."""
+    video.status = VideoStatus.PENDING
+    video.stage = None
+    video.progress = 0
+    video.error_message = None
+    await db.commit()
+    await db.refresh(video)
+    return video
+
+
+async def list_captions(db: AsyncSession, video_id: int) -> list[Caption]:
+    result = await db.execute(
+        select(Caption).where(Caption.video_id == video_id).order_by(Caption.sequence)
+    )
+    return list(result.scalars().all())
+
+
 async def delete_video(db: AsyncSession, video: Video) -> None:
     """
     Remove the row and its files.
@@ -97,6 +116,7 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
     a missing file breaks playback. Losing the less damaging one is preferable
     if this is interrupted halfway.
     """
+    video_id = video.id
     stored, thumbnail = video.storage_path, video.thumbnail_path
 
     await db.delete(video)
@@ -104,3 +124,11 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
 
     storage.delete(stored)
     storage.delete(thumbnail)
+
+    # Caption rows go with the video via ON DELETE CASCADE, but ChromaDB is a
+    # separate store with no foreign keys — its vectors must be removed here
+    # or searches keep returning hits for a video that no longer exists.
+    # Imported lazily so the API process doesn't load the ML stack at startup.
+    from app.services.embeddings import delete_video_vectors
+
+    delete_video_vectors(video_id)

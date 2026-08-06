@@ -9,9 +9,8 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[
-        # Milestone 4+ will add task modules here, e.g.:
-        # "app.workers.transcription",
-        # "app.workers.export",
+        "app.workers.transcription",
+        # Milestone 8 will add "app.workers.export".
     ],
 )
 
@@ -26,4 +25,11 @@ celery_app.conf.update(
     # kill them via the default time limits.
     task_soft_time_limit=60 * 30,  # 30 min
     task_time_limit=60 * 35,
+    # Only take a job when actually free. The default prefetches several, so
+    # one worker would sit on queued videos it can't start while another idles.
+    worker_prefetch_multiplier=1,
+    # Acknowledge only after the task finishes, so a crashed worker's job is
+    # redelivered rather than lost. Safe because the pipeline is idempotent:
+    # it deletes any existing captions before writing new ones.
+    task_acks_late=True,
 )
