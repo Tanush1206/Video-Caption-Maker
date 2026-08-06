@@ -69,7 +69,22 @@ class Video(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
+    # Progress through the current pipeline stage, 0-100. Transient: it is
+    # meaningful only while status is PROCESSING.
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    # Which stage is running ("extracting", "transcribing", "embedding"), so
+    # the UI can say something more useful than a bare percentage.
+    stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     owner = relationship("User", back_populates="videos")
+    captions = relationship(
+        "Caption",
+        back_populates="video",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Caption.sequence",
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<Video id={self.id} title={self.title!r} status={self.status.value}>"

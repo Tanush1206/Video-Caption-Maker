@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     whisper_model_size: str = "medium"
     whisper_device: str = "cuda"
     whisper_compute_type: str = "float16"
+    # Whisper hallucinates text over music and silence; VAD trims those first.
+    whisper_vad_filter: bool = True
+    # None lets Whisper detect the language per file.
+    whisper_language: str | None = None
+
+    # ── Embeddings / vector search ───────────────────────
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    chroma_collection: str = "captions"
 
     # ── Storage ──────────────────────────────────────────
     storage_backend: str = "local"

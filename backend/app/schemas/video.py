@@ -26,6 +26,9 @@ class VideoRead(BaseModel):
     status: VideoStatus
     error_message: str | None
     has_thumbnail: bool
+    # Meaningful only while status is "processing".
+    progress: int
+    stage: str | None
     created_at: datetime
     updated_at: datetime
 
