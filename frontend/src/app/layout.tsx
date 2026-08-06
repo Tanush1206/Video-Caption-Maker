@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthBootstrap } from "@/components/layout/auth-bootstrap";
 import { Providers } from "@/components/layout/providers";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -41,7 +42,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <ThemeToggle />
-          <Providers>{children}</Providers>
+          <Providers>
+            {/* Silently restores the session from the refresh cookie on load. */}
+            <AuthBootstrap />
+            {children}
+          </Providers>
         </ThemeProvider>
       </body>
     </html>
