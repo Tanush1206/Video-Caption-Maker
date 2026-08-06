@@ -24,6 +24,7 @@ node_modules/
 out/
 .turbo/
 npm-debug.log*
+*.tsbuildinfo
 
 # Docker volumes mounted locally (if any)
 backend/storage/
