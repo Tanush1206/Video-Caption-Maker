@@ -6,5 +6,6 @@ see the full set of tables.
 """
 
 from app.models.user import User
+from app.models.video import Video, VideoStatus
 
-__all__ = ["User"]
+__all__ = ["User", "Video", "VideoStatus"]
