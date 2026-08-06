@@ -1,11 +1,22 @@
+import { VideoGrid } from "@/components/videos/video-grid";
+import { VideoUpload } from "@/components/videos/video-upload";
+
 export default function DashboardPage() {
   return (
-    <main className="p-8">
+    <main className="mx-auto max-w-6xl px-6 py-8">
       <h1 className="text-2xl font-semibold">Your videos</h1>
-      {/* Milestone 3: upload UI + video grid; Milestone 10: full dashboard */}
-      <p className="mt-4 text-sm text-muted-foreground">
-        Video upload and project list go here — Milestone 3.
+      <p className="mt-1 text-sm text-muted-foreground">
+        Upload a video to transcribe, caption, and search it.
       </p>
+
+      <div className="mt-6">
+        <VideoUpload />
+      </div>
+
+      <div className="mt-8">
+        {/* Milestone 10: filters, sorting, and storage usage land here. */}
+        <VideoGrid />
+      </div>
     </main>
   );
 }
