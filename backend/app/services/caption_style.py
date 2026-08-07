@@ -189,19 +189,32 @@ def scale_for(height: int) -> float:
     return height / REFERENCE_HEIGHT
 
 
+def _bgr(hex_colour: str) -> str:
+    """RRGGBB -> BBGGRR. ASS orders the channels backwards from hex, blue first."""
+    value = hex_colour.lstrip("#").upper()
+    return f"{value[4:6]}{value[2:4]}{value[0:2]}"
+
+
 def to_ass_colour(hex_colour: str, opacity: float = 1.0) -> str:
     """
-    #RRGGBB -> &HAABBGGRR.
+    #RRGGBB -> &HAABBGGRR, the form a `Style:` line takes.
 
-    Two traps in one conversion. ASS orders the channels **backwards** from
-    hex, blue first; and its alpha byte is *transparency*, not opacity, so 0 is
-    fully visible and 255 is invisible — the exact opposite of every other
-    alpha you will touch that day.
+    The alpha byte is *transparency*, not opacity: 0 is fully visible and 255
+    invisible — the exact opposite of every other alpha you will touch that day.
     """
-    value = hex_colour.lstrip("#")
-    red, green, blue = value[0:2], value[2:4], value[4:6]
     transparency = round((1.0 - max(0.0, min(1.0, opacity))) * 255)
-    return f"&H{transparency:02X}{blue}{green}{red}".upper()
+    return f"&H{transparency:02X}{_bgr(hex_colour)}"
+
+
+def to_ass_inline_colour(hex_colour: str) -> str:
+    """
+    #RRGGBB -> &HBBGGRR&, the form the inline `\\c` override tag takes.
+
+    A different shape from the style version: no alpha byte, and a trailing
+    ampersand. Passing one where the other is expected parses without error and
+    renders the wrong colour.
+    """
+    return f"&H{_bgr(hex_colour)}&"
 
 
 # ASS alignment follows a numeric keypad: 1-3 along the bottom, 4-6 the
