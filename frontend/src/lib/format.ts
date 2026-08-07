@@ -17,6 +17,27 @@ export function formatDuration(ms: number | null): string {
     : `${minutes}:${pad(seconds)}`;
 }
 
+/**
+ * Subtitle-style timecode: MM:SS.mmm, or HH:MM:SS.mmm past an hour.
+ *
+ * Milliseconds are shown because caption timing is edited at that precision —
+ * "0:04" would hide the difference between two adjacent captions.
+ */
+export function formatTimecode(ms: number): string {
+  const clamped = Math.max(0, ms);
+  const totalSeconds = Math.floor(clamped / 1000);
+  const millis = clamped % 1000;
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+  const base = `${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
+
+  return hours > 0 ? `${hours}:${base}` : base;
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
 

@@ -12,3 +12,9 @@ export interface CaptionList {
   items: Caption[];
   total: number;
 }
+
+/** Both halves returned by a split, so the client needn't refetch to know them. */
+export interface CaptionPair {
+  first: Caption;
+  second: Caption;
+}
