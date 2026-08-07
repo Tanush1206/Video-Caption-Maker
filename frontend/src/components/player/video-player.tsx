@@ -4,9 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { CaptionOverlay } from "@/components/captions/caption-overlay";
 import type { Playback } from "@/hooks/use-playback";
 import { downloadUrl, streamKeys, streamUrl, useStreamTicket } from "@/hooks/use-stream";
 import type { Caption } from "@/types/caption";
+import type { CaptionStyle, Font } from "@/types/style";
 import type { Video } from "@/types/video";
 
 interface VideoPlayerProps {
@@ -14,9 +16,18 @@ interface VideoPlayerProps {
   playback: Playback;
   /** Drawn over the video so you can see the sync, not just trust it. */
   activeCaption: Caption | null;
+  /** Undefined until the style loads; the overlay copes by drawing nothing. */
+  style: CaptionStyle | undefined;
+  font: Font | undefined;
 }
 
-export function VideoPlayer({ video, playback, activeCaption }: VideoPlayerProps) {
+export function VideoPlayer({
+  video,
+  playback,
+  activeCaption,
+  style,
+  font,
+}: VideoPlayerProps) {
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, isError } = useStreamTicket(video.id);
 
@@ -104,13 +115,7 @@ export function VideoPlayer({ video, playback, activeCaption }: VideoPlayerProps
         className="h-full w-full cursor-pointer"
       />
 
-      {activeCaption && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4 text-center">
-          <span className="inline-block max-w-[90%] whitespace-pre-wrap rounded bg-black/70 px-3 py-1.5 text-sm leading-snug text-white">
-            {activeCaption.text}
-          </span>
-        </div>
-      )}
+      <CaptionOverlay caption={activeCaption} style={style} font={font} />
 
       <a
         href={downloadUrl(video.id, ticket.token)}

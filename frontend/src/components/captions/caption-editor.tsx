@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { CaptionRow } from "@/components/captions/caption-row";
 import {
+  EMPHASIS,
+  NO_EMPHASIS,
   useDeleteCaption,
   useMergeCaption,
   useSplitCaption,
@@ -149,6 +151,12 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
             }}
             onSave={(text) => updateCaption.mutate({ id: caption.id, text })}
             onSeek={() => playback.seekMs(caption.start_ms)}
+            onToggleEmphasis={() =>
+              updateCaption.mutate({
+                id: caption.id,
+                ...(caption.override_bold === null ? EMPHASIS : NO_EMPHASIS),
+              })
+            }
             onSplit={() =>
               splitCaption.mutate({
                 id: caption.id,

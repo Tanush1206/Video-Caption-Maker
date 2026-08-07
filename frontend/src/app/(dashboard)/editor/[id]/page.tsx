@@ -8,6 +8,8 @@ import { CaptionEditor } from "@/components/captions/caption-editor";
 import { PlayerControls } from "@/components/player/player-controls";
 import { Timeline } from "@/components/player/timeline";
 import { VideoPlayer } from "@/components/player/video-player";
+import { StylePanel } from "@/components/styles/style-panel";
+import { useCaptionStyle, useStyleOptions } from "@/hooks/use-caption-style";
 import { useUpdateCaption, useVideoCaptions } from "@/hooks/use-captions";
 import { usePlayback } from "@/hooks/use-playback";
 import { usePlayerShortcuts } from "@/hooks/use-player-shortcuts";
@@ -40,6 +42,12 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
   const { data: waveform, isLoading: isLoadingWaveform } = useWaveform(videoId);
   const updateCaption = useUpdateCaption(videoId);
+
+  // Both live here rather than inside the overlay: the panel edits the style
+  // and the player draws it, so the shared parent owns the query.
+  const { data: style } = useCaptionStyle(videoId);
+  const { data: styleOptions } = useStyleOptions();
+  const font = styleOptions?.fonts.find((f) => f.key === style?.font_key);
 
   const activeCaption =
     captions.find((caption) => caption.id === playback.activeCaptionId) ?? null;
@@ -83,7 +91,13 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-3">
-          <VideoPlayer video={video} playback={playback} activeCaption={activeCaption} />
+          <VideoPlayer
+            video={video}
+            playback={playback}
+            activeCaption={activeCaption}
+            style={style}
+            font={font}
+          />
           <PlayerControls
             playback={playback}
             // Undecided until the waveform lands; empty peaks mean FFmpeg
@@ -103,8 +117,11 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
         {/* A bounded, independently scrolling column: the list has to be able
             to follow the playhead without moving the video off screen. */}
-        <div className="flex h-[calc(100vh-13rem)] flex-col lg:sticky lg:top-6">
-          <CaptionEditor video={video} playback={playback} />
+        <div className="flex h-[calc(100vh-13rem)] min-h-0 flex-col gap-4 overflow-y-auto lg:sticky lg:top-6">
+          <StylePanel videoId={videoId} />
+          <div className="flex min-h-[24rem] flex-1 flex-col">
+            <CaptionEditor video={video} playback={playback} />
+          </div>
         </div>
       </div>
     </main>

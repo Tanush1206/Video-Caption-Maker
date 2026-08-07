@@ -54,6 +54,29 @@ export function useUpdateCaption(videoId: number) {
   });
 }
 
+/** A caption is emphasised as one gesture, so all three move together. */
+export const EMPHASIS: Pick<Caption, "override_color" | "override_bold" | "override_scale"> =
+  {
+    override_color: "#FFD400",
+    override_bold: true,
+    override_scale: 1.15,
+  };
+
+/**
+ * Explicit nulls, not an empty object.
+ *
+ * The API distinguishes "clear this override" from "I didn't mention it", so
+ * omitting the keys would leave the emphasis exactly where it was.
+ */
+export const NO_EMPHASIS: Pick<
+  Caption,
+  "override_color" | "override_bold" | "override_scale"
+> = {
+  override_color: null,
+  override_bold: null,
+  override_scale: null,
+};
+
 /** Split, merge and delete change ids and ordering, so just refetch. */
 function useStructuralMutation<TArgs>(
   videoId: number,

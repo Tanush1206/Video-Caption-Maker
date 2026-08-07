@@ -1,6 +1,6 @@
 "use client";
 
-import { Scissors, Trash2, CornerRightDown } from "lucide-react";
+import { Highlighter, Scissors, Trash2, CornerRightDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ interface CaptionRowProps {
   onMerge: () => void;
   onDelete: () => void;
   onSeek: () => void;
+  onToggleEmphasis: () => void;
   onFocusNext: () => void;
   onFocusPrevious: () => void;
   registerRef: (element: HTMLTextAreaElement | null) => void;
@@ -37,6 +38,7 @@ export function CaptionRow({
   onMerge,
   onDelete,
   onSeek,
+  onToggleEmphasis,
   onFocusNext,
   onFocusPrevious,
   registerRef,
@@ -102,6 +104,13 @@ export function CaptionRow({
   const lowConfidence =
     caption.confidence !== null && caption.confidence < LOW_CONFIDENCE;
 
+  // Any override at all counts. The three are set and cleared together by the
+  // toggle, but a caption edited through the API might carry only one.
+  const emphasised =
+    caption.override_color !== null ||
+    caption.override_bold !== null ||
+    caption.override_scale !== null;
+
   return (
     <div
       ref={registerRow}
@@ -154,6 +163,21 @@ export function CaptionRow({
       </div>
 
       <div className="flex shrink-0 items-start gap-1 pt-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+        <button
+          type="button"
+          onClick={onToggleEmphasis}
+          aria-pressed={emphasised}
+          title={emphasised ? "Remove emphasis" : "Emphasise this caption"}
+          aria-label="Toggle emphasis"
+          className={cn(
+            "rounded p-1.5 transition hover:bg-muted",
+            emphasised
+              ? "text-amber-500"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Highlighter className="h-3.5 w-3.5" />
+        </button>
         <button
           type="button"
           onClick={onSplit}
