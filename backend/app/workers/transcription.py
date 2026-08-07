@@ -161,6 +161,63 @@ async def _run(video_id: int) -> dict:
     return {"video_id": video_id, "segments": len(segments), "language": language}
 
 
+async def _reindex(video_id: int) -> dict:
+    """
+    Rebuild the vector index for one video from its current captions.
+
+    Re-embedding the whole video rather than the individual edited captions:
+    it keeps deletes, splits and merges correct without tracking which vector
+    ids went away, and the embedding model is already warm in this process so
+    a few hundred short strings cost little.
+    """
+    async with worker_session() as session:
+        captions = list(
+            (
+                await session.execute(
+                    select(Caption)
+                    .where(Caption.video_id == video_id)
+                    .order_by(Caption.sequence)
+                )
+            ).scalars()
+        )
+
+    # Always clear first: a caption deleted since the last index would
+    # otherwise keep its vector and go on matching searches.
+    embeddings.delete_video_vectors(video_id)
+
+    if not captions:
+        return {"video_id": video_id, "indexed": 0}
+
+    segments = [
+        transcription.Segment(
+            start_ms=c.start_ms, end_ms=c.end_ms, text=c.text, confidence=c.confidence
+        )
+        for c in captions
+    ]
+    await asyncio.to_thread(
+        embeddings.index_captions, video_id, [c.id for c in captions], segments
+    )
+
+    return {"video_id": video_id, "indexed": len(captions)}
+
+
+@celery_app.task(name="reindex_captions")
+def reindex_captions(video_id: int, caption_ids: list[int] | None = None) -> dict:
+    """
+    Re-embed a video's captions after an edit.
+
+    caption_ids is accepted for logging and future partial updates; the work
+    itself is whole-video for the reasons in _reindex.
+    """
+    try:
+        return asyncio.run(_reindex(video_id))
+    except Exception as exc:  # noqa: BLE001
+        # Stale search results are a degradation, not a reason to surface an
+        # error against an edit the user already saw succeed.
+        logger.error("Reindex failed for video %s: %s", video_id, exc)
+        return {"video_id": video_id, "error": str(exc)}
+
+
 @celery_app.task(name="transcribe_video", bind=True)
 def transcribe_video(self, video_id: int) -> dict:
     try:
