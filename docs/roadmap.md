@@ -6,12 +6,12 @@ you can actually open and use — no milestone is pure plumbing.
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Project foundation | ✅ Done |
-| 2 | Authentication | Next |
-| 3 | Video upload & library | |
-| 4 | Transcription pipeline | |
-| 5 | Caption editor — text | |
-| 6 | Caption editor — video & timeline | |
-| 7 | Caption editor — styling | |
+| 2 | Authentication | ✅ Done |
+| 3 | Video upload & library | ✅ Done |
+| 4 | Transcription pipeline | ✅ Done |
+| 5 | Caption editor — text | ✅ Done |
+| 6 | Caption editor — video & timeline | ✅ Done |
+| 7 | Caption editor — styling | Next |
 | 8 | Export & rendering | |
 | 9 | Semantic search & RAG | |
 | 10 | Dashboard & polish | |
