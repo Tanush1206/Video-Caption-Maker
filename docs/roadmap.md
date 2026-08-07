@@ -13,8 +13,8 @@ you can actually open and use — no milestone is pure plumbing.
 | 6 | Caption editor — video & timeline | ✅ Done |
 | 7 | Caption editor — styling | ✅ Done |
 | 8 | Export & rendering | ✅ Done |
-| 9 | Semantic search & RAG | Next |
-| 10 | Dashboard & polish | |
+| 9 | Semantic search & RAG | ✅ Done |
+| 10 | Dashboard & polish | Next |
 
 ---
 
