@@ -40,3 +40,22 @@ class VideoUpdate(BaseModel):
 class VideoList(BaseModel):
     items: list[VideoRead]
     total: int
+
+
+class StreamTicket(BaseModel):
+    """
+    A short-lived credential for the media URL.
+
+    `expires_in` is returned so the client can re-issue before playback breaks,
+    rather than discovering the expiry as a failed seek.
+    """
+
+    token: str
+    expires_in: int
+
+
+class Waveform(BaseModel):
+    """Amplitude peaks in 0..1, evenly spaced across the video's duration."""
+
+    peaks: list[float]
+    duration_ms: int | None

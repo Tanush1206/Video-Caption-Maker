@@ -1,6 +1,10 @@
+import hashlib
+import json
+import subprocess
+
 import pytest
 
-from app.services import storage
+from app.services import media, storage
 
 
 async def upload(client, headers, content: bytes, filename="clip.mp4", content_type="video/mp4"):
@@ -106,8 +110,9 @@ async def test_another_user_cannot_reach_your_video(
 
     for method, path in [
         ("get", f"/api/videos/{video_id}"),
-        ("get", f"/api/videos/{video_id}/stream"),
         ("get", f"/api/videos/{video_id}/thumbnail"),
+        ("get", f"/api/videos/{video_id}/waveform"),
+        ("post", f"/api/videos/{video_id}/stream-token"),
         ("delete", f"/api/videos/{video_id}"),
     ]:
         response = await getattr(client, method)(path, headers=second_user_headers)
@@ -115,19 +120,215 @@ async def test_another_user_cannot_reach_your_video(
         assert response.status_code == 404, f"{method} {path} returned {response.status_code}"
 
 
+async def stream_token(client, headers, video_id: int) -> str:
+    response = await client.post(f"/api/videos/{video_id}/stream-token", headers=headers)
+    assert response.status_code == 200
+    return response.json()["token"]
+
+
+@pytest.mark.asyncio
+async def test_stream_requires_a_token(client, auth_headers, sample_video_bytes):
+    """A bearer header is not accepted here — the credential must be in the URL."""
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+
+    response = await client.get(f"/api/videos/{video_id}/stream", headers=auth_headers)
+
+    assert response.status_code == 422  # missing required query parameter
+
+
+@pytest.mark.asyncio
+async def test_stream_rejects_a_garbage_token(client, auth_headers, sample_video_bytes):
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+
+    response = await client.get(f"/api/videos/{video_id}/stream?token=not-a-jwt")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_stream_rejects_an_access_token(client, auth_headers, sample_video_bytes):
+    """
+    The `type` claim is what stops this. An access token in the query string
+    would otherwise be a full API credential sitting in the browser's history.
+    """
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    access = auth_headers["Authorization"].removeprefix("Bearer ")
+
+    response = await client.get(f"/api/videos/{video_id}/stream?token={access}")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_stream_token_is_bound_to_one_video(
+    client, auth_headers, sample_video_bytes
+):
+    """A leaked URL must not become a key to the rest of the library."""
+    first = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    second = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+
+    token = await stream_token(client, auth_headers, first)
+    response = await client.get(f"/api/videos/{second}/stream?token={token}")
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_stream_serves_the_file_with_a_valid_token(
+    client, auth_headers, sample_video_bytes
+):
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
+
+    response = await client.get(f"/api/videos/{video_id}/stream?token={token}")
+
+    assert response.status_code == 200
+    assert response.content == sample_video_bytes
+
+
+@pytest.mark.asyncio
+async def test_upload_and_stream_are_byte_identical(
+    client, auth_headers, sample_video_bytes
+):
+    """
+    Nothing in this application re-encodes video.
+
+    The guard is a checksum rather than a size or duration check, because a
+    re-encode can easily preserve both while changing every byte. If a future
+    change ever transcodes on upload — for a smaller thumbnail, a "web-safe"
+    profile, anything — this fails immediately rather than being discovered as
+    "the quality looks worse than my original".
+    """
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
+
+    served = (await client.get(f"/api/videos/{video_id}/stream?token={token}")).content
+
+    assert hashlib.sha256(served).hexdigest() == hashlib.sha256(sample_video_bytes).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_stream_preserves_the_audio_track(
+    client, auth_headers, sample_video_bytes, tmp_path
+):
+    """The uploaded fixture has an AAC track; what comes back must still have it."""
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
+
+    served = (await client.get(f"/api/videos/{video_id}/stream?token={token}")).content
+    round_tripped = tmp_path / "round_tripped.mp4"
+    round_tripped.write_bytes(served)
+
+    streams = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "stream=codec_type",
+            "-of", "csv=p=0",
+            str(round_tripped),
+        ],
+        capture_output=True,
+        timeout=60,
+    ).stdout.decode()
+
+    assert "audio" in streams, f"audio track lost in transit; streams were: {streams!r}"
+    assert "video" in streams
+
+
+@pytest.mark.asyncio
+async def test_stream_names_the_file_for_playback_and_for_download(
+    client, auth_headers, sample_video_bytes
+):
+    """
+    Saved files need their extension back.
+
+    Without a filename the browser names a saved video after the last path
+    segment — `stream`, with no extension — which Windows won't open. `inline`
+    keeps a <video> element playing it; `download=1` is the explicit save.
+    """
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
+
+    playback = await client.get(f"/api/videos/{video_id}/stream?token={token}")
+    attachment = await client.get(
+        f"/api/videos/{video_id}/stream?token={token}&download=1"
+    )
+
+    assert playback.headers["content-disposition"].startswith("inline")
+    assert attachment.headers["content-disposition"].startswith("attachment")
+    assert "clip.mp4" in attachment.headers["content-disposition"]
+
+
 @pytest.mark.asyncio
 async def test_stream_supports_range_requests(client, auth_headers, sample_video_bytes):
     """Without 206 support a player must refetch from the start to seek."""
     video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
 
     response = await client.get(
-        f"/api/videos/{video_id}/stream",
-        headers={**auth_headers, "Range": "bytes=0-99"},
+        f"/api/videos/{video_id}/stream?token={token}",
+        headers={"Range": "bytes=0-99"},
     )
 
     assert response.status_code == 206
     assert response.headers["content-range"].startswith("bytes 0-99/")
     assert len(response.content) == 100
+
+
+@pytest.mark.asyncio
+async def test_range_request_reads_from_the_middle(
+    client, auth_headers, sample_video_bytes
+):
+    """Seeking is only cheap if the server can start partway into the file."""
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
+
+    response = await client.get(
+        f"/api/videos/{video_id}/stream?token={token}",
+        headers={"Range": "bytes=500-599"},
+    )
+
+    assert response.status_code == 206
+    assert response.content == sample_video_bytes[500:600]
+
+
+@pytest.mark.asyncio
+async def test_waveform_returns_peaks_and_caches_them(
+    client, auth_headers, sample_video_bytes
+):
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+
+    # The dev database this runs against has real videos in it, some already
+    # carrying a cached waveform. Compare before and after rather than counting
+    # what happens to be on disk.
+    before = set(storage.storage_root().rglob("*.peaks.json"))
+
+    response = await client.get(f"/api/videos/{video_id}/waveform", headers=auth_headers)
+
+    assert response.status_code == 200
+    peaks = response.json()["peaks"]
+    assert len(peaks) == media.WAVEFORM_BUCKETS
+    assert all(0.0 <= peak <= 1.0 for peak in peaks)
+    # The fixture is a 440 Hz sine at full scale, so it must not read as silence.
+    assert max(peaks) > 0.5
+
+    written = set(storage.storage_root().rglob("*.peaks.json")) - before
+    assert len(written) == 1
+    assert json.loads(written.pop().read_text()) == peaks
+
+
+@pytest.mark.asyncio
+async def test_waveform_is_empty_for_a_silent_video(
+    client, auth_headers, sample_silent_video_bytes
+):
+    """No audio track is a normal upload, not an error — the timeline copes."""
+    video_id = (
+        await upload(client, auth_headers, sample_silent_video_bytes)
+    ).json()["id"]
+
+    response = await client.get(f"/api/videos/{video_id}/waveform", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["peaks"] == []
 
 
 @pytest.mark.asyncio

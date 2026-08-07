@@ -1,5 +1,6 @@
 """Video upload, listing, and retrieval."""
 
+import json
 import logging
 from pathlib import Path
 
@@ -10,9 +11,15 @@ from app.config import get_settings
 from app.dependencies import CurrentUser, DbSession
 from app.models.video import VideoStatus
 from app.schemas.caption import CaptionList, CaptionRead
-from app.schemas.video import VideoList, VideoRead, VideoUpdate
+from app.schemas.video import StreamTicket, VideoList, VideoRead, VideoUpdate, Waveform
 from app.services import media, storage
 from app.services import video as video_service
+from app.utils.security import (
+    TokenError,
+    create_stream_token,
+    decode_token,
+    stream_token_max_age,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -253,15 +260,65 @@ async def get_thumbnail(video_id: int, user: CurrentUser, db: DbSession) -> File
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.get("/{video_id}/stream")
-async def stream_video(video_id: int, user: CurrentUser, db: DbSession) -> FileResponse:
+@router.post("/{video_id}/stream-token", response_model=StreamTicket)
+async def issue_stream_token(
+    video_id: int, user: CurrentUser, db: DbSession
+) -> StreamTicket:
     """
-    Serve the video file itself.
+    Mint a URL-embeddable credential for this video's media stream.
+
+    This exists because a <video> element cannot send an Authorization header:
+    the browser issues the media requests itself, including the range requests
+    it makes while seeking, and gives us no hook to attach one. The URL has to
+    carry the proof instead. Ownership is checked here, once, against the
+    normal bearer token.
+    """
+    await _require_owned(db, video_id, user.id)
+
+    return StreamTicket(
+        token=create_stream_token(user.id, video_id),
+        expires_in=stream_token_max_age(),
+    )
+
+
+@router.get("/{video_id}/stream")
+async def stream_video(
+    video_id: int,
+    db: DbSession,
+    token: str = Query(..., description="A stream token from /stream-token"),
+    download: bool = Query(
+        default=False, description="Send as an attachment rather than for playback"
+    ),
+) -> FileResponse:
+    """
+    Serve the video file itself, byte for byte as it was uploaded.
 
     Files live outside the webroot and are never served statically, so this is
-    the only way to reach them — and it runs the ownership check first.
+    the only way to reach them. Note the missing CurrentUser: this is the one
+    route authenticated by query string rather than header, for the reason
+    given on /stream-token above.
+
+    Nothing in this application re-encodes video. The upload is streamed to
+    disk unmodified and handed back the same way; FFmpeg only ever *reads* it,
+    writing a JPEG thumbnail, a scratch WAV for Whisper, and waveform peaks to
+    separate files.
     """
-    video = await _require_owned(db, video_id, user.id)
+    try:
+        payload = decode_token(token, expected_type="stream")
+    except TokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired stream token"
+        ) from None
+
+    # Without this the token would be a key to the whole library rather than to
+    # one file, and a leaked URL would expose every video its owner has.
+    if payload.get("vid") != video_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This token is for a different video",
+        )
+
+    video = await _require_owned(db, video_id, int(payload["sub"]))
 
     path = storage.resolve(video.storage_path)
     if not path.exists():
@@ -269,6 +326,59 @@ async def stream_video(video_id: int, user: CurrentUser, db: DbSession) -> FileR
             status_code=status.HTTP_404_NOT_FOUND, detail="Video file is missing"
         )
 
-    # FileResponse honours Range requests, which is what lets a player seek
-    # without re-downloading from the start.
-    return FileResponse(path, media_type=video.content_type, filename=video.original_filename)
+    # FileResponse answers a Range header with 206 and just that slice of the
+    # file, which is what lets the player seek to the middle of a two-hour
+    # video without downloading the first hour.
+    #
+    # The filename matters even for playback. Without it the browser saves
+    # "Save video as…" under the last path segment — `stream`, with no
+    # extension — and a file with no extension is one Windows won't open and
+    # some players mis-handle. `inline` rather than `attachment` so a media
+    # element still plays it; `download=1` flips that for an explicit save.
+    return FileResponse(
+        path,
+        media_type=video.content_type,
+        filename=video.original_filename,
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
+@router.get("/{video_id}/waveform", response_model=Waveform)
+async def get_waveform(video_id: int, user: CurrentUser, db: DbSession) -> Waveform:
+    """
+    Amplitude peaks for the timeline, computed once and cached beside the file.
+
+    Decoding the audio takes seconds on a long video, so the result is written
+    to disk. Doing this in the browser instead would mean downloading the whole
+    file and decoding it in the main thread before the timeline could draw.
+    """
+    video = await _require_owned(db, video_id, user.id)
+
+    source = storage.resolve(video.storage_path)
+    if not source.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Video file is missing"
+        )
+
+    cache = storage.resolve(storage.waveform_cache_path(video.storage_path))
+    if cache.exists():
+        try:
+            return Waveform(peaks=json.loads(cache.read_text()), duration_ms=video.duration_ms)
+        except (json.JSONDecodeError, OSError) as exc:
+            # A truncated cache from an interrupted write is worth redoing, not
+            # worth failing over.
+            logger.warning("Discarding unreadable waveform cache for video %s: %s", video_id, exc)
+
+    peaks = await media.extract_waveform_peaks(source, video.duration_ms)
+
+    if peaks:
+        try:
+            # Write then rename, so a crash mid-write can't leave a half-file
+            # that the branch above would happily read back.
+            temporary = cache.with_suffix(".tmp")
+            temporary.write_text(json.dumps(peaks))
+            temporary.replace(cache)
+        except OSError as exc:
+            logger.warning("Could not cache waveform for video %s: %s", video_id, exc)
+
+    return Waveform(peaks=peaks, duration_ms=video.duration_ms)

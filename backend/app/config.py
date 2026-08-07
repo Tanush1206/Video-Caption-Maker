@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    # Media URLs carry their credential in the query string, which leaks more
+    # readily than a header, so this is kept short.
+    stream_token_expire_minutes: int = 60
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     # Must exactly match an Authorized redirect URI in the Google Cloud console.

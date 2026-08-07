@@ -13,7 +13,7 @@ an S3 implementation slots in later.
 
 import shutil
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from app.config import get_settings
 
@@ -84,6 +84,19 @@ def resolve(relative_path: str) -> Path:
         raise ValueError(f"Refusing to access path outside storage root: {relative_path}")
 
     return candidate
+
+
+def waveform_cache_path(relative_path: str) -> str:
+    """
+    Where a video's derived waveform peaks are cached.
+
+    Derived rather than stored in a column: it is a disposable artifact of the
+    video file, so a rule both the writer and the deleter can compute beats an
+    extra nullable column that can drift out of sync.
+    """
+    # PurePosixPath, not Path: stored paths always use forward slashes, and on
+    # Windows Path would hand back backslashes that don't match the database.
+    return str(PurePosixPath(relative_path).with_suffix(".peaks.json"))
 
 
 def delete(relative_path: str | None) -> None:

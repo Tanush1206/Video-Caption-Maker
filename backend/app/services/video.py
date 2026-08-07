@@ -124,6 +124,7 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
 
     storage.delete(stored)
     storage.delete(thumbnail)
+    storage.delete(storage.waveform_cache_path(stored))
 
     # Caption rows go with the video via ON DELETE CASCADE, but ChromaDB is a
     # separate store with no foreign keys — its vectors must be removed here

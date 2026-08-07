@@ -17,7 +17,7 @@ from app.config import get_settings
 
 settings = get_settings()
 
-TokenType = Literal["access", "refresh"]
+TokenType = Literal["access", "refresh", "stream"]
 
 # bcrypt only considers the first 72 bytes of a password. Rather than let it
 # silently truncate, we reject longer input at the edges.
@@ -61,7 +61,12 @@ def verify_password(password: str, hashed_password: str | None) -> bool:
         return False
 
 
-def _create_token(subject: str | int, token_type: TokenType, lifetime: timedelta) -> str:
+def _create_token(
+    subject: str | int,
+    token_type: TokenType,
+    lifetime: timedelta,
+    **claims: Any,
+) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": str(subject),
@@ -70,6 +75,7 @@ def _create_token(subject: str | int, token_type: TokenType, lifetime: timedelta
         "exp": int((now + lifetime).timestamp()),
         # Unique per token, so individual refresh tokens can be revoked later.
         "jti": uuid4().hex,
+        **claims,
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
@@ -84,6 +90,30 @@ def create_refresh_token(user_id: str | int) -> str:
     return _create_token(
         user_id, "refresh", timedelta(days=settings.refresh_token_expire_days)
     )
+
+
+def create_stream_token(user_id: str | int, video_id: int) -> str:
+    """
+    A short-lived credential for one video file, passed in the query string.
+
+    A <video> element cannot send an Authorization header, so the URL itself
+    has to carry proof. Query strings leak — into browser history, Referer
+    headers, and access logs — so this token is deliberately weak: it expires
+    within the hour, and the `vid` claim binds it to a single video, so a
+    leaked one cannot be replayed against another file or used as an API
+    credential.
+    """
+    return _create_token(
+        user_id,
+        "stream",
+        timedelta(minutes=settings.stream_token_expire_minutes),
+        vid=video_id,
+    )
+
+
+def stream_token_max_age() -> int:
+    """Stream-token lifetime in seconds, so the client can re-issue before it dies."""
+    return settings.stream_token_expire_minutes * 60
 
 
 def decode_token(token: str, expected_type: TokenType) -> dict[str, Any]:
