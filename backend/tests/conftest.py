@@ -33,6 +33,25 @@ async def clear_rate_limits():
     yield
 
 
+@pytest.fixture(autouse=True)
+def dont_queue_transcription(monkeypatch):
+    """
+    Stop uploads in tests from handing work to the real worker.
+
+    Every upload enqueues transcription, and if a worker is running it picks
+    the job up — then *deletes the video's captions* before writing its own,
+    because the pipeline is idempotent. Tests that seed captions and then take
+    a few seconds (rendering, say) would find them gone halfway through, with a
+    failure that only appears when a worker happens to be up and fast enough.
+
+    Suites that exercise the pipeline call the task body directly, so nothing
+    here needs the real queue.
+    """
+    monkeypatch.setattr(
+        "app.api.videos._enqueue_transcription", lambda video_id: True
+    )
+
+
 @pytest.fixture
 async def db_session():
     """
