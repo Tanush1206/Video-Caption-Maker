@@ -88,6 +88,13 @@ class Video(Base):
         passive_deletes=True,
         uselist=False,
     )
+    exports = relationship(
+        "Export",
+        back_populates="video",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Export.created_at.desc()",
+    )
     captions = relationship(
         "Caption",
         back_populates="video",
