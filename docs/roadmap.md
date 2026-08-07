@@ -12,8 +12,8 @@ you can actually open and use — no milestone is pure plumbing.
 | 5 | Caption editor — text | ✅ Done |
 | 6 | Caption editor — video & timeline | ✅ Done |
 | 7 | Caption editor — styling | ✅ Done |
-| 8 | Export & rendering | Next |
-| 9 | Semantic search & RAG | |
+| 8 | Export & rendering | ✅ Done |
+| 9 | Semantic search & RAG | Next |
 | 10 | Dashboard & polish | |
 
 ---
