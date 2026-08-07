@@ -247,9 +247,10 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
         "BackColour": to_ass_colour(style.box_color, style.box_opacity),
         # 3 draws an opaque box behind the text; 1 draws an outline and shadow.
         "BorderStyle": 3 if boxed else 1,
-        # A box uses this as its padding, so it must not be 0 or the text
-        # touches the edges of its own background.
-        "Outline": round(max(style.outline_width, 8 if boxed else 0) * scale),
+        # This field changes meaning with BorderStyle: stroke width at 1, box
+        # padding at 3. The padding rule lives on the model so the browser
+        # preview can apply the identical number.
+        "Outline": round((style.box_padding if boxed else style.outline_width) * scale),
         "Shadow": 0,
         "Alignment": to_ass_alignment(style),
         "MarginL": round(style.margin_h * scale),

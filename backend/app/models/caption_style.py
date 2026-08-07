@@ -12,6 +12,11 @@ from app.database import Base
 # meaningless to a human. One reference height gives both.
 REFERENCE_HEIGHT = 1080
 
+# Minimum breathing room between the text and the edge of its box, in reference
+# pixels. Without a floor, a style with no outline draws a box that the glyphs
+# touch on every side.
+BOX_PADDING_MIN = 8
+
 
 class VerticalPosition(str, enum.Enum):
     TOP = "top"
@@ -95,6 +100,20 @@ class CaptionStyle(Base):
     )
 
     video = relationship("Video", back_populates="style")
+
+    @property
+    def box_padding(self) -> int:
+        """
+        Space between the glyphs and the edge of the box, in reference pixels.
+
+        A property on the model rather than a rule each renderer reimplements.
+        The ASS conversion and the browser's CSS both read this, so the box in
+        the preview is the same size as the box in the export — recomputing it
+        in TypeScript would be one more place for the two to drift apart.
+        """
+        if self.box_opacity <= 0:
+            return 0
+        return max(self.outline_width, BOX_PADDING_MIN)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<CaptionStyle video={self.video_id} {self.font_key} {self.font_size}px>"

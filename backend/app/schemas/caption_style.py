@@ -27,6 +27,10 @@ class CaptionStyleRead(BaseModel):
     margin_v: int
     margin_h: int
 
+    # Derived, not stored. Sent so the browser applies the same box padding as
+    # the renderer rather than reimplementing the rule and drifting from it.
+    box_padding: int
+
     # Echoed so the client never has to hardcode it to size the preview.
     reference_height: int = REFERENCE_HEIGHT
 
