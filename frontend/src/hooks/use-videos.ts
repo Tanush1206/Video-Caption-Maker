@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import type { CaptionList } from "@/types/caption";
 import type { Video, VideoList } from "@/types/video";
 
 export const videoKeys = {
@@ -14,6 +15,34 @@ export function useVideos() {
   return useQuery({
     queryKey: videoKeys.all,
     queryFn: () => api.get<VideoList>("/api/videos"),
+    // Poll only while something is actually moving. Returning false when
+    // nothing is in flight stops an idle dashboard hammering the API.
+    //
+    // Polling rather than websockets/SSE: progress changes a few times a
+    // minute, so a 2-second poll is far simpler than a persistent connection
+    // plus its reconnection and auth handling. Revisit if it gets chattier.
+    refetchInterval: (query) => {
+      const items = query.state.data?.items ?? [];
+      const busy = items.some((v) => v.status === "pending" || v.status === "processing");
+      return busy ? 2000 : false;
+    },
+  });
+}
+
+export function useRetranscribe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => api.post<Video>(`/api/videos/${id}/transcribe`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: videoKeys.all }),
+  });
+}
+
+export function useCaptions(videoId: number, enabled = true) {
+  return useQuery({
+    queryKey: [...videoKeys.detail(videoId), "captions"],
+    queryFn: () => api.get<CaptionList>(`/api/videos/${videoId}/captions`),
+    enabled,
   });
 }
 

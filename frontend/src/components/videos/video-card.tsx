@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Film, Trash2 } from "lucide-react";
+import { Film, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { AuthedImage } from "@/components/videos/authed-image";
-import { useDeleteVideo } from "@/hooks/use-videos";
+import { useDeleteVideo, useRetranscribe } from "@/hooks/use-videos";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatFileSize, formatRelativeTime } from "@/lib/format";
 import type { Video, VideoStatus } from "@/types/video";
@@ -18,14 +18,23 @@ const STATUS_STYLES: Record<VideoStatus, string> = {
 };
 
 const STATUS_LABELS: Record<VideoStatus, string> = {
-  pending: "Not transcribed",
+  pending: "Queued",
   processing: "Transcribing…",
   completed: "Ready",
   failed: "Failed",
 };
 
+// The stage name the worker writes is an internal token; give it a label a
+// user can act on.
+const STAGE_LABELS: Record<string, string> = {
+  extracting: "Extracting audio",
+  transcribing: "Transcribing speech",
+  embedding: "Building search index",
+};
+
 export function VideoCard({ video }: { video: Video }) {
   const deleteVideo = useDeleteVideo();
+  const retranscribe = useRetranscribe();
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -84,10 +93,56 @@ export function VideoCard({ video }: { video: Video }) {
           {STATUS_LABELS[video.status]}
         </span>
 
-        {video.status === "failed" && video.error_message && (
-          <p className="mt-1 text-xs text-red-500" title={video.error_message}>
-            {video.error_message}
-          </p>
+        {video.status === "processing" && (
+          <div className="mt-2">
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={video.progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full bg-primary transition-all duration-500"
+                style={{ width: `${video.progress}%` }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {video.stage ? (STAGE_LABELS[video.stage] ?? video.stage) : "Starting"} ·{" "}
+              {video.progress}%
+            </p>
+          </div>
+        )}
+
+        {video.status === "failed" && (
+          <div className="mt-2">
+            {video.error_message && (
+              <p className="text-xs text-red-500" title={video.error_message}>
+                {video.error_message}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => retranscribe.mutate(video.id)}
+              disabled={retranscribe.isPending}
+              className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline disabled:opacity-60"
+            >
+              <RefreshCw className={cn("h-3 w-3", retranscribe.isPending && "animate-spin")} />
+              Retry
+            </button>
+          </div>
+        )}
+
+        {video.status === "pending" && (
+          <button
+            type="button"
+            onClick={() => retranscribe.mutate(video.id)}
+            disabled={retranscribe.isPending}
+            className="mt-2 flex items-center gap-1.5 text-xs text-primary hover:underline disabled:opacity-60"
+          >
+            <RefreshCw className={cn("h-3 w-3", retranscribe.isPending && "animate-spin")} />
+            Transcribe now
+          </button>
         )}
       </div>
 

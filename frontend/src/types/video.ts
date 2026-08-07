@@ -10,6 +10,10 @@ export interface Video {
   status: VideoStatus;
   error_message: string | null;
   has_thumbnail: boolean;
+  /** 0-100, meaningful only while status is "processing". */
+  progress: number;
+  /** "extracting" | "transcribing" | "embedding", or null when idle. */
+  stage: string | null;
   created_at: string;
   updated_at: string;
 }
