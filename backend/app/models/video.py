@@ -78,6 +78,16 @@ class Video(Base):
     stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     owner = relationship("User", back_populates="videos")
+    # uselist=False: one style per video, so this reads as an object, not a
+    # one-element list. Created lazily — a video with no style row uses the
+    # defaults rather than being wrong.
+    style = relationship(
+        "CaptionStyle",
+        back_populates="video",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+    )
     captions = relationship(
         "Caption",
         back_populates="video",

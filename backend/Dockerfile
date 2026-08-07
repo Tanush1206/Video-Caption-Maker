@@ -36,6 +36,20 @@ RUN pip install --no-cache-dir --upgrade pip \
 # inside pip's nvidia/* package directories on its own.
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib
 
+# Fonts for burning captions in (Milestone 7/8). Liberation is metric-compatible
+# with Arial, Times New Roman and Courier New, which is what makes the browser
+# preview trustworthy: the editor previews in Arial, libass renders in Liberation
+# Sans, and because the glyph advance widths are identical the line breaks land
+# in the same places. A visually-similar-but-different font would not do that.
+#
+# Deliberately placed after the pip install rather than beside the other apt
+# packages: adding a font must not invalidate the layer that builds torch.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-liberation \
+    fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -f
+
 COPY . .
 
 EXPOSE 8000
