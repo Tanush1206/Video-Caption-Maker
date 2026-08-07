@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
 
 import { CaptionEditor } from "@/components/captions/caption-editor";
+import { ExportPanel } from "@/components/exports/export-panel";
 import { PlayerControls } from "@/components/player/player-controls";
 import { Timeline } from "@/components/player/timeline";
 import { VideoPlayer } from "@/components/player/video-player";
@@ -119,6 +120,7 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
             to follow the playhead without moving the video off screen. */}
         <div className="flex h-[calc(100vh-13rem)] min-h-0 flex-col gap-4 overflow-y-auto lg:sticky lg:top-6">
           <StylePanel videoId={videoId} />
+          <ExportPanel videoId={videoId} hasCaptions={captions.length > 0} />
           <div className="flex min-h-[24rem] flex-1 flex-col">
             <CaptionEditor video={video} playback={playback} />
           </div>
