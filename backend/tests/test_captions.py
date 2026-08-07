@@ -278,3 +278,95 @@ async def test_editing_requires_authentication(client, video_with_captions):
 
     response = await client.patch(f"/api/captions/{caption_ids[0]}", json={"text": "x"})
     assert response.status_code == 401
+
+
+# ── Per-caption emphasis (Milestone 7) ───────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_emphasis_override_is_stored(client, auth_headers, video_with_captions):
+    _, caption_ids = video_with_captions
+
+    response = await client.patch(
+        f"/api/captions/{caption_ids[0]}",
+        headers=auth_headers,
+        json={"override_color": "#FFCC00", "override_bold": True, "override_scale": 1.25},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["override_color"] == "#FFCC00"
+    assert body["override_bold"] is True
+    assert body["override_scale"] == 1.25
+
+
+@pytest.mark.asyncio
+async def test_null_clears_an_override_but_omitting_leaves_it(
+    client, auth_headers, video_with_captions
+):
+    """
+    The distinction `exclude_unset` exists for.
+
+    Sending null means "stop overriding, inherit the video's style again".
+    Leaving the key out means "I'm not talking about that field". With a plain
+    optional-defaults-to-None schema the two are indistinguishable.
+    """
+    _, caption_ids = video_with_captions
+    caption_id = caption_ids[0]
+
+    await client.patch(
+        f"/api/captions/{caption_id}",
+        headers=auth_headers,
+        json={"override_color": "#FFCC00", "override_bold": True},
+    )
+
+    # Omitted: both survive an unrelated text edit.
+    kept = await client.patch(
+        f"/api/captions/{caption_id}", headers=auth_headers, json={"text": "still emphasised"}
+    )
+    assert kept.json()["override_color"] == "#FFCC00"
+    assert kept.json()["override_bold"] is True
+
+    # Explicit null: only that one is cleared.
+    cleared = await client.patch(
+        f"/api/captions/{caption_id}", headers=auth_headers, json={"override_color": None}
+    )
+    assert cleared.json()["override_color"] is None
+    assert cleared.json()["override_bold"] is True
+
+
+@pytest.mark.asyncio
+async def test_emphasis_edit_does_not_queue_a_reindex(
+    client, auth_headers, video_with_captions, monkeypatch
+):
+    """Appearance doesn't change the words, so the embedding is still correct."""
+    from app.api import captions as captions_api
+
+    queued: list[tuple] = []
+    monkeypatch.setattr(
+        captions_api, "_reindex", lambda video_id, ids: queued.append((video_id, ids))
+    )
+
+    _, caption_ids = video_with_captions
+    await client.patch(
+        f"/api/captions/{caption_ids[0]}", headers=auth_headers, json={"override_bold": True}
+    )
+    assert queued == []
+
+    await client.patch(
+        f"/api/captions/{caption_ids[0]}", headers=auth_headers, json={"text": "new words"}
+    )
+    assert len(queued) == 1
+
+
+@pytest.mark.asyncio
+async def test_out_of_range_emphasis_is_rejected(
+    client, auth_headers, video_with_captions
+):
+    _, caption_ids = video_with_captions
+
+    for payload in [{"override_scale": 9.0}, {"override_color": "#FFF"}]:
+        response = await client.patch(
+            f"/api/captions/{caption_ids[0]}", headers=auth_headers, json=payload
+        )
+        assert response.status_code == 422, f"{payload} was accepted"

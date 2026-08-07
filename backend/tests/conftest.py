@@ -34,6 +34,18 @@ async def clear_rate_limits():
 
 
 @pytest.fixture
+async def db_session():
+    """
+    A session for asserting directly against the database.
+
+    Separate from the one the app uses per request, so a test can check what
+    actually landed rather than what the response claimed.
+    """
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+@pytest.fixture
 def unique_email() -> str:
     """Fresh address per test so reruns don't collide on the unique index."""
     return f"test-{uuid.uuid4().hex[:12]}@example.com"
