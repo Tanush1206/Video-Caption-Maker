@@ -2,6 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { CaptionOverlay } from "@/components/captions/caption-overlay";
@@ -30,6 +31,13 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, isError } = useStreamTicket(video.id);
+
+  // `?t=` deep link, so a search result opens at the moment it came from.
+  // Applied once, on the first metadata load: re-seeking on every render would
+  // drag the playhead back the moment anyone scrubbed away from it.
+  const searchParams = useSearchParams();
+  const deepLinkMs = Number(searchParams.get("t"));
+  const deepLinkApplied = useRef(false);
 
   // Tracked through the subscription rather than read on demand: by the time
   // an error fires the element may already have reset currentTime to zero.
@@ -62,9 +70,18 @@ export function VideoPlayer({
   }
 
   function handleLoadedMetadata() {
-    if (resumeAt.current === null) return;
-    playback.seekMs(resumeAt.current);
-    resumeAt.current = null;
+    // Recovering from an expired token takes priority: the user was already
+    // somewhere, and putting them back beats honouring a stale URL.
+    if (resumeAt.current !== null) {
+      playback.seekMs(resumeAt.current);
+      resumeAt.current = null;
+      return;
+    }
+
+    if (!deepLinkApplied.current && Number.isFinite(deepLinkMs) && deepLinkMs > 0) {
+      deepLinkApplied.current = true;
+      playback.seekMs(deepLinkMs);
+    }
   }
 
   if (isLoading) {

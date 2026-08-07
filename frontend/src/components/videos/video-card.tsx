@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Film, RefreshCw, Trash2 } from "lucide-react";
+import { Film, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { AuthedImage } from "@/components/videos/authed-image";
@@ -68,6 +68,18 @@ export function VideoCard({ video }: { video: Video }) {
               {video.title}
             </p>
           </Link>
+
+          {/* Only once there is a transcript to search. */}
+          {video.status === "completed" && (
+            <Link
+              href={`/search/${video.id}`}
+              title="Search this video"
+              aria-label={`Search ${video.title}`}
+              className="rounded p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+            >
+              <Search className="h-4 w-4" />
+            </Link>
+          )}
 
           <button
             type="button"
