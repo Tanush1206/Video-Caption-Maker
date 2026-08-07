@@ -10,7 +10,7 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "app.workers.transcription",
-        # Milestone 8 will add "app.workers.export".
+        "app.workers.export",
     ],
 )
 

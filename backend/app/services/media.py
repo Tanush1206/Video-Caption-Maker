@@ -77,6 +77,40 @@ async def probe_duration_ms(path: Path) -> int | None:
     return int(seconds * 1000)
 
 
+async def probe_dimensions(path: Path) -> tuple[int, int] | None:
+    """
+    The video stream's pixel width and height, or None if unreadable.
+
+    Needed by the burn-in render: libass scales what it draws to the ASS
+    canvas, so `PlayResX/Y` has to be the real frame size or the exported
+    captions come out a different size from the preview.
+    """
+    try:
+        code, stdout, stderr = await _run(
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "json",
+            str(path),
+            timeout=PROBE_TIMEOUT_SECONDS,
+        )
+    except (asyncio.TimeoutError, FileNotFoundError) as exc:
+        logger.warning("ffprobe failed for %s: %s", path.name, exc)
+        return None
+
+    if code != 0:
+        logger.warning("ffprobe exited %s for %s: %s", code, path.name, stderr[:200])
+        return None
+
+    try:
+        stream = json.loads(stdout)["streams"][0]
+        return int(stream["width"]), int(stream["height"])
+    except (KeyError, IndexError, ValueError, TypeError) as exc:
+        logger.warning("Could not parse dimensions for %s: %s", path.name, exc)
+        return None
+
+
 async def generate_thumbnail(
     source: Path, destination: Path, at_ms: int | None = None
 ) -> bool:
