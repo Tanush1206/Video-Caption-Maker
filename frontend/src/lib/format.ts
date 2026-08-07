@@ -24,7 +24,10 @@ export function formatDuration(ms: number | null): string {
  * "0:04" would hide the difference between two adjacent captions.
  */
 export function formatTimecode(ms: number): string {
-  const clamped = Math.max(0, ms);
+  // Floor first. This is fed from `video.currentTime`, which is a float in
+  // seconds, so ms arrives as 16159.78799999999865 — and `padStart` on a
+  // fractional number is a no-op, printing "00:16.159.78799999999865".
+  const clamped = Math.max(0, Math.floor(ms));
   const totalSeconds = Math.floor(clamped / 1000);
   const millis = clamped % 1000;
 

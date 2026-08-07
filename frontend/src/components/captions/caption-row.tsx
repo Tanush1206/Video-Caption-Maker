@@ -15,25 +15,32 @@ const AUTOSAVE_DELAY_MS = 800;
 interface CaptionRowProps {
   caption: Caption;
   isLast: boolean;
+  /** True while the playhead is inside this caption's time range. */
+  isActive: boolean;
   onSave: (text: string) => void;
   onSplit: () => void;
   onMerge: () => void;
   onDelete: () => void;
+  onSeek: () => void;
   onFocusNext: () => void;
   onFocusPrevious: () => void;
   registerRef: (element: HTMLTextAreaElement | null) => void;
+  registerRow: (element: HTMLDivElement | null) => void;
 }
 
 export function CaptionRow({
   caption,
   isLast,
+  isActive,
   onSave,
   onSplit,
   onMerge,
   onDelete,
+  onSeek,
   onFocusNext,
   onFocusPrevious,
   registerRef,
+  registerRow,
 }: CaptionRowProps) {
   const [text, setText] = useState(caption.text);
   const [dirty, setDirty] = useState(false);
@@ -96,15 +103,28 @@ export function CaptionRow({
     caption.confidence !== null && caption.confidence < LOW_CONFIDENCE;
 
   return (
-    <div className="group flex gap-3 rounded-md border border-transparent px-2 py-2 transition hover:border-border hover:bg-muted/40">
-      <div className="w-24 shrink-0 pt-2 text-right">
-        <p className="font-mono text-xs tabular-nums text-muted-foreground">
+    <div
+      ref={registerRow}
+      className={cn(
+        "group flex gap-3 rounded-md border px-2 py-2 transition",
+        isActive
+          ? "border-primary/40 bg-primary/5"
+          : "border-transparent hover:border-border hover:bg-muted/40"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onSeek}
+        title="Jump the video here"
+        className="w-24 shrink-0 pt-2 text-right transition hover:text-primary"
+      >
+        <span className="block font-mono text-xs tabular-nums text-muted-foreground">
           {formatTimecode(caption.start_ms)}
-        </p>
-        <p className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
+        </span>
+        <span className="block font-mono text-[10px] tabular-nums text-muted-foreground/60">
           {formatTimecode(caption.end_ms)}
-        </p>
-      </div>
+        </span>
+      </button>
 
       <div className="min-w-0 flex-1">
         <textarea
