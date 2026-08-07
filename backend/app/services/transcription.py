@@ -20,6 +20,8 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+PROBE_TIMEOUT_SECONDS = 30
+
 _model = None
 
 
@@ -53,6 +55,22 @@ def get_model():
     return _model
 
 
+def has_audio_stream(path: Path) -> bool:
+    """Whether the file contains at least one audio stream."""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=index",
+            "-of", "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        timeout=PROBE_TIMEOUT_SECONDS,
+    )
+    return bool(result.stdout.strip())
+
+
 def extract_audio(source: Path, destination: Path) -> None:
     """
     Pull a 16kHz mono WAV out of the video.
@@ -61,6 +79,13 @@ def extract_audio(source: Path, destination: Path) -> None:
     both faster and smaller than handing it the original file. Raises on
     failure — unlike thumbnails, there is no useful result without audio.
     """
+    # Checked explicitly so a silent video produces a message the user can act
+    # on. Without this, FFmpeg fails with "Output file does not contain any
+    # stream", which reads like a bug in the app rather than a fact about
+    # their file.
+    if not has_audio_stream(source):
+        raise RuntimeError("This video has no audio track, so there is nothing to transcribe")
+
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     result = subprocess.run(

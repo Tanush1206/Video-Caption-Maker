@@ -1,5 +1,5 @@
-import asyncio
 import shutil
+import subprocess
 import uuid
 
 import pytest
@@ -64,35 +64,49 @@ async def cleanup_test_users():
             shutil.rmtree(entry, ignore_errors=True)
 
 
+def _build_video(*extra_input_args: str, with_audio: bool) -> bytes:
+    """Render a short MP4 with FFmpeg and return its bytes."""
+    destination = storage.storage_root() / f"_pytest_sample_{uuid.uuid4().hex[:8]}.mp4"
+
+    command = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=15",
+        *extra_input_args,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    ]
+    if with_audio:
+        command += ["-c:a", "aac", "-shortest"]
+
+    subprocess.run([*command, str(destination)], capture_output=True, timeout=120)
+
+    try:
+        return destination.read_bytes()
+    finally:
+        destination.unlink(missing_ok=True)
+
+
 @pytest.fixture(scope="session")
 def sample_video_bytes() -> bytes:
     """
-    A genuinely valid 1-second MP4, built once per session with FFmpeg.
+    A genuinely valid 1-second MP4 with an audio track.
 
     Real bytes matter here: ffprobe has to read it for the duration and
-    thumbnail assertions to mean anything. Random bytes with an .mp4 name
-    would pass the upload but silently skip everything worth testing.
+    thumbnail assertions to mean anything, and random bytes with an .mp4 name
+    would pass the upload while silently skipping everything worth testing.
+
+    The audio track matters too — the first version of this fixture was
+    video-only, which made audio extraction fail in a way real uploads
+    wouldn't. See sample_silent_video_bytes for that case, tested deliberately.
     """
-    destination = storage.storage_root() / f"_pytest_sample_{uuid.uuid4().hex[:8]}.mp4"
+    return _build_video(
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=1", with_audio=True
+    )
 
-    async def build() -> bytes:
-        process = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=15",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
-            str(destination),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await process.communicate()
-        return destination.read_bytes()
 
-    try:
-        return asyncio.get_event_loop().run_until_complete(build())
-    except RuntimeError:
-        return asyncio.run(build())
-    finally:
-        destination.unlink(missing_ok=True)
+@pytest.fixture(scope="session")
+def sample_silent_video_bytes() -> bytes:
+    """A valid MP4 with no audio stream at all."""
+    return _build_video(with_audio=False)
 
 
 @pytest.fixture

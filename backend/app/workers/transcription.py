@@ -67,7 +67,10 @@ async def _run(video_id: int) -> dict:
     async with worker_session() as session:
         video = await session.get(Video, video_id)
         if video is None:
-            raise RuntimeError(f"Video {video_id} no longer exists")
+            # Deleted while the job sat in the queue. A normal race, not a
+            # failure: there is nothing to do and nothing to report.
+            logger.info("Video %s was deleted before transcription started", video_id)
+            return {"video_id": video_id, "skipped": "video deleted"}
         source_relative = video.storage_path
 
     source = storage.resolve(source_relative)
