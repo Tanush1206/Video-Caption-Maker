@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Media URLs carry their credential in the query string, which leaks more
     # readily than a header, so this is kept short.
     stream_token_expire_minutes: int = 60
+    # Download links are shorter-lived than stream tokens: a media URL has to
+    # survive a whole editing session, a download only the click that starts it.
+    download_token_expire_minutes: int = 15
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     # Must exactly match an Authorized redirect URI in the Google Cloud console.

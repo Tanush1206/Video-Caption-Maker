@@ -17,7 +17,7 @@ from app.config import get_settings
 
 settings = get_settings()
 
-TokenType = Literal["access", "refresh", "stream"]
+TokenType = Literal["access", "refresh", "stream", "download"]
 
 # bcrypt only considers the first 72 bytes of a password. Rather than let it
 # silently truncate, we reject longer input at the edges.
@@ -114,6 +114,27 @@ def create_stream_token(user_id: str | int, video_id: int) -> str:
 def stream_token_max_age() -> int:
     """Stream-token lifetime in seconds, so the client can re-issue before it dies."""
     return settings.stream_token_expire_minutes * 60
+
+
+def create_download_token(user_id: str | int, export_id: int) -> str:
+    """
+    A short-lived credential for one exported file.
+
+    Same shape and same reasoning as the stream token: a plain `<a href>`
+    cannot send an Authorization header, so the URL carries the proof. The
+    `eid` claim binds it to one export, and the separate token type stops a
+    download link being replayed against the media stream or the API.
+    """
+    return _create_token(
+        user_id,
+        "download",
+        timedelta(minutes=settings.download_token_expire_minutes),
+        eid=export_id,
+    )
+
+
+def download_token_max_age() -> int:
+    return settings.download_token_expire_minutes * 60
 
 
 def decode_token(token: str, expected_type: TokenType) -> dict[str, Any]:
