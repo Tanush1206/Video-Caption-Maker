@@ -49,24 +49,35 @@ async def update_caption(
 ) -> CaptionRead:
     caption = await _require_caption(db, caption_id, user.id)
 
+    # exclude_unset, so `"override_bold": null` clears the override while
+    # omitting the key leaves it untouched. Those mean different things, and
+    # `None` alone cannot express both.
+    changes = payload.model_dump(exclude_unset=True)
+
+    # Only the override_* columns are nullable. An explicit null for the
+    # others is meaningless, and letting it through would fail at the database
+    # with a NOT NULL violation instead of being ignored here.
+    for field in ("text", "start_ms", "end_ms"):
+        if changes.get(field, ...) is None:
+            del changes[field]
+
+    if not changes:
+        return CaptionRead.model_validate(caption)
+
     # A one-sided timing edit can only be validated against what's stored.
-    start = payload.start_ms if payload.start_ms is not None else caption.start_ms
-    end = payload.end_ms if payload.end_ms is not None else caption.end_ms
+    start = changes.get("start_ms", caption.start_ms)
+    end = changes.get("end_ms", caption.end_ms)
     if start >= end:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="start_ms must be less than end_ms",
         )
 
-    updated = await caption_service.update_caption(
-        db,
-        caption,
-        text=payload.text,
-        start_ms=payload.start_ms,
-        end_ms=payload.end_ms,
-    )
+    updated = await caption_service.update_caption(db, caption, changes)
 
-    if payload.text is not None:
+    # Only the words affect the embedding. Retiming or restyling a caption
+    # leaves the vector correct, so re-embedding would be pure waste.
+    if "text" in changes:
         _reindex(updated.video_id, [updated.id])
 
     return CaptionRead.model_validate(updated)

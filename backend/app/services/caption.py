@@ -39,20 +39,18 @@ async def get_neighbour(db: AsyncSession, caption: Caption, offset: int) -> Capt
     return result.scalar_one_or_none()
 
 
-async def update_caption(
-    db: AsyncSession,
-    caption: Caption,
-    *,
-    text: str | None = None,
-    start_ms: int | None = None,
-    end_ms: int | None = None,
-) -> Caption:
-    if text is not None:
-        caption.text = text
-    if start_ms is not None:
-        caption.start_ms = start_ms
-    if end_ms is not None:
-        caption.end_ms = end_ms
+async def update_caption(db: AsyncSession, caption: Caption, changes: dict) -> Caption:
+    """
+    Apply an already-validated set of field changes.
+
+    A dict rather than keyword arguments defaulting to None, because the
+    emphasis overrides need `null` to mean "clear this and go back to
+    inheriting the video's style". With `text: str | None = None` there is no
+    way to say that — None is indistinguishable from "not supplied". The route
+    builds this dict with `exclude_unset`, which keeps the two meanings apart.
+    """
+    for field, value in changes.items():
+        setattr(caption, field, value)
 
     await db.commit()
     await db.refresh(caption)

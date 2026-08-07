@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -35,6 +45,15 @@ class Caption(Base):
     # Whisper's average log-probability for the segment. Useful for flagging
     # low-confidence lines in the editor (Milestone 5).
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Per-caption emphasis (Milestone 7). NULL means "inherit from the video's
+    # CaptionStyle" — which is why these are nullable columns rather than a
+    # copy of the style with defaults filled in. Changing the video's style
+    # must still move every caption that hasn't been deliberately overridden.
+    override_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    override_bold: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Multiplier on the base font size, so emphasis survives a size change.
+    override_scale: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

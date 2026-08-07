@@ -11,6 +11,13 @@ class CaptionRead(BaseModel):
     text: str
     confidence: float | None
 
+    # Per-caption emphasis. null means "inherit the video's style", which is
+    # not the same as "same value as the video's style" — an inherited caption
+    # follows along when the style changes.
+    override_color: str | None = None
+    override_bold: bool | None = None
+    override_scale: float | None = None
+
 
 class CaptionList(BaseModel):
     items: list[CaptionRead]
@@ -21,11 +28,20 @@ class CaptionUpdate(BaseModel):
     """
     All fields optional: the editor autosaves a single changed field rather
     than sending the whole caption back.
+
+    The `override_*` fields are nullable on purpose, and the route reads them
+    with `exclude_unset` so that sending `null` clears an override while
+    omitting the key leaves it alone. Those are different requests.
     """
 
     text: str | None = Field(default=None, max_length=5000)
     start_ms: int | None = Field(default=None, ge=0)
     end_ms: int | None = Field(default=None, ge=0)
+
+    override_color: str | None = Field(default=None, pattern=r"^#(?:[0-9a-fA-F]{6})$")
+    override_bold: bool | None = None
+    # Bounded so emphasis can't blow a caption up until it covers the frame.
+    override_scale: float | None = Field(default=None, ge=0.5, le=3.0)
 
     @model_validator(mode="after")
     def check_timing(self) -> "CaptionUpdate":
