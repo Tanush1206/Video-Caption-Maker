@@ -4,6 +4,9 @@ import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { useEffect } from "react";
 
+import { buttonVariants } from "@/components/ui/button-variants";
+import { Button } from "@/components/ui/button";
+
 /**
  * The last line of defence for anything under the dashboard.
  *
@@ -29,8 +32,10 @@ export default function DashboardError({
   }, [error]);
 
   return (
-    <main className="mx-auto flex max-w-md flex-col items-center px-6 py-20 text-center">
-      <AlertTriangle className="mb-4 h-10 w-10 text-amber-500" />
+    <main className="mx-auto flex max-w-md flex-col items-center px-6 py-24 text-center">
+      <span className="mb-5 flex size-12 items-center justify-center rounded-full bg-warning/10 text-warning">
+        <AlertTriangle className="size-5" />
+      </span>
       <h1 className="text-lg font-semibold">Something went wrong</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         This page hit an error it couldn&apos;t recover from on its own. Your
@@ -41,23 +46,14 @@ export default function DashboardError({
           Next deliberately withholds from the browser in production. Without
           showing it there is no way to connect a user's report to a log line. */}
       {error.digest && (
-        <p className="mt-2 font-mono text-xs text-muted-foreground">
+        <p className="mt-3 rounded-md bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
           Reference: {error.digest}
         </p>
       )}
 
       <div className="mt-6 flex gap-2">
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition hover:opacity-90"
-        >
-          Try again
-        </button>
-        <Link
-          href="/dashboard"
-          className="rounded-md border border-border px-4 py-2 text-sm transition hover:bg-muted"
-        >
+        <Button onClick={reset}>Try again</Button>
+        <Link href="/dashboard" className={buttonVariants({ variant: "secondary" })}>
           Back to your videos
         </Link>
       </div>

@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Check } from "lucide-react";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { useDeleteAccount, useChangePassword, useUpdateProfile } from "@/hooks/use-account";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth";
+import { cn } from "@/lib/utils";
 
 function Section({
   title,
@@ -22,13 +25,21 @@ function Section({
   danger?: boolean;
 }) {
   return (
-    <section
-      className={`rounded-lg border p-4 sm:p-5 ${danger ? "border-red-500/40" : "border-border"}`}
-    >
-      <h2 className={`text-sm font-semibold ${danger ? "text-red-500" : ""}`}>{title}</h2>
+    <Card className={cn("p-4 sm:p-5", danger && "border-destructive/40")}>
+      <h2 className={cn("text-sm font-semibold", danger && "text-destructive")}>{title}</h2>
       <p className="mb-4 mt-1 text-sm text-muted-foreground">{description}</p>
       {children}
-    </section>
+    </Card>
+  );
+}
+
+/** A confirmation that appears next to the button that caused it. */
+function Saved({ label }: { label: string }) {
+  return (
+    <span className="flex animate-fade-in items-center gap-1.5 text-sm text-success">
+      <Check className="size-4" />
+      {label}
+    </span>
   );
 }
 
@@ -46,7 +57,7 @@ function ProfileSection() {
           event.preventDefault();
           updateProfile.mutate(name.trim() || null);
         }}
-        className="space-y-3"
+        className="space-y-4"
       >
         <Field
           label="Name"
@@ -57,13 +68,13 @@ function ProfileSection() {
           autoComplete="name"
         />
 
-        <div>
+        <div className="space-y-1.5">
           <label className="block text-sm font-medium">Email</label>
-          <p className="mt-1.5 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+          <p className="rounded-md border border-dashed border-border bg-subtle px-3 py-2 text-sm text-muted-foreground">
             {user?.email}
           </p>
           {/* Not an oversight worth hiding: say why it's fixed. */}
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Your email can&apos;t be changed here — a new address would have to be
             verified before the old one stopped working, and there&apos;s no mail
             delivery set up to do that.
@@ -71,22 +82,13 @@ function ProfileSection() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={!dirty || updateProfile.isPending}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
-          >
+          <Button type="submit" disabled={!dirty} loading={updateProfile.isPending}>
             {updateProfile.isPending ? "Saving…" : "Save"}
-          </button>
+          </Button>
 
-          {updateProfile.isSuccess && !dirty && (
-            <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-              <Check className="h-4 w-4" />
-              Saved
-            </span>
-          )}
+          {updateProfile.isSuccess && !dirty && <Saved label="Saved" />}
           {updateProfile.isError && (
-            <span role="alert" className="text-sm text-red-500">
+            <span role="alert" className="text-sm text-destructive">
               {(updateProfile.error as Error).message}
             </span>
           )}
@@ -132,7 +134,7 @@ function PasswordSection() {
       title="Password"
       description="Changing this signs you out everywhere else. This browser stays signed in."
     >
-      <form onSubmit={submit} className="space-y-3">
+      <form onSubmit={submit} className="space-y-4">
         <Field
           label="Current password"
           name="current_password"
@@ -148,6 +150,7 @@ function PasswordSection() {
           autoComplete="new-password"
           value={next}
           onChange={(event) => setNext(event.target.value)}
+          hint="At least 8 characters"
           error={next.length > 0 && next.length < 8 ? "At least 8 characters" : undefined}
         />
         <Field
@@ -161,22 +164,17 @@ function PasswordSection() {
         />
 
         <div className="flex items-center gap-3">
-          <button
+          <Button
             type="submit"
-            disabled={changePassword.isPending || !current || next.length < 8}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+            loading={changePassword.isPending}
+            disabled={!current || next.length < 8}
           >
             {changePassword.isPending ? "Changing…" : "Change password"}
-          </button>
+          </Button>
 
-          {changePassword.isSuccess && (
-            <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-              <Check className="h-4 w-4" />
-              Changed
-            </span>
-          )}
+          {changePassword.isSuccess && <Saved label="Changed" />}
           {changePassword.isError && (
-            <span role="alert" className="text-sm text-red-500">
+            <span role="alert" className="text-sm text-destructive">
               {(changePassword.error as Error).message}
             </span>
           )}
@@ -215,19 +213,16 @@ function DangerSection() {
       description="Removes your account, every video you've uploaded, and all their captions and exports. There is no undo and no backup."
     >
       {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-md border border-red-500/50 px-4 py-2 text-sm text-red-500 transition hover:bg-red-500/10"
-        >
+        <Button variant="danger" onClick={() => setOpen(true)}>
           Delete my account
-        </button>
+        </Button>
       ) : (
-        <form onSubmit={confirm} className="space-y-3">
-          <div className="flex gap-2 rounded-md bg-red-500/10 p-3">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
-            <p className="text-sm text-red-500">
-              This permanently deletes everything owned by {user?.email}.
+        <form onSubmit={confirm} className="animate-fade-in space-y-4">
+          <div className="flex gap-2.5 rounded-md border border-destructive/30 bg-destructive/10 p-3">
+            <AlertTriangle className="mt-px size-4 shrink-0 text-destructive" />
+            <p className="text-sm text-destructive">
+              This permanently deletes everything owned by{" "}
+              <span className="font-medium">{user?.email}</span>.
             </p>
           </div>
 
@@ -245,24 +240,25 @@ function DangerSection() {
           />
 
           <div className="flex gap-2">
-            <button
+            <Button
               type="submit"
-              disabled={deleteAccount.isPending || !password}
-              className="rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              variant="destructive"
+              loading={deleteAccount.isPending}
+              disabled={!password}
             >
               {deleteAccount.isPending ? "Deleting…" : "Delete everything"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 setOpen(false);
                 setPassword("");
                 deleteAccount.reset();
               }}
-              className="rounded-md border border-border px-4 py-2 text-sm transition hover:bg-muted"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -275,13 +271,13 @@ export default function SettingsPage() {
     <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
       <Link
         href="/dashboard"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="size-4" />
         Back to your videos
       </Link>
 
-      <h1 className="mb-6 text-xl font-semibold sm:text-2xl">Account settings</h1>
+      <h1 className="mb-6 text-2xl font-semibold">Account settings</h1>
 
       <div className="space-y-4">
         <ProfileSection />

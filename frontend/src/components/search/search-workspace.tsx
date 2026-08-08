@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2, Search, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { inputClasses } from "@/components/ui/field";
 import { useAsk, useSemanticSearch } from "@/hooks/use-search";
 import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,17 +26,18 @@ function ResultRow({ result, showVideo }: { result: SearchResult; showVideo: boo
   return (
     <Link
       href={`/editor/${result.video_id}?t=${result.start_ms}`}
-      className="flex flex-col gap-1 rounded-md border border-transparent px-2 py-2 transition hover:border-border hover:bg-muted/40 sm:flex-row sm:gap-3"
+      className="group flex flex-col gap-1.5 rounded-lg px-3 py-3 transition-colors hover:bg-muted/60 sm:flex-row sm:gap-4"
     >
-      <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:w-20 sm:pt-0.5 sm:text-right">
+      <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground sm:w-[4.5rem] sm:justify-end sm:pt-0.5">
         {formatTimecode(result.start_ms)}
+        <ArrowUpRight className="size-3 opacity-0 transition-opacity group-hover:opacity-100 sm:hidden" />
       </span>
 
       <span className="min-w-0 flex-1">
         <span className="block text-sm leading-relaxed">{result.text}</span>
         {/* Only when the video isn't already implied by the page. */}
         {showVideo && (
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          <span className="mt-1 block truncate text-xs text-muted-foreground">
             {result.video_title}
           </span>
         )}
@@ -41,9 +45,19 @@ function ResultRow({ result, showVideo }: { result: SearchResult; showVideo: boo
 
       <span
         title="How closely this matches, by meaning"
-        className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground sm:pt-0.5"
+        className="flex shrink-0 items-center gap-2 sm:pt-1"
       >
-        {Math.round(result.score * 100)}%
+        {/* A bar as well as a number: relative strength across a result list is
+            far easier to read as length than as four digits per row. */}
+        <span className="hidden h-1 w-10 overflow-hidden rounded-full bg-muted sm:block">
+          <span
+            className="block h-full rounded-full bg-primary/70"
+            style={{ width: `${Math.round(result.score * 100)}%` }}
+          />
+        </span>
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+          {Math.round(result.score * 100)}%
+        </span>
       </span>
     </Link>
   );
@@ -74,10 +88,10 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
 
   return (
     <>
-      <h1 className="text-xl font-semibold">{heading}</h1>
-      <p className="mb-5 mt-1 text-sm text-muted-foreground">{subheading}</p>
+      <h1 className="text-2xl font-semibold">{heading}</h1>
+      <p className="mb-6 mt-1.5 text-sm text-muted-foreground">{subheading}</p>
 
-      <div className="mb-3 flex gap-1 rounded-md border border-border p-0.5">
+      <div className="mb-3 inline-flex rounded-lg bg-muted p-1">
         {(["search", "ask"] as const).map((option) => (
           <button
             key={option}
@@ -85,16 +99,16 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
             onClick={() => setMode(option)}
             aria-pressed={mode === option}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition sm:px-3 sm:text-sm",
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all sm:text-sm",
               mode === option
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             {option === "search" ? (
-              <Search className="h-3.5 w-3.5 shrink-0" />
+              <Search className="size-3.5 shrink-0" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <Sparkles className="size-3.5 shrink-0" />
             )}
             {option === "search" ? "Find passages" : "Ask a question"}
           </button>
@@ -102,61 +116,81 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
       </div>
 
       <form onSubmit={submit} className="flex gap-2">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={
-            mode === "search"
-              ? "What are you looking for?"
-              : showVideo
-                ? "What do you want to know?"
-                : "What do you want to know about this video?"
-          }
-          aria-label={mode === "search" ? "Search query" : "Question"}
-          className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-        />
-        <button
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={
+              mode === "search"
+                ? "What are you looking for?"
+                : showVideo
+                  ? "What do you want to know?"
+                  : "What do you want to know about this video?"
+            }
+            aria-label={mode === "search" ? "Search query" : "Question"}
+            className={cn(inputClasses, "h-10 pl-9")}
+          />
+        </div>
+        <Button
           type="submit"
-          disabled={active.isPending || query.trim().length < 2}
-          className="shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          size="lg"
+          loading={active.isPending}
+          disabled={query.trim().length < 2}
         >
-          {active.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : mode === "search" ? (
-            "Search"
-          ) : (
-            "Ask"
-          )}
-        </button>
+          {mode === "search" ? "Search" : "Ask"}
+        </Button>
       </form>
 
       {active.isError && (
-        <p role="alert" className="mt-4 rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-500">
-          {(active.error as Error).message}
-        </p>
+        <div
+          role="alert"
+          className="mt-4 flex gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          <AlertCircle className="mt-px size-4 shrink-0" />
+          <span>{(active.error as Error).message}</span>
+        </div>
       )}
 
       {mode === "ask" && ask.data && (
-        <section
+        <Card
           className={cn(
-            "mt-5 rounded-lg border p-4",
+            "mt-5 animate-fade-up p-4 sm:p-5",
             ask.data.grounded
-              ? "border-primary/40 bg-primary/5"
-              : "border-amber-500/40 bg-amber-500/5"
+              ? "border-primary/30 bg-primary/[0.04]"
+              : "border-warning/40 bg-warning/[0.06]"
           )}
         >
-          <p className="text-sm leading-relaxed">{ask.data.answer}</p>
+          <div className="flex gap-3">
+            <span
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-lg",
+                ask.data.grounded
+                  ? "bg-primary/15 text-primary"
+                  : "bg-warning/15 text-warning"
+              )}
+            >
+              {ask.data.grounded ? (
+                <Sparkles className="size-3.5" />
+              ) : (
+                <AlertCircle className="size-3.5" />
+              )}
+            </span>
+            <p className="flex-1 text-sm leading-relaxed">{ask.data.answer}</p>
+          </div>
 
           {ask.data.citations.length > 0 && (
-            <div className="mt-3 space-y-1 border-t border-border/50 pt-3">
-              <p className="text-xs font-medium text-muted-foreground">Sources</p>
+            <div className="mt-4 border-t border-border/60 pt-3">
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Sources</p>
               {ask.data.citations.map((citation) => (
                 <Link
                   key={citation.caption_id}
                   href={`/editor/${citation.video_id}?t=${citation.start_ms}`}
-                  className="flex gap-2 rounded px-1 py-1 text-xs transition hover:bg-muted"
+                  className="flex gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted"
                 >
-                  <span className="shrink-0 font-mono text-primary">[{citation.index}]</span>
+                  <span className="shrink-0 font-mono font-medium text-primary">
+                    [{citation.index}]
+                  </span>
                   <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
                     {formatTimecode(citation.start_ms)}
                   </span>
@@ -176,22 +210,22 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
           {/* Said plainly rather than dressed up: a wrong answer that looks
               confident is the failure mode this whole feature guards against. */}
           {!ask.data.grounded && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
+            <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
               Nothing in {showVideo ? "your videos" : "this transcript"} answers that, so
               no answer was invented.
             </p>
           )}
-        </section>
+        </Card>
       )}
 
       {results && (
-        <section className="mt-5">
-          <p className="mb-2 text-xs text-muted-foreground">
+        <section className="mt-5 animate-fade-in">
+          <p className="mb-1 px-3 text-xs text-muted-foreground">
             {results.length === 0
               ? "No passages matched closely enough."
               : `${results.length} passage${results.length === 1 ? "" : "s"}`}
           </p>
-          <div className="divide-y divide-border/50">
+          <div className="divide-y divide-border/60">
             {results.map((result) => (
               <ResultRow key={result.caption_id} result={result} showVideo={showVideo} />
             ))}
