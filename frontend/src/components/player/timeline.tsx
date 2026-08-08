@@ -394,12 +394,16 @@ export function Timeline({
           );
         })}
 
+        {/* Fixed red, deliberately outside the theme. Every video tool draws
+            the playhead red, and it has to stay legible over an arbitrary
+            waveform in either theme — a token that shifts with the palette
+            could land the same colour as the caption blocks behind it. */}
         <div
           ref={playhead}
-          className="pointer-events-none absolute top-0 h-full w-0.5 bg-red-500"
+          className="pointer-events-none absolute top-0 h-full w-0.5 bg-[#ef4444] shadow-[0_0_6px_rgba(239,68,68,0.6)]"
           style={{ willChange: "transform" }}
         >
-          <div className="absolute -left-1 top-0 h-2 w-2.5 rounded-sm bg-red-500" />
+          <div className="absolute -left-[3px] top-0 size-2 rotate-45 rounded-[1px] bg-[#ef4444]" />
         </div>
       </div>
 

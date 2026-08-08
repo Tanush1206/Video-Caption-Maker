@@ -103,7 +103,8 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
             aria-pressed={playback.isMuted}
             className={cn(
               buttonClass,
-              silent && "bg-red-500/15 text-red-500 hover:bg-red-500/25 hover:text-red-500"
+              silent &&
+                "bg-destructive/15 text-destructive hover:bg-destructive/25 hover:text-destructive"
             )}
           >
             {silent ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -118,7 +119,7 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
             aria-label="Volume"
             className="w-16 accent-primary"
           />
-          {silent && <span className="text-xs font-medium text-red-500">Muted</span>}
+          {silent && <span className="text-xs font-medium text-destructive">Muted</span>}
         </div>
       )}
 

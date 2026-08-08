@@ -95,7 +95,7 @@ export function VideoPlayer({
   if (isError || !ticket) {
     return (
       <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-lg bg-black text-center">
-        <AlertTriangle className="h-6 w-6 text-amber-500" />
+        <AlertTriangle className="h-6 w-6 text-warning" />
         <p className="text-sm text-white/70">Couldn&apos;t load this video.</p>
       </div>
     );
