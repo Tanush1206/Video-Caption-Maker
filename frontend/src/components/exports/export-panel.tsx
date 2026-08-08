@@ -10,6 +10,8 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useCreateExport,
   useDeleteExport,
@@ -35,7 +37,7 @@ const FORMATS: {
 function StatusLine({ item }: { item: VideoExport }) {
   if (item.status === "failed") {
     return (
-      <span className="flex items-center gap-1 text-xs text-red-500">
+      <span className="flex items-center gap-1 text-xs text-destructive">
         <AlertTriangle className="h-3 w-3" />
         {item.error_message ?? "Render failed"}
       </span>
@@ -79,9 +81,9 @@ export function ExportPanel({
   );
 
   return (
-    <section className="rounded-lg border border-border bg-card p-3">
+    <Card className="p-3">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Export
         </h2>
         {createExport.isPending && (
@@ -90,7 +92,7 @@ export function ExportPanel({
       </header>
 
       {!hasCaptions && (
-        <p className="mb-3 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+        <p className="mb-3 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
           Nothing to export until this video has captions.
         </p>
       )}
@@ -108,14 +110,16 @@ export function ExportPanel({
               onClick={() => createExport.mutate(key)}
               title={key === "mp4" ? "Captions drawn into the video itself" : hint}
               className={cn(
-                "flex items-center gap-2 rounded-md border border-border px-2.5 py-2 text-left transition",
-                "hover:border-primary hover:bg-primary/10",
-                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-transparent"
+                "group flex items-center gap-2.5 rounded-md border border-border bg-subtle px-2.5 py-2 text-left transition-colors",
+                "hover:border-primary/50 hover:bg-primary/5",
+                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-subtle"
               )}
             >
-              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary group-disabled:bg-muted group-disabled:text-muted-foreground">
+                <Icon className="size-3.5" />
+              </span>
               <span className="min-w-0">
-                <span className="block text-xs font-medium">{label}</span>
+                <span className="block text-xs font-semibold">{label}</span>
                 <span className="block truncate text-[10px] text-muted-foreground">
                   {hint}
                 </span>
@@ -126,7 +130,7 @@ export function ExportPanel({
       </div>
 
       {createExport.isError && (
-        <p role="alert" className="mt-2 text-xs text-red-500">
+        <p role="alert" className="mt-2 text-xs text-destructive">
           {(createExport.error as Error).message}
         </p>
       )}
@@ -140,7 +144,7 @@ export function ExportPanel({
       )}
 
       <div className="mt-3 space-y-1.5">
-        {isLoading && <div className="h-10 animate-pulse rounded-md bg-muted" />}
+        {isLoading && <Skeleton className="h-10" />}
 
         {!isLoading && items.length === 0 && (
           <p className="py-2 text-center text-xs text-muted-foreground">
@@ -151,9 +155,9 @@ export function ExportPanel({
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-2 rounded-md border border-border/60 px-2.5 py-2"
+            className="flex items-center gap-2 rounded-md border border-border/60 bg-subtle px-2.5 py-2"
           >
-            <span className="w-10 shrink-0 font-mono text-[11px] uppercase text-muted-foreground">
+            <span className="w-9 shrink-0 rounded bg-muted py-0.5 text-center font-mono text-[10px] font-semibold uppercase text-muted-foreground">
               {item.format}
             </span>
 
@@ -162,7 +166,7 @@ export function ExportPanel({
               {item.status === "processing" && (
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full bg-primary transition-[width]"
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-[width] duration-500 ease-out"
                     style={{ width: `${item.progress}%` }}
                   />
                 </div>
@@ -184,13 +188,13 @@ export function ExportPanel({
               onClick={() => deleteExport.mutate(item.id)}
               title="Delete this export"
               aria-label={`Delete ${item.format} export`}
-              className="rounded p-1.5 text-muted-foreground transition hover:bg-muted hover:text-red-500"
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

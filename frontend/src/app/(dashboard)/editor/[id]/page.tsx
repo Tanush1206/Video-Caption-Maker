@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { AlertCircle, ArrowLeft, Search } from "lucide-react";
 import { useMemo } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CaptionEditor } from "@/components/captions/caption-editor";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { PlayerControls } from "@/components/player/player-controls";
@@ -55,19 +58,28 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
   if (isLoading) {
     return (
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="mt-4 h-7 w-64" />
+        <div className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <Skeleton className="aspect-video w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
       </main>
     );
   }
 
   if (isError || !video) {
     return (
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <p role="alert" className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-500">
-          Couldn&apos;t load this video. It may have been deleted.
+      <main className="mx-auto max-w-md px-6 py-24 text-center">
+        <span className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <AlertCircle className="size-5" />
+        </span>
+        <h1 className="text-lg font-semibold">Couldn&apos;t load this video</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          It may have been deleted, or the link may be wrong.
         </p>
-        <Link href="/dashboard" className="mt-4 inline-block text-sm text-primary hover:underline">
+        <Link href="/dashboard" className={`mt-6 ${buttonVariants()}`}>
           Back to your videos
         </Link>
       </main>
@@ -75,20 +87,36 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-6">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <Link
         href="/dashboard"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="size-4" />
         Back to your videos
       </Link>
 
-      <h1 className="text-xl font-semibold">{video.title}</h1>
-      <p className="mb-5 mt-1 text-sm text-muted-foreground">
-        {formatDuration(video.duration_ms)}
-        {video.status !== "completed" && ` · ${video.status}`}
-      </p>
+      <div className="mb-5 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1 className="min-w-0 truncate text-xl font-semibold sm:text-2xl">{video.title}</h1>
+
+        {video.status === "completed" ? (
+          <Link
+            href={`/search/${video.id}`}
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
+            <Search />
+            Search this video
+          </Link>
+        ) : (
+          <Badge tone={video.status === "failed" ? "destructive" : "primary"} dot>
+            {video.status}
+          </Badge>
+        )}
+
+        <span className="ml-auto font-mono text-sm tabular-nums text-muted-foreground">
+          {formatDuration(video.duration_ms)}
+        </span>
+      </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-3">

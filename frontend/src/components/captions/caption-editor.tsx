@@ -4,6 +4,7 @@ import { FileText, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 
 import { CaptionRow } from "@/components/captions/caption-row";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   EMPHASIS,
   NO_EMPHASIS,
@@ -89,7 +90,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />
+          <Skeleton key={i} className="h-12" />
         ))}
       </div>
     );
@@ -97,7 +98,10 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   if (isError) {
     return (
-      <p role="alert" className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-500">
+      <p
+        role="alert"
+        className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+      >
         Couldn&apos;t load captions: {(error as Error).message}
       </p>
     );
@@ -105,10 +109,12 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   if (captions.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border py-16 text-center">
-        <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-        <p className="text-sm font-medium">No captions yet</p>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-subtle px-6 py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <FileText className="size-5" />
+        </span>
+        <p className="mt-4 text-sm font-medium">No captions yet</p>
+        <p className="mt-1 max-w-xs text-sm text-muted-foreground">
           {video.status === "completed"
             ? "Transcription finished but found no speech in this video."
             : "They'll appear here once transcription finishes."}
@@ -119,13 +125,13 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="mb-2 flex items-center justify-between text-sm text-muted-foreground">
-        <span>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {captions.length} caption{captions.length === 1 ? "" : "s"}
         </span>
         {updateCaption.isPending && (
-          <span className="flex items-center gap-1.5 text-xs">
-            <Loader2 className="h-3 w-3 animate-spin" />
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
             Saving…
           </span>
         )}

@@ -150,13 +150,13 @@ export function CaptionRow({
             "w-full resize-none rounded-md border bg-background px-2 py-1.5 text-sm leading-relaxed transition",
             "focus:outline-none focus:ring-2 focus:ring-primary/40",
             dirty ? "border-primary/50" : "border-transparent",
-            lowConfidence && !dirty && "border-amber-500/40"
+            lowConfidence && !dirty && "border-warning/40"
           )}
           aria-label={`Caption at ${formatTimecode(caption.start_ms)}`}
         />
 
         {lowConfidence && (
-          <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-500">
+          <p className="mt-0.5 text-[11px] text-warning">
             Low confidence — worth checking
           </p>
         )}
@@ -172,7 +172,7 @@ export function CaptionRow({
           className={cn(
             "rounded p-1.5 transition hover:bg-muted",
             emphasised
-              ? "text-amber-500"
+              ? "text-warning"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -202,7 +202,7 @@ export function CaptionRow({
           onClick={onDelete}
           title="Delete caption"
           aria-label="Delete caption"
-          className="rounded p-1.5 text-muted-foreground transition hover:bg-muted hover:text-red-500"
+          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
