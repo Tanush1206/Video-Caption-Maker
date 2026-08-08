@@ -110,5 +110,26 @@ def delete(relative_path: str | None) -> None:
         pass
 
 
+def delete_user_files(user_id: int) -> None:
+    """
+    Remove everything belonging to one user, in a single recursive delete.
+
+    Deleting an account row cascades to its videos in Postgres, but the
+    filesystem has no foreign keys — without this, the bytes stay on disk
+    forever with nothing left pointing at them.
+
+    The path is rebuilt from the user id rather than assembled from any stored
+    value, so there is no input here that could be made to name another
+    directory. The is_relative_to check is still worth keeping: it costs
+    nothing, and this is a recursive delete.
+    """
+    target = storage_root() / f"user_{user_id}"
+
+    if not target.resolve().is_relative_to(storage_root().resolve()):
+        raise ValueError(f"Refusing to delete outside storage root: {target}")
+
+    shutil.rmtree(target, ignore_errors=True)
+
+
 def free_space_bytes() -> int:
     return shutil.disk_usage(storage_root()).free

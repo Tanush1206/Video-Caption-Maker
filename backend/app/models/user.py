@@ -31,6 +31,17 @@ class User(Base):
         Boolean, nullable=False, default=True, server_default=text("true")
     )
 
+    # Refresh tokens issued before this moment are refused.
+    #
+    # A JWT denylist can only revoke tokens we can name, and we cannot
+    # enumerate one user's outstanding jti values. Changing a password has to
+    # kick out sessions we have never seen — a stolen laptop, a shared browser
+    # — so instead of listing what to reject, we move a line and reject
+    # everything behind it. One nullable column replaces a session table.
+    sessions_valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
