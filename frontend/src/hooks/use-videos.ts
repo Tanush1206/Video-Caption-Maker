@@ -1,20 +1,36 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { statsKeys } from "@/hooks/use-stats";
 import type { CaptionList } from "@/types/caption";
-import type { Video, VideoList } from "@/types/video";
+import type { Video, VideoList, VideoStatus } from "@/types/video";
+
+/** One screenful on a wide monitor: 4 columns × 3 rows, and 2 or 3 on smaller. */
+export const PAGE_SIZE = 12;
 
 export const videoKeys = {
   all: ["videos"] as const,
+  list: (page: number, status: VideoStatus | null) => ["videos", "list", page, status] as const,
   detail: (id: number) => ["videos", id] as const,
 };
 
-export function useVideos() {
+export function useVideos(page = 0, status: VideoStatus | null = null) {
   return useQuery({
-    queryKey: videoKeys.all,
-    queryFn: () => api.get<VideoList>("/api/videos"),
+    queryKey: videoKeys.list(page, status),
+    queryFn: () => {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(page * PAGE_SIZE),
+      });
+      if (status) params.set("status", status);
+      return api.get<VideoList>(`/api/videos?${params}`);
+    },
+    // Each page is a separate cache entry, so paging forward would normally
+    // blank the grid and collapse the layout while the next one loads. This
+    // keeps the previous page on screen until the new one lands.
+    placeholderData: keepPreviousData,
     // Poll only while something is actually moving. Returning false when
     // nothing is in flight stops an idle dashboard hammering the API.
     //
@@ -34,7 +50,12 @@ export function useRetranscribe() {
 
   return useMutation({
     mutationFn: (id: number) => api.post<Video>(`/api/videos/${id}/transcribe`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: videoKeys.all }),
+    onSuccess: () => {
+      // videoKeys.all is a prefix of every page key, so one call clears them
+      // all — a video moving between statuses can change which page it is on.
+      void queryClient.invalidateQueries({ queryKey: videoKeys.all });
+      void queryClient.invalidateQueries({ queryKey: statsKeys.all });
+    },
   });
 }
 
@@ -59,8 +80,12 @@ export function useDeleteVideo() {
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/api/videos/${id}`),
     // Refetch rather than trusting a local edit: the server is the source of
-    // truth, and the list is small enough that a round-trip is cheap.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: videoKeys.all }),
+    // truth, and with pagination a deletion pulls a video from the next page
+    // onto this one — something no local splice can know about.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: videoKeys.all });
+      void queryClient.invalidateQueries({ queryKey: statsKeys.all });
+    },
   });
 }
 

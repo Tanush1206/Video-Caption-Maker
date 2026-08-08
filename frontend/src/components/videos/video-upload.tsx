@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
+import { statsKeys } from "@/hooks/use-stats";
 import { videoKeys } from "@/hooks/use-videos";
 import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/lib/format";
@@ -55,6 +56,7 @@ export function VideoUpload() {
       handle.promise
         .then(() => {
           void queryClient.invalidateQueries({ queryKey: videoKeys.all });
+          void queryClient.invalidateQueries({ queryKey: statsKeys.all });
         })
         .catch((err: Error) => {
           if (err.message !== "Upload cancelled") setError(err.message);
