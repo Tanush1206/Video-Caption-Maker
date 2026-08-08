@@ -50,16 +50,35 @@ async def get_owned_video(db: AsyncSession, video_id: int, owner_id: int) -> Vid
 
 
 async def list_videos(
-    db: AsyncSession, owner_id: int, *, limit: int = 50, offset: int = 0
+    db: AsyncSession,
+    owner_id: int,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    status: VideoStatus | None = None,
 ) -> tuple[list[Video], int]:
-    """Newest first, with the total count for pagination."""
-    total = await db.scalar(
-        select(func.count()).select_from(Video).where(Video.owner_id == owner_id)
-    )
+    """
+    Newest first, with the total count for pagination.
+
+    The filter is applied in SQL and counted with the same predicate, not
+    handed to the client to apply. Filtering a paginated response in the
+    browser would only ever filter the page you happen to be looking at — ask
+    for failed videos on page one and you get however many of the newest
+    twelve happen to have failed, which looks like an answer and is not one.
+    """
+    conditions = [Video.owner_id == owner_id]
+    if status is not None:
+        conditions.append(Video.status == status)
+
+    total = await db.scalar(select(func.count()).select_from(Video).where(*conditions))
 
     result = await db.execute(
         select(Video)
-        .where(Video.owner_id == owner_id)
+        .where(*conditions)
+        # id as a tiebreaker, not decoration: two videos uploaded in the same
+        # moment would otherwise have no defined order between them, and could
+        # swap places between page one and page two — showing one twice and
+        # hiding the other entirely.
         .order_by(Video.created_at.desc(), Video.id.desc())
         .limit(limit)
         .offset(offset)

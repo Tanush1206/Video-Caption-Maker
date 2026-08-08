@@ -170,9 +170,17 @@ async def list_videos(
     db: DbSession,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    status_filter: VideoStatus | None = Query(default=None, alias="status"),
 ) -> VideoList:
+    """
+    The caller's videos, newest first.
+
+    `total` counts everything matching the filter, not what came back in
+    `items` — the client needs to know how many pages exist, and the page it
+    is holding cannot tell it that.
+    """
     videos, total = await video_service.list_videos(
-        db, user.id, limit=limit, offset=offset
+        db, user.id, limit=limit, offset=offset, status=status_filter
     )
     return VideoList(items=[_to_read(v) for v in videos], total=total)
 

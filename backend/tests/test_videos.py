@@ -103,6 +103,120 @@ async def test_list_returns_only_your_own_videos(
 
 
 @pytest.mark.asyncio
+async def test_pages_do_not_overlap_or_skip(
+    client, auth_headers, sample_video_bytes, db_session
+):
+    """
+    Five videos sharing one timestamp, paged two at a time, must yield five
+    distinct ids in a defined order.
+
+    The timestamps are forced equal because real upload times differ by
+    milliseconds and never exercise the tie at all. Be clear about what this
+    does and does not prove: with ties, `ORDER BY created_at` alone leaves the
+    row order *unspecified*, and an unspecified order is free to come out
+    right — removing the id tiebreaker does not reliably fail this test,
+    because Postgres tends to return a small table in heap order anyway.
+
+    So this pins the contract rather than catching the bug: it asserts the
+    total ordering the pager depends on, and it would catch a regression that
+    reorders pages consistently. The tiebreaker itself is a correctness
+    argument, not something a five-row fixture can demonstrate.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update
+
+    from app.models.video import Video
+
+    for index in range(5):
+        assert (
+            await upload(client, auth_headers, sample_video_bytes, f"clip{index}.mp4")
+        ).status_code == 201
+
+    owner_id = (await client.get("/api/auth/me", headers=auth_headers)).json()["id"]
+    await db_session.execute(
+        update(Video)
+        .where(Video.owner_id == owner_id)
+        .values(created_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    )
+    await db_session.commit()
+
+    seen: list[int] = []
+    for offset in (0, 2, 4):
+        page = (
+            await client.get(f"/api/videos?limit=2&offset={offset}", headers=auth_headers)
+        ).json()
+        assert page["total"] == 5
+        seen.extend(item["id"] for item in page["items"])
+
+    assert len(seen) == 5
+    assert len(set(seen)) == 5, f"a page boundary duplicated or dropped a video: {seen}"
+    # Newest first; with created_at tied, that leaves the id tiebreaker.
+    assert seen == sorted(seen, reverse=True), f"page order is not total: {seen}"
+
+
+@pytest.mark.asyncio
+async def test_total_counts_the_library_not_the_page(
+    client, auth_headers, sample_video_bytes
+):
+    """Without this the client cannot know a second page exists."""
+    for index in range(3):
+        await upload(client, auth_headers, sample_video_bytes, f"clip{index}.mp4")
+
+    page = (await client.get("/api/videos?limit=1", headers=auth_headers)).json()
+
+    assert len(page["items"]) == 1
+    assert page["total"] == 3
+
+
+@pytest.mark.asyncio
+async def test_status_filter_narrows_both_items_and_total(
+    client, auth_headers, sample_video_bytes
+):
+    """
+    The count has to use the same predicate as the rows.
+
+    A filtered list with an unfiltered total renders as "1 of 12 videos" over
+    a single card, and the pager offers pages that come back empty.
+    """
+    await upload(client, auth_headers, sample_video_bytes)
+
+    pending = (await client.get("/api/videos?status=pending", headers=auth_headers)).json()
+    completed = (
+        await client.get("/api/videos?status=completed", headers=auth_headers)
+    ).json()
+
+    # Transcription is stubbed out in tests, so the upload stays pending.
+    assert pending["total"] == 1
+    assert len(pending["items"]) == 1
+    assert completed["total"] == 0
+    assert completed["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_unknown_status_is_rejected_rather_than_ignored(client, auth_headers):
+    """
+    Silently ignoring it would return the whole library while the UI shows a
+    filter as active — the user reads that as data that shouldn't be there.
+    """
+    response = await client.get("/api/videos?status=banana", headers=auth_headers)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_filter_cannot_widen_the_scope(
+    client, auth_headers, second_user_headers, sample_video_bytes
+):
+    await upload(client, auth_headers, sample_video_bytes)
+
+    theirs = (
+        await client.get("/api/videos?status=pending", headers=second_user_headers)
+    ).json()
+
+    assert theirs["total"] == 0
+
+
+@pytest.mark.asyncio
 async def test_another_user_cannot_reach_your_video(
     client, auth_headers, second_user_headers, sample_video_bytes
 ):
