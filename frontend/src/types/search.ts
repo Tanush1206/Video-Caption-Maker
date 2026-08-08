@@ -1,5 +1,7 @@
 export interface SearchResult {
   video_id: number;
+  /** So a library-wide result can say which video it came from. */
+  video_title: string;
   caption_id: number;
   start_ms: number;
   end_ms: number;
@@ -24,6 +26,7 @@ export interface SearchResponse {
 export interface Citation {
   index: number;
   video_id: number;
+  video_title: string;
   caption_id: number;
   start_ms: number;
   text: string;
