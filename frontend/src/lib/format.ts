@@ -41,6 +41,24 @@ export function formatTimecode(ms: number): string {
   return hours > 0 ? `${hours}:${base}` : base;
 }
 
+/**
+ * A total, not a position: "3h 42m" rather than "3:42:07".
+ *
+ * Clock format is right for a playhead, where the seconds matter and the
+ * reader is comparing against a timeline. For "how much footage do I have",
+ * seconds are noise, and a bare "3:42" is ambiguous between hours and minutes.
+ */
+export function formatDurationLong(ms: number): string {
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  // Sub-minute libraries are usually empty ones; "0m" reads as broken.
+  return ms > 0 ? "<1m" : "0m";
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
 
