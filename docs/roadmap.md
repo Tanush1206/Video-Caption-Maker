@@ -14,7 +14,10 @@ you can actually open and use — no milestone is pure plumbing.
 | 7 | Caption editor — styling | ✅ Done |
 | 8 | Export & rendering | ✅ Done |
 | 9 | Semantic search & RAG | ✅ Done |
-| 10 | Dashboard & polish | Next |
+| 10 | Dashboard & polish | ✅ Done |
+
+All ten milestones are complete. What remains is a visual design pass —
+deferred throughout, on purpose — and deployment.
 
 ---
 
@@ -211,6 +214,18 @@ found" instead of a fabrication. This is the test that matters.
 
 **Done when:** every route works on a phone-sized viewport with a
 throttled connection.
+
+Three decisions from this milestone worth keeping in view:
+
+- **Filtering and counting happen in SQL.** A filter applied in the browser
+  only ever filters the page already loaded, which produces a number that
+  looks like an answer and isn't.
+- **`sessions_valid_from` on the user row.** A signed JWT can't be unsigned
+  and a denylist can't name tokens it has never seen, so changing a password
+  moves a cut-off and refuses everything issued behind it.
+- **Google-only accounts cannot set a first password.** With no email
+  delivery there is nothing to authorise the request but the session itself,
+  and that would turn a stolen tab into permanent access.
 
 ---
 
