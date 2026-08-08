@@ -62,6 +62,27 @@ async def owned_video_ids(
     return list((await db.execute(query)).scalars().all())
 
 
+async def video_titles(db: AsyncSession, video_ids: list[int]) -> dict[int, str]:
+    """
+    Titles for the videos a result set actually landed in.
+
+    Searching one video, the caller already knows whose transcript it is.
+    Searching the library, a wall of quotes with no indication of where each
+    came from is barely usable — so the title travels with the hit.
+
+    Looked up for the handful of ids in the results rather than for the whole
+    library: a user with hundreds of videos should not pay for all of them to
+    label ten rows.
+    """
+    if not video_ids:
+        return {}
+
+    rows = await db.execute(
+        select(Video.id, Video.title).where(Video.id.in_(set(video_ids)))
+    )
+    return {video_id: title for video_id, title in rows}
+
+
 def search_vectors(query: str, video_ids: list[int], limit: int) -> list[SearchHit]:
     """
     Nearest captions to `query`, restricted to `video_ids`.

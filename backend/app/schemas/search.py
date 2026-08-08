@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 
 class SearchResult(BaseModel):
     video_id: int
+    # Carried so library-wide results can say which video each hit came from.
+    video_title: str
     caption_id: int
     start_ms: int
     end_ms: int
@@ -34,6 +36,7 @@ class Citation(BaseModel):
 
     index: int
     video_id: int
+    video_title: str
     caption_id: int
     start_ms: int
     text: str
