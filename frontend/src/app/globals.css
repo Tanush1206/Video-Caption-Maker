@@ -2,32 +2,149 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens.
+ *
+ * Every colour is declared as bare HSL channels so Tailwind can wrap them in
+ * `hsl(var(--x) / <alpha>)` and opacity modifiers like `bg-primary/10` keep
+ * working. A token holding a full `hsl(...)` string breaks that silently.
+ *
+ * The two themes are not the same palette inverted. Light builds depth by
+ * darkening a shared white with borders and shadow; dark builds it by lifting
+ * surfaces off a near-black, because a shadow on a dark background is
+ * invisible. That is why --card is *lighter* than --background in dark and
+ * identical to it in light.
+ */
+
 @layer base {
   :root {
+    /* Neutrals: a hair of blue (220-ish hue) rather than pure grey, which
+       reads as dinginess on most displays. */
     --background: 0 0% 100%;
     --foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --border: 214 32% 91%;
-    --radius: 0.5rem;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    /* One step down from the page, for inset areas like the upload dropzone. */
+    --subtle: 220 33% 98%;
+
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 12% 46%;
+
+    /* Violet rather than the default blue: blue is what every framework ships
+       with, and this needs to look like a decision. It also stays clear of the
+       red/amber/green already carrying status meaning on the video cards. */
+    --primary: 258 82% 57%;
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 258 82% 96%;
+
+    --accent: 190 90% 42%;
+
+    --success: 142 66% 36%;
+    --warning: 32 92% 46%;
+    --destructive: 0 74% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 18% 90%;
+    /* Slightly darker than --border, for inputs, which need to read as
+       interactive rather than decorative. */
+    --input: 220 16% 86%;
+    --ring: 258 82% 57%;
+
+    --radius: 0.625rem;
+
+    /* Layered rather than one blur: a tight shadow for the contact edge and a
+       wide one for the ambient falloff. A single shadow always looks either
+       hard or muddy. */
+    --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
+    --shadow-md:
+      0 1px 3px 0 hsl(222 47% 11% / 0.07), 0 4px 12px -2px hsl(222 47% 11% / 0.06);
+    --shadow-lg:
+      0 2px 4px -1px hsl(222 47% 11% / 0.06), 0 12px 28px -6px hsl(222 47% 11% / 0.12);
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --border: 217 33% 17%;
+    --background: 224 32% 7%;
+    --foreground: 220 20% 96%;
+
+    /* Lifted off the page, because shadows do not read on dark surfaces.
+       Elevation here is expressed as lightness, not as blur. */
+    --card: 224 26% 10%;
+    --card-foreground: 220 20% 96%;
+
+    --subtle: 224 28% 9%;
+
+    --muted: 223 22% 16%;
+    --muted-foreground: 220 12% 62%;
+
+    /* Lighter and less saturated than the light-theme violet. The same colour
+       on a dark background reads heavier and vibrates against it. */
+    --primary: 258 90% 71%;
+    --primary-foreground: 258 50% 12%;
+    --primary-muted: 258 40% 18%;
+
+    --accent: 190 85% 55%;
+
+    --success: 142 60% 52%;
+    --warning: 32 92% 60%;
+    --destructive: 0 78% 64%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 20% 19%;
+    --input: 222 18% 24%;
+    --ring: 258 90% 71%;
+
+    /* Kept, and deliberately deeper: they do almost nothing on the card
+       surfaces but still separate overlays and dropdowns from the page. */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 2px 6px -1px hsl(0 0% 0% / 0.4), 0 8px 20px -6px hsl(0 0% 0% / 0.35);
+    --shadow-lg: 0 4px 10px -2px hsl(0 0% 0% / 0.45), 0 18px 40px -10px hsl(0 0% 0% / 0.5);
   }
 
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    /* Inter ships proper contextual alternates and tabular figures; without
+       cv11 the lowercase l and uppercase I are hard to tell apart in filenames
+       and error messages. */
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Headings are set tighter than body text. At display sizes the default
+     tracking looks loose and unresolved. */
+  h1, h2, h3 {
+    @apply tracking-tight;
+  }
+
+  /* One focus treatment everywhere, rather than each component inventing its
+     own. Applied on :focus-visible only, so a mouse click doesn't leave a ring
+     behind while the keyboard path stays fully visible. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
+  }
+
+  /* Any number that changes in place - timecodes, progress, counters - must
+     not reflow as its digits change. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Respected globally rather than per-animation: everything below is
+     decoration, and a vestibular disorder is not a preference. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

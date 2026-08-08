@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthBootstrap } from "@/components/layout/auth-bootstrap";
 import { Providers } from "@/components/layout/providers";
 import { ThemeProvider } from "@/components/layout/theme-provider";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 // Runs before first paint, so the correct theme is applied without a flash
@@ -21,7 +20,19 @@ const themeInitScript = `
 })();
 `;
 
-const inter = Inter({ subsets: ["latin"] });
+// Exposed as CSS variables rather than class names so Tailwind's fontFamily
+// can reference them, and so a `font-mono` utility anywhere picks the right
+// face without the component knowing which font is loaded.
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+
+// Timecodes, byte counts and progress percentages sit in columns that must not
+// jitter as their digits change. A proportional face makes 00:11 narrower than
+// 00:00, and the whole row shifts every tenth of a second during playback.
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "VideoCaptionMaker — AI Captions & Transcript Search",
@@ -39,9 +50,8 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={inter.className}>
+      <body className={`${sans.variable} ${mono.variable} font-sans`}>
         <ThemeProvider>
-          <ThemeToggle />
           <Providers>
             {/* Silently restores the session from the refresh cookie on load. */}
             <AuthBootstrap />
