@@ -11,7 +11,15 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.dependencies import CurrentUser, DbSession
-from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserRead
+from app.schemas.user import (
+    AccountDelete,
+    PasswordChange,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserRead,
+    UserUpdate,
+)
 from app.services import auth as auth_service
 from app.utils.rate_limit import (
     RateLimitExceeded,
@@ -190,6 +198,18 @@ async def refresh(request: Request, response: Response, db: DbSession) -> TokenR
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
+    # Issued before the last password change. The denylist cannot catch these
+    # — we have no way to enumerate one user's outstanding tokens — so the cut
+    # -off is checked here instead. This is where a stolen session actually
+    # dies: an access token survives until it expires, but without a usable
+    # refresh token it cannot be renewed.
+    if auth_service.sessions_are_stale(user, payload.get("iat")):
+        _clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please sign in again.",
+        )
+
     # A new refresh token goes out with every refresh. The old one is left
     # valid until it expires rather than revoked here: revoking it would make
     # two concurrent refreshes (two browser tabs) log the user out.
@@ -216,6 +236,104 @@ async def logout(request: Request) -> Response:
 @router.get("/me", response_model=UserRead)
 async def read_current_user(user: CurrentUser) -> UserRead:
     return UserRead.model_validate(user)
+
+
+@router.patch("/me", response_model=UserRead)
+async def update_current_user(
+    payload: UserUpdate, user: CurrentUser, db: DbSession
+) -> UserRead:
+    name = payload.full_name.strip() if payload.full_name else None
+    # Empty string and "just spaces" both mean "clear it", not a name made of
+    # whitespace that renders as a blank line wherever it is displayed.
+    return UserRead.model_validate(
+        await auth_service.update_profile(db, user, full_name=name or None)
+    )
+
+
+@router.post("/me/password", response_model=TokenResponse)
+async def change_password(
+    payload: PasswordChange, request: Request, response: Response, user: CurrentUser, db: DbSession
+) -> TokenResponse:
+    """
+    Change the password and end every other session.
+
+    Rate limited like login, because it takes the current password as input:
+    without a limit, an attacker with a stolen access token could brute-force
+    the real password here at full speed.
+    """
+    await _limit(f"password:user:{user.id}")
+
+    if user.hashed_password is None:
+        # A Google-only account has nothing to check the request against, and
+        # setting a first password on a session's say-so would be an
+        # escalation: the session dies in days, a password lasts forever. With
+        # no email delivery there is no way to prove the request, so refuse.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account signs in with Google and has no password to change.",
+        )
+
+    if not auth_service.verify_password_for(user, payload.current_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
+        )
+
+    user = await auth_service.change_password(db, user, payload.new_password)
+
+    # The caller's own refresh token was just invalidated along with the rest,
+    # so it is replaced here. Anything else would sign the user out of the
+    # browser they are sitting in front of as a reward for good security
+    # hygiene.
+    old = request.cookies.get(settings.refresh_cookie_name)
+    if old:
+        try:
+            await revoke_token(decode_token(old, expected_type="refresh"))
+        except TokenError:
+            pass
+
+    return _token_response(user, response)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_current_user(
+    payload: AccountDelete, request: Request, user: CurrentUser, db: DbSession
+) -> Response:
+    """
+    Erase the account, its videos, its captions, and its files.
+
+    Takes a body rather than being a bare DELETE: this is the one action in
+    the app with nothing to undo it, so it asks the caller to prove they meant
+    it and not merely that they hold a token.
+    """
+    await _limit(f"delete-account:user:{user.id}")
+
+    if user.hashed_password is not None:
+        if not payload.password or not auth_service.verify_password_for(user, payload.password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Password is incorrect"
+            )
+    else:
+        # Google-only: no password exists, so typing the address is the proof.
+        typed = auth_service.normalize_email(payload.confirm_email or "")
+        if not typed or typed != user.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Type your email address to confirm",
+            )
+
+    await auth_service.delete_account(db, user)
+
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _clear_refresh_cookie(response)
+
+    old = request.cookies.get(settings.refresh_cookie_name)
+    if old:
+        try:
+            await revoke_token(decode_token(old, expected_type="refresh"))
+        except TokenError:
+            pass
+
+    return response
 
 
 # ── Google OAuth ─────────────────────────────────────────────────────────
