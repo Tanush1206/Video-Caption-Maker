@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 
+import { AuthDivider, GoogleButton } from "@/components/auth/google-button";
+import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { useAuth } from "@/hooks/use-auth";
 import { ApiError } from "@/lib/api";
 import { fieldErrors, loginSchema } from "@/lib/validation";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,63 +51,55 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold mb-6">Sign in</h1>
-
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          {errors.form && (
-            <p role="alert" className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-500">
-              {errors.form}
-            </p>
-          )}
-
-          <Field
-            label="Email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            error={errors.email}
-          />
-          <Field
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            error={errors.password}
-          />
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-          >
-            {submitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-
-        <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          OR
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
-        {/* A plain anchor, not fetch: OAuth requires a full-page navigation. */}
-        <a
-          href={`${API_URL}/api/auth/google/authorize`}
-          className="block w-full rounded-md border border-border px-4 py-2 text-center font-medium transition hover:bg-muted"
-        >
-          Continue with Google
-        </a>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-primary hover:underline">
-            Create one
-          </Link>
+    <>
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold">Welcome back</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Sign in to reach your videos and transcripts.
         </p>
       </div>
-    </main>
+
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        {errors.form && (
+          <div
+            role="alert"
+            className="flex gap-2.5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          >
+            <AlertCircle className="mt-px size-4 shrink-0" />
+            <span>{errors.form}</span>
+          </div>
+        )}
+
+        <Field
+          label="Email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          error={errors.email}
+        />
+        <Field
+          label="Password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          error={errors.password}
+        />
+
+        <Button type="submit" size="lg" loading={submitting} className="w-full">
+          {submitting ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
+
+      <AuthDivider />
+      <GoogleButton label="Continue with Google" />
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-medium text-primary hover:underline">
+          Create one
+        </Link>
+      </p>
+    </>
   );
 }
