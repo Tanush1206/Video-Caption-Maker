@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 import { Film, LogOut, Menu, Search, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Brand } from "@/components/layout/brand";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { UserMenu } from "@/components/layout/user-menu";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -30,90 +34,85 @@ export function DashboardHeader() {
   }
 
   return (
-    <header className="border-b border-border">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex min-w-0 items-center gap-6">
-          <Link href="/dashboard" className="shrink-0 font-semibold">
-            VideoCaptionMaker
-          </Link>
+    <header
+      className={cn(
+        "sticky top-0 z-40 border-b border-border",
+        // Translucent with a blur, so content scrolling underneath stays
+        // faintly visible instead of vanishing behind an opaque bar. The
+        // supports check keeps a solid fallback where blur is unavailable,
+        // rather than leaving the header see-through and unreadable.
+        "bg-background/85 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-lg"
+      )}
+    >
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
+        <Brand href="/dashboard" />
 
-          <nav className="hidden items-center gap-1 md:flex">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={isActive(item.href) ? "page" : undefined}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm transition",
-                  isActive(item.href)
-                    ? "bg-muted font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        {/* mr-12 on the last item keeps it clear of the theme toggle, which is
-            fixed to the top-right corner by the root layout. */}
-        <div className="hidden items-center gap-4 md:flex">
-          <span className="max-w-[16ch] truncate text-sm text-muted-foreground">
-            {user?.full_name || user?.email}
-          </span>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="mr-12 flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm transition hover:bg-muted"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-label={open ? "Close menu" : "Open menu"}
-          className="mr-12 rounded-md border border-border p-2 transition hover:bg-muted md:hidden"
-        >
-          {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        </button>
-      </div>
-
-      {/* Opens below the header rather than as an overlay: the theme toggle is
-          fixed to the top-right corner, and a full-screen panel would bury it. */}
-      {open && (
-        <nav className="border-t border-border px-4 py-2 md:hidden">
+        <nav className="hidden items-center gap-0.5 md:flex">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               aria-current={isActive(item.href) ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2 py-2.5 text-sm transition",
+                "rounded-md px-3 py-1.5 text-sm transition-colors",
                 isActive(item.href)
-                  ? "bg-muted font-medium"
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-1">
+          <ThemeToggle />
+          <div className="hidden md:block">
+            <UserMenu />
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-label={open ? "Close menu" : "Open menu"}
+            className="md:hidden"
+          >
+            {open ? <X /> : <Menu />}
+          </Button>
+        </div>
+      </div>
+
+      {open && (
+        <nav className="animate-fade-in border-t border-border bg-card px-3 py-2 md:hidden">
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={isActive(item.href) ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
+                isActive(item.href)
+                  ? "bg-primary/10 font-medium text-primary"
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className="size-4" />
               {item.label}
             </Link>
           ))}
 
-          <div className="mt-2 border-t border-border pt-2">
-            <p className="truncate px-2 py-1 text-xs text-muted-foreground">
+          <div className="mt-1 border-t border-border pt-1">
+            <p className="truncate px-3 py-2 text-xs text-muted-foreground">
               {user?.full_name || user?.email}
             </p>
             <button
               type="button"
               onClick={() => void logout()}
-              className="flex w-full items-center gap-2.5 rounded-md px-2 py-2.5 text-sm text-muted-foreground transition hover:bg-muted"
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="size-4" />
               Sign out
             </button>
           </div>
