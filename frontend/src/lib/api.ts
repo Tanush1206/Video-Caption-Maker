@@ -116,5 +116,8 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  // DELETE takes an optional body: deleting an account asks for the password
+  // as confirmation, and a query string is the wrong place for one — it lands
+  // in browser history and server access logs.
+  delete: <T>(path: string, body?: unknown) => request<T>(path, { method: "DELETE", body }),
 };
