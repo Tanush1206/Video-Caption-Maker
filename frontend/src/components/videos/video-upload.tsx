@@ -1,9 +1,11 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Upload, X } from "lucide-react";
+import { FileVideo, Loader2, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { statsKeys } from "@/hooks/use-stats";
 import { videoKeys } from "@/hooks/use-videos";
 import { cn } from "@/lib/utils";
@@ -77,50 +79,55 @@ export function VideoUpload() {
 
   if (active) {
     return (
-      <div className="rounded-lg border border-border p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
+      <Card className="animate-fade-in p-5">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <FileVideo className="size-4" />
+          </span>
+
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{active.file.name}</p>
             <p className="text-xs text-muted-foreground">
               {formatFileSize(active.file.size)}
             </p>
           </div>
-          <button
-            type="button"
+
+          <span className="font-mono text-sm tabular-nums text-muted-foreground">
+            {active.percent}%
+          </span>
+
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => active.handle.cancel()}
-            className="rounded-md p-1.5 transition hover:bg-muted"
             aria-label="Cancel upload"
           >
-            <X className="h-4 w-4" />
-          </button>
+            <X />
+          </Button>
         </div>
 
         <div
-          className="mt-4 h-2 overflow-hidden rounded-full bg-muted"
+          className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"
           role="progressbar"
           aria-valuenow={active.percent}
           aria-valuemin={0}
           aria-valuemax={100}
         >
           <div
-            className="h-full bg-primary transition-all duration-200"
+            className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-200 ease-out"
             style={{ width: `${active.percent}%` }}
           />
         </div>
 
-        <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-          {active.percent >= 100 ? (
-            <>
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {/* The bar hits 100% when the bytes are sent, but the server is
-                  still probing and generating a thumbnail. */}
-              Processing on the server…
-            </>
-          ) : (
-            `Uploading… ${active.percent}%`
-          )}
-        </p>
-      </div>
+        {active.percent >= 100 && (
+          <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            {/* The bar hits 100% when the bytes are sent, but the server is
+                still probing and generating a thumbnail. */}
+            Processing on the server…
+          </p>
+        )}
+      </Card>
     );
   }
 
@@ -141,16 +148,34 @@ export function VideoUpload() {
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 text-center transition",
-          dragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+          "group flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors duration-200 sm:p-10",
+          dragging
+            ? "border-primary bg-primary/5"
+            : "border-border bg-subtle hover:border-muted-foreground/40 hover:bg-muted/50"
         )}
       >
-        <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
-        <p className="text-sm font-medium">
-          Drop a video here, or <span className="text-primary">browse</span>
+        <span
+          className={cn(
+            "flex size-11 items-center justify-center rounded-xl transition-all duration-200 ease-out",
+            dragging
+              ? "scale-110 bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground group-hover:scale-105"
+          )}
+        >
+          <Upload className="size-5" />
+        </span>
+
+        <p className="mt-3.5 text-sm font-medium">
+          {dragging ? (
+            "Drop to upload"
+          ) : (
+            <>
+              Drop a video here, or <span className="text-primary">browse</span>
+            </>
+          )}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {ACCEPTED_EXTENSIONS.join(", ")}
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
+          {ACCEPTED_EXTENSIONS.join("  ·  ")}
         </p>
 
         <input
@@ -168,7 +193,10 @@ export function VideoUpload() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-3 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-500">
+        <p
+          role="alert"
+          className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {error}
         </p>
       )}

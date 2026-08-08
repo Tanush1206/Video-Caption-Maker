@@ -1,9 +1,12 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Film, SearchX } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Film, SearchX } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { VideoCard } from "@/components/videos/video-card";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PAGE_SIZE, useVideos } from "@/hooks/use-videos";
 import { cn } from "@/lib/utils";
 import type { VideoStatus } from "@/types/video";
@@ -15,14 +18,39 @@ const FILTERS: { label: string; value: VideoStatus | null }[] = [
   { label: "Failed", value: "failed" },
 ];
 
+const GRID = "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
 function SkeletonCard() {
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <div className="aspect-video animate-pulse bg-muted" />
+    <Card className="overflow-hidden">
+      <Skeleton className="aspect-video rounded-none" />
       <div className="space-y-2 p-3">
-        <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
       </div>
+    </Card>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  body,
+  action,
+}: {
+  icon: typeof Film;
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-subtle px-6 py-16 text-center">
+      <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Icon className="size-5" />
+      </span>
+      <p className="mt-4 text-sm font-medium">{title}</p>
+      <p className="mt-1 max-w-xs text-sm text-muted-foreground">{body}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
@@ -50,7 +78,7 @@ export function VideoGrid() {
   }
 
   const filters = (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by status">
       {FILTERS.map((filter) => (
         <button
           key={filter.label}
@@ -58,10 +86,10 @@ export function VideoGrid() {
           onClick={() => changeFilter(filter.value)}
           aria-pressed={status === filter.value}
           className={cn(
-            "rounded-full px-3 py-1 text-xs font-medium transition",
+            "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
             status === filter.value
-              ? "bg-primary text-primary-foreground"
-              : "border border-border text-muted-foreground hover:bg-muted"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
           {filter.label}
@@ -72,9 +100,13 @@ export function VideoGrid() {
 
   if (isError) {
     return (
-      <p role="alert" className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-500">
-        Couldn&apos;t load your videos: {(error as Error).message}
-      </p>
+      <div
+        role="alert"
+        className="flex gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+      >
+        <AlertCircle className="mt-px size-4 shrink-0" />
+        <span>Couldn&apos;t load your videos: {(error as Error).message}</span>
+      </div>
     );
   }
 
@@ -82,7 +114,7 @@ export function VideoGrid() {
     return (
       <div className="space-y-4">
         {filters}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className={GRID}>
           {/* Skeletons rather than a spinner: the layout doesn't jump when the
               real cards arrive. */}
           {Array.from({ length: 4 }, (_, i) => (
@@ -100,7 +132,7 @@ export function VideoGrid() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         {filters}
         {total > 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs tabular-nums text-muted-foreground">
             {total} video{total === 1 ? "" : "s"}
           </p>
         )}
@@ -110,36 +142,32 @@ export function VideoGrid() {
         // Two different nothings. "You have no videos" is an invitation;
         // "no videos match this filter" is a dead end with a way out, and
         // showing the first when someone filtered would read as data loss.
-        <div className="rounded-lg border border-dashed border-border py-16 text-center">
-          {status === null ? (
-            <>
-              <Film className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-              <p className="text-sm font-medium">No videos yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Upload one above to get started.
-              </p>
-            </>
-          ) : (
-            <>
-              <SearchX className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-              <p className="text-sm font-medium">Nothing matches this filter</p>
-              <button
-                type="button"
-                onClick={() => changeFilter(null)}
-                className="mt-2 text-sm text-primary hover:underline"
-              >
+        status === null ? (
+          <EmptyState
+            icon={Film}
+            title="No videos yet"
+            body="Upload one above and it'll be transcribed automatically."
+          />
+        ) : (
+          <EmptyState
+            icon={SearchX}
+            title="Nothing matches this filter"
+            body="No videos are in this state right now."
+            action={
+              <Button variant="secondary" size="sm" onClick={() => changeFilter(null)}>
                 Show all videos
-              </button>
-            </>
-          )}
-        </div>
+              </Button>
+            }
+          />
+        )
       ) : (
         <div
           className={cn(
-            "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+            GRID,
             // Dimmed while the next page is in flight, so the stale content on
             // screen doesn't read as the answer to what was just clicked.
-            isPlaceholderData && "opacity-60 transition-opacity"
+            isPlaceholderData && "pointer-events-none opacity-50",
+            "transition-opacity duration-200"
           )}
         >
           {items.map((video) => (
@@ -149,28 +177,28 @@ export function VideoGrid() {
       )}
 
       {pageCount > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            type="button"
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button
+            variant="secondary"
+            size="icon-sm"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
             aria-label="Previous page"
-            className="rounded-md border border-border p-1.5 transition hover:bg-muted disabled:opacity-40"
           >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="text-xs tabular-nums text-muted-foreground">
+            <ChevronLeft />
+          </Button>
+          <span className="px-2 text-xs tabular-nums text-muted-foreground">
             Page {page + 1} of {pageCount}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="icon-sm"
             onClick={() => setPage((p) => p + 1)}
             disabled={page + 1 >= pageCount}
             aria-label="Next page"
-            className="rounded-md border border-border p-1.5 transition hover:bg-muted disabled:opacity-40"
           >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+            <ChevronRight />
+          </Button>
         </div>
       )}
     </div>

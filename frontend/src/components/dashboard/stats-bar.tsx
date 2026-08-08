@@ -2,6 +2,8 @@
 
 import { Clock, Film, HardDrive, Subtitles } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useStats } from "@/hooks/use-stats";
 import { formatDurationLong, formatFileSize } from "@/lib/format";
 
@@ -17,23 +19,20 @@ function Tile({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border p-3 sm:p-4">
-      <div className="flex items-center gap-1.5 text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-xs">{label}</span>
+    <Card className="p-3.5 sm:p-4">
+      <div className="flex items-center gap-2">
+        <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Icon className="size-3.5" />
+        </span>
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
       </div>
-      <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
 
-function SkeletonTile() {
-  return (
-    <div className="rounded-lg border border-border p-3 sm:p-4">
-      <div className="h-3 w-16 animate-pulse rounded bg-muted" />
-      <div className="mt-2 h-6 w-12 animate-pulse rounded bg-muted" />
-    </div>
+      <p className="mt-2.5 text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
+
+      {/* Reserved even when empty, so tiles in a row stay the same height and
+          the grid doesn't jog as counts change. */}
+      <p className="mt-0.5 h-4 truncate text-xs text-muted-foreground">{hint ?? ""}</p>
+    </Card>
   );
 }
 
@@ -44,7 +43,11 @@ export function StatsBar() {
     return (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
-          <SkeletonTile key={i} />
+          <Card key={i} className="p-3.5 sm:p-4">
+            <Skeleton className="h-7 w-24" />
+            <Skeleton className="mt-2.5 h-7 w-16" />
+            <Skeleton className="mt-1 h-3 w-20" />
+          </Card>
         ))}
       </div>
     );
@@ -71,11 +74,7 @@ export function StatsBar() {
               : undefined
         }
       />
-      <Tile
-        icon={Clock}
-        label="Footage"
-        value={formatDurationLong(data.duration_ms)}
-      />
+      <Tile icon={Clock} label="Footage" value={formatDurationLong(data.duration_ms)} />
       <Tile
         icon={Subtitles}
         label="Captions"
