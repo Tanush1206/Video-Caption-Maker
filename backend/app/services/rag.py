@@ -134,7 +134,21 @@ def answer_question(question: str, hits: list[SearchHit]) -> Answer:
                 # Near-zero temperature: this is an extraction task, and
                 # sampling variety here means inventing detail.
                 temperature=0.1,
-                max_output_tokens=400,
+                # Both of these are load-bearing, not tuning preferences.
+                #
+                # `gemini-flash-latest` resolves to a thinking model, and
+                # reasoning tokens are charged against max_output_tokens. At
+                # the old cap of 400 a Hindi question spent 382 of them
+                # thinking and returned 14 tokens of answer, cut off
+                # mid-sentence with finishReason MAX_TOKENS. The cap has to
+                # clear the thinking, not just the reply.
+                #
+                # thinking_budget=0 would be the obvious fix and Gemini 3
+                # rejects it outright with 400 INVALID_ARGUMENT — thinking
+                # cannot be switched off, only turned down. "low" measured
+                # ~300 reasoning tokens against ~565 left at the default.
+                max_output_tokens=1500,
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
             ),
         )
         text = (response.text or "").strip()

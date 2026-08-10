@@ -57,7 +57,18 @@ class Settings(BaseSettings):
 
     # ── LLM (Gemini) ─────────────────────────────────────
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    # An alias, not a pinned version, and deliberately so. Every pinned model
+    # tried on this project's free tier reports `limit: 0` — gemini-2.0-flash
+    # and -flash-lite return 429 RESOURCE_EXHAUSTED on the very first request,
+    # and gemini-2.5-flash 404s. Free-tier quota is granted per model, so a
+    # pin is a bet that *that* model keeps a free allowance. The alias follows
+    # whichever current flash model does, and today resolves to
+    # gemini-3.6-flash.
+    #
+    # Worth knowing when this next returns 429: the failure is quota, not
+    # auth. A bad key gives 401/403 — a 429 means the key is fine and the
+    # model is the thing to change.
+    gemini_model: str = "gemini-flash-latest"
 
     # ── Whisper ──────────────────────────────────────────
     whisper_model_size: str = "medium"
