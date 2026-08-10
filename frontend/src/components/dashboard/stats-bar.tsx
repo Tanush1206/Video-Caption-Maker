@@ -11,27 +11,35 @@ function Tile({
   icon: Icon,
   label,
   value,
+  unit,
   hint,
 }: {
   icon: typeof Film;
   label: string;
   value: string;
+  /** Shown small beside the value — "GB", "captions". Keeps the number big. */
+  unit?: string;
   hint?: string;
 }) {
   return (
-    <Card className="p-3.5 sm:p-4">
-      <div className="flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Icon className="size-3.5" />
-        </span>
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    <Card className="p-4">
+      {/* Label left, icon right — the Stitch instrument-panel arrangement.
+          The icon is a quiet marker here, not a feature badge. */}
+      <div className="flex items-center justify-between text-muted-foreground">
+        <span className="label-caps">{label}</span>
+        <Icon className="size-4" />
       </div>
 
-      <p className="mt-2.5 text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
+      <div className="mt-2 flex items-baseline gap-1.5">
+        <span className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+          {value}
+        </span>
+        {unit && <span className="text-body-sm text-muted-foreground">{unit}</span>}
+      </div>
 
       {/* Reserved even when empty, so tiles in a row stay the same height and
           the grid doesn't jog as counts change. */}
-      <p className="mt-0.5 h-4 truncate text-xs text-muted-foreground">{hint ?? ""}</p>
+      <p className="mt-0.5 h-4 truncate text-body-sm text-muted-foreground">{hint ?? ""}</p>
     </Card>
   );
 }
@@ -43,10 +51,10 @@ export function StatsBar() {
     return (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
-          <Card key={i} className="p-3.5 sm:p-4">
-            <Skeleton className="h-7 w-24" />
-            <Skeleton className="mt-2.5 h-7 w-16" />
-            <Skeleton className="mt-1 h-3 w-20" />
+          <Card key={i} className="p-4">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-2 h-8 w-16" />
+            <Skeleton className="mt-1 h-4 w-20" />
           </Card>
         ))}
       </div>
@@ -59,6 +67,14 @@ export function StatsBar() {
   if (isError || !data) return null;
 
   const inFlight = data.by_status.pending + data.by_status.processing;
+
+  // How full the *disk* is, which is a fact we actually have. Stitch drew this
+  // bar as "412 GB / 1TB", implying a per-account allowance; there are no
+  // quotas here, so the bar tracks the machine and the label says so. A bar
+  // that invents a limit is worse than no bar.
+  const diskUsed = data.disk_total_bytes - data.disk_free_bytes;
+  const diskPercent =
+    data.disk_total_bytes > 0 ? Math.round((diskUsed / data.disk_total_bytes) * 100) : 0;
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -81,15 +97,34 @@ export function StatsBar() {
         value={data.captions.toLocaleString()}
         hint={data.exports > 0 ? `${data.exports} exports` : undefined}
       />
-      <Tile
-        icon={HardDrive}
-        label="Storage used"
-        value={formatFileSize(data.storage_bytes)}
-        // Deliberately worded as the machine's free space, not an allowance:
-        // it is the host disk, shared by every account, and there are no
-        // quotas. Calling it "remaining" would promise something we don't have.
-        hint={`${formatFileSize(data.disk_free_bytes)} free on disk`}
-      />
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between text-muted-foreground">
+          <span className="label-caps">Storage used</span>
+          <HardDrive className="size-4" />
+        </div>
+
+        <div className="mt-2 flex items-baseline gap-1.5">
+          <span className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+            {formatFileSize(data.storage_bytes)}
+          </span>
+        </div>
+
+        <div
+          className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3"
+          role="progressbar"
+          aria-valuenow={diskPercent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Host disk usage"
+        >
+          <div className="bar-fill h-full rounded-full" style={{ width: `${diskPercent}%` }} />
+        </div>
+
+        <p className="mt-1 truncate text-body-sm text-muted-foreground">
+          Disk {diskPercent}% full · {formatFileSize(data.disk_free_bytes)} free
+        </p>
+      </Card>
     </div>
   );
 }

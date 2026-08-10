@@ -21,8 +21,9 @@ export function Card({
           cn(
             "transition-all duration-200 ease-out",
             // Lifting on hover reads as "this is clickable" without needing a
-            // cursor change to say so.
-            "hover:-translate-y-0.5 hover:border-border hover:shadow-card",
+            // cursor change to say so. It also brightens a step, which is how
+            // the dark theme expresses elevation at all.
+            "hover:-translate-y-0.5 hover:bg-surface-2 hover:shadow-card",
             // Keyboard users get the same affordance as the mouse.
             "focus-within:-translate-y-0.5 focus-within:shadow-card"
           ),

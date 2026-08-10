@@ -31,7 +31,11 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
-        secondary: "border border-border bg-card text-foreground shadow-sm hover:bg-muted",
+        // surface-2, not card: a secondary button sits *on* a card in this
+        // design and has to read as raised above it, which in dark means one
+        // step lighter rather than a heavier border.
+        secondary:
+          "border border-border bg-surface-2 text-foreground shadow-sm hover:bg-surface-3",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
         // Filled, not outlined: this is for the confirm step of a destructive
         // action, where it should be obvious which button does the damage.
@@ -43,9 +47,9 @@ export const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-8 px-3 text-xs",
-        md: "h-9 px-4 text-sm",
-        lg: "h-11 px-6 text-sm",
+        sm: "h-8 px-3 text-body-sm",
+        md: "h-9 px-4 text-body-md",
+        lg: "h-11 px-6 text-body-md",
         // Square, for icon-only buttons. Anything smaller than this fails the
         // minimum touch target on a phone.
         icon: "size-9",

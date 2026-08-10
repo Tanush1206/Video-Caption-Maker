@@ -9,8 +9,9 @@ export interface Stats {
   captions: number;
   exports: number;
   /**
-   * Free space on the host disk, shared by everyone — not a per-user quota.
-   * Label it as the machine's, never as an allowance.
+   * Free and total space on the host disk, shared by everyone — not a
+   * per-user quota. Label it as the machine's, never as an allowance.
    */
   disk_free_bytes: number;
+  disk_total_bytes: number;
 }
