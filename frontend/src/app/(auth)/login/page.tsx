@@ -1,21 +1,36 @@
 "use client";
 
+import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 
-import { AuthDivider, GoogleButton } from "@/components/auth/google-button";
-import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
+import { GlassField, GlassLink, GlassSubmit } from "@/components/auth/glass-field";
+import { GoogleMark } from "@/components/auth/google-mark";
 import { useAuth } from "@/hooks/use-auth";
 import { ApiError } from "@/lib/api";
 import { fieldErrors, loginSchema } from "@/lib/validation";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/**
+ * Sign-in, on the same glass controls as registration.
+ *
+ * Deliberately still one step. The multi-step flow on sign-up earns its
+ * friction by catching a mistyped password before it becomes permanent; here
+ * a wrong password just fails and you try again, so splitting it would be
+ * ceremony for its own sake.
+ *
+ * The inputs are controlled now rather than read from FormData on submit,
+ * because the floating label has to know whether the field has a value.
+ */
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,12 +38,7 @@ export default function LoginPage() {
     event.preventDefault();
     setErrors({});
 
-    const form = new FormData(event.currentTarget);
-    const parsed = loginSchema.safeParse({
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
-    });
-
+    const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       return;
@@ -52,49 +62,90 @@ export default function LoginPage() {
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Welcome back</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
+      <div className="text-center">
+        <h1 className="text-4xl font-light tracking-tight sm:text-5xl">Welcome back</h1>
+        <p className="mx-auto mt-3 max-w-xs text-body-sm text-muted-foreground">
           Sign in to reach your videos and transcripts.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        {errors.form && (
-          <div
-            role="alert"
-            className="flex gap-2.5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
-          >
-            <AlertCircle className="mt-px size-4 shrink-0" />
-            <span>{errors.form}</span>
-          </div>
-        )}
+      <fieldset disabled={submitting} className="mx-auto mt-8 w-full max-w-[300px]">
+        <GlassLink href={`${API_URL}/api/auth/google/authorize`}>
+          <GoogleMark />
+          Continue with Google
+        </GlassLink>
 
-        <Field
-          label="Email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          error={errors.email}
-        />
-        <Field
-          label="Password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          error={errors.password}
-        />
+        <div className="mt-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="label-caps">or</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
 
-        <Button type="submit" size="lg" loading={submitting} className="w-full">
-          {submitting ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
+        <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
+          {errors.form && (
+            <div
+              role="alert"
+              className="flex gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-body-sm text-destructive"
+            >
+              <AlertCircle className="mt-px size-4 shrink-0" />
+              <span>{errors.form}</span>
+            </div>
+          )}
 
-      <AuthDivider />
-      <GoogleButton label="Continue with Google" />
+          <GlassField
+            label="Email"
+            icon={Mail}
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="Email"
+            value={email}
+            labelVisible={email.length > 0}
+            error={errors.email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
+          <GlassField
+            label="Password"
+            icon={Lock}
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            placeholder="Password"
+            value={password}
+            labelVisible={password.length > 0}
+            error={errors.password}
+            onChange={(event) => setPassword(event.target.value)}
+            leading={
+              password.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((shown) => !shown)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="rounded-full p-2 text-foreground/80 transition-colors hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                </button>
+              ) : undefined
+            }
+          />
+
+          <GlassSubmit type="submit">
+            {submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              <>
+                Sign in
+                <ArrowRight className="size-4" />
+              </>
+            )}
+          </GlassSubmit>
+        </form>
+      </fieldset>
+
+      <p className="mt-10 text-center text-body-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link href="/register" className="font-medium text-primary hover:underline">
           Create one
@@ -103,3 +154,4 @@ export default function LoginPage() {
     </>
   );
 }
+
