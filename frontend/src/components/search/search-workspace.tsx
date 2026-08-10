@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, ArrowUpRight, Search, Sparkles } from "lucide-react";
+import { AlertCircle, Film, PlayCircle, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -23,42 +23,48 @@ interface SearchWorkspaceProps {
 
 /** Every result links into the editor at the moment it came from. */
 function ResultRow({ result, showVideo }: { result: SearchResult; showVideo: boolean }) {
+  const percent = Math.round(result.score * 100);
+
   return (
     <Link
       href={`/editor/${result.video_id}?t=${result.start_ms}`}
-      className="group flex flex-col gap-1.5 rounded-lg px-3 py-3 transition-colors hover:bg-muted/60 sm:flex-row sm:gap-4"
+      className="group relative flex flex-col gap-2 overflow-hidden rounded-lg border border-border bg-card p-4 transition-colors hover:bg-surface-2"
     >
-      <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground sm:w-[4.5rem] sm:justify-end sm:pt-0.5">
-        {formatTimecode(result.start_ms)}
-        <ArrowUpRight className="size-3 opacity-0 transition-opacity group-hover:opacity-100 sm:hidden" />
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm leading-relaxed">{result.text}</span>
-        {/* Only when the video isn't already implied by the page. */}
-        {showVideo && (
-          <span className="mt-1 block truncate text-xs text-muted-foreground">
-            {result.video_title}
-          </span>
-        )}
-      </span>
-
+      {/* A rail that fills in on hover, rather than a border that changes
+          colour. It marks the row being read without shifting any layout. */}
       <span
-        title="How closely this matches, by meaning"
-        className="flex shrink-0 items-center gap-2 sm:pt-1"
-      >
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 w-0.5 bg-primary opacity-0 transition-opacity group-hover:opacity-100"
+      />
+
+      <div className="flex items-start justify-between gap-4">
+        <span className="flex items-center gap-1.5 font-mono text-mono-data tabular-nums text-primary">
+          <PlayCircle className="size-4 text-muted-foreground" />
+          {formatTimecode(result.start_ms)}
+        </span>
+
         {/* A bar as well as a number: relative strength across a result list is
-            far easier to read as length than as four digits per row. */}
-        <span className="hidden h-1 w-10 overflow-hidden rounded-full bg-muted sm:block">
-          <span
-            className="block h-full rounded-full bg-primary/70"
-            style={{ width: `${Math.round(result.score * 100)}%` }}
-          />
+            far easier to read as length than as digits on every row. */}
+        <span
+          title="How closely this matches, by meaning"
+          className="flex shrink-0 flex-col items-end gap-1"
+        >
+          <span className="label-caps">Relevance {percent}%</span>
+          <span className="block h-1 w-20 overflow-hidden rounded-full bg-surface-3">
+            <span className="bar-fill block h-full rounded-full" style={{ width: `${percent}%` }} />
+          </span>
         </span>
-        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-          {Math.round(result.score * 100)}%
-        </span>
-      </span>
+      </div>
+
+      <p className="text-body-md leading-relaxed text-foreground">{result.text}</p>
+
+      {/* Only when the video isn't already implied by the page. */}
+      {showVideo && (
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Film className="size-3.5 shrink-0" />
+          <span className="truncate text-body-sm">{result.video_title}</span>
+        </div>
+      )}
     </Link>
   );
 }
@@ -155,50 +161,61 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
       {mode === "ask" && ask.data && (
         <Card
           className={cn(
-            "mt-5 animate-fade-up p-4 sm:p-5",
-            ask.data.grounded
-              ? "border-primary/30 bg-primary/[0.04]"
-              : "border-warning/40 bg-warning/[0.06]"
+            "relative mt-5 animate-fade-up overflow-hidden p-4 sm:p-5",
+            ask.data.grounded ? "border-primary bg-surface-1" : "border-warning/50 bg-surface-1"
           )}
         >
-          <div className="flex gap-3">
-            <span
-              className={cn(
-                "flex size-7 shrink-0 items-center justify-center rounded-lg",
-                ask.data.grounded
-                  ? "bg-primary/15 text-primary"
-                  : "bg-warning/15 text-warning"
-              )}
-            >
-              {ask.data.grounded ? (
-                <Sparkles className="size-3.5" />
-              ) : (
-                <AlertCircle className="size-3.5" />
-              )}
-            </span>
-            <p className="flex-1 text-sm leading-relaxed">{ask.data.answer}</p>
+          {/* An oversized, very faint glyph in the corner. It reads as a
+              watermark on the panel rather than as an icon competing with the
+              answer, so the text stays the loudest thing here. */}
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute -right-3 -top-3 opacity-[0.07]",
+              ask.data.grounded ? "text-primary" : "text-warning"
+            )}
+          >
+            {ask.data.grounded ? (
+              <Sparkles className="size-24" />
+            ) : (
+              <AlertCircle className="size-24" />
+            )}
+          </span>
+
+          <div
+            className={cn(
+              "relative flex items-center gap-2",
+              ask.data.grounded ? "text-primary" : "text-warning"
+            )}
+          >
+            {ask.data.grounded ? (
+              <Sparkles className="size-4" />
+            ) : (
+              <AlertCircle className="size-4" />
+            )}
+            <h2 className="text-h2">{ask.data.grounded ? "Answer" : "No answer"}</h2>
           </div>
 
+          <p className="relative mt-3 text-body-md leading-relaxed">{ask.data.answer}</p>
+
           {ask.data.citations.length > 0 && (
-            <div className="mt-4 border-t border-border/60 pt-3">
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Sources</p>
+            <div className="relative mt-4 border-t border-border pt-3">
+              <p className="label-caps mb-1.5">Sources</p>
               {ask.data.citations.map((citation) => (
                 <Link
                   key={citation.caption_id}
                   href={`/editor/${citation.video_id}?t=${citation.start_ms}`}
-                  className="flex gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted"
+                  className="flex gap-2 rounded-sm px-2 py-1.5 transition-colors hover:bg-muted"
                 >
-                  <span className="shrink-0 font-mono font-medium text-primary">
+                  <span className="shrink-0 rounded-sm bg-primary/10 px-1 font-mono text-mono-data-sm font-medium text-primary">
                     [{citation.index}]
                   </span>
-                  <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
+                  <span className="shrink-0 font-mono text-mono-data-sm tabular-nums text-muted-foreground">
                     {formatTimecode(citation.start_ms)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 truncate text-body-sm">
                     {showVideo && (
-                      <span className="text-muted-foreground">
-                        {citation.video_title} ·{" "}
-                      </span>
+                      <span className="text-muted-foreground">{citation.video_title} · </span>
                     )}
                     {citation.text}
                   </span>
@@ -210,7 +227,7 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
           {/* Said plainly rather than dressed up: a wrong answer that looks
               confident is the failure mode this whole feature guards against. */}
           {!ask.data.grounded && (
-            <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            <p className="relative mt-3 border-t border-border pt-3 text-body-sm text-muted-foreground">
               Nothing in {showVideo ? "your videos" : "this transcript"} answers that, so
               no answer was invented.
             </p>
@@ -219,13 +236,17 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
       )}
 
       {results && (
-        <section className="mt-5 animate-fade-in">
-          <p className="mb-1 px-3 text-xs text-muted-foreground">
+        <section className="mt-6 animate-fade-in">
+          <h2 className="label-caps mb-2">
             {results.length === 0
-              ? "No passages matched closely enough."
-              : `${results.length} passage${results.length === 1 ? "" : "s"}`}
-          </p>
-          <div className="divide-y divide-border/60">
+              ? "No passages matched closely enough"
+              : `Results (${results.length})`}
+          </h2>
+          {/* Spaced cards rather than divided rows: each result is its own
+              object with a timecode, a quote and a source, and stacking them
+              flush makes a long transcript excerpt hard to tell apart from
+              the next one. */}
+          <div className="flex flex-col gap-2">
             {results.map((result) => (
               <ResultRow key={result.caption_id} result={result} showVideo={showVideo} />
             ))}
