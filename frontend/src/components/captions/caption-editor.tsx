@@ -126,7 +126,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
   return (
     <div className="flex min-h-0 flex-col">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="label-caps">
           {captions.length} caption{captions.length === 1 ? "" : "s"}
         </span>
         {updateCaption.isPending && (
@@ -139,9 +139,11 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
       {/* `relative` so each row's offsetTop is measured against this box, which
           is what the auto-scroll above assumes. */}
+      {/* space-y, not divide-y: the rows are cards now, and a divider between
+          two bordered cards reads as a third stray line. */}
       <div
         ref={list}
-        className="relative min-h-0 flex-1 divide-y divide-border/50 overflow-y-auto pr-1"
+        className="relative min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1"
       >
         {captions.map((caption, index) => (
           <CaptionRow

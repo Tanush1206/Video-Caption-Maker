@@ -1,6 +1,6 @@
 "use client";
 
-import { Highlighter, Scissors, Trash2, CornerRightDown } from "lucide-react";
+import { CornerRightDown, Highlighter, PlayCircle, Scissors, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -112,57 +112,42 @@ export function CaptionRow({
     caption.override_scale !== null;
 
   return (
+    // A card per caption rather than a table row. Each one is an editable
+    // object with its own timing, text and actions, and flush rows made a
+    // wrapped two-line caption hard to tell from the next caption entirely.
     <div
       ref={registerRow}
       className={cn(
-        "group flex gap-3 rounded-md border px-2 py-2 transition",
+        "group rounded-md border p-2 transition-colors",
         isActive
-          ? "border-primary/40 bg-primary/5"
-          : "border-transparent hover:border-border hover:bg-muted/40"
+          ? "border-l-2 border-l-primary border-border bg-primary/5"
+          : "border-border bg-card hover:bg-surface-2"
       )}
     >
-      <button
-        type="button"
-        onClick={onSeek}
-        title="Jump the video here"
-        className="w-24 shrink-0 pt-2 text-right transition hover:text-primary"
-      >
-        <span className="block font-mono text-xs tabular-nums text-muted-foreground">
-          {formatTimecode(caption.start_ms)}
-        </span>
-        <span className="block font-mono text-[10px] tabular-nums text-muted-foreground/60">
-          {formatTimecode(caption.end_ms)}
-        </span>
-      </button>
-
-      <div className="min-w-0 flex-1">
-        <textarea
-          ref={registerRef}
-          value={text}
-          rows={Math.max(1, Math.ceil(text.length / 60))}
-          onChange={(e) => {
-            setText(e.target.value);
-            setDirty(true);
-          }}
-          onBlur={flush}
-          onKeyDown={handleKeyDown}
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onSeek}
+          title="Jump the video here"
           className={cn(
-            "w-full resize-none rounded-md border bg-background px-2 py-1.5 text-sm leading-relaxed transition",
-            "focus:outline-none focus:ring-2 focus:ring-primary/40",
-            dirty ? "border-primary/50" : "border-transparent",
-            lowConfidence && !dirty && "border-warning/40"
+            "flex items-center gap-1.5 font-mono text-mono-data-sm tabular-nums transition-colors hover:text-primary",
+            isActive ? "text-primary" : "text-muted-foreground"
           )}
-          aria-label={`Caption at ${formatTimecode(caption.start_ms)}`}
-        />
+        >
+          <PlayCircle className="size-3" />
+          {formatTimecode(caption.start_ms)}
+          <span className="text-muted-foreground">–</span>
+          {formatTimecode(caption.end_ms)}
+        </button>
 
-        {lowConfidence && (
-          <p className="mt-0.5 text-[11px] text-warning">
-            Low confidence — worth checking
-          </p>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-start gap-1 pt-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+        {/* Always visible on the active row: it is the one you are editing, so
+            its actions should not require a hover to find. */}
+        <div
+          className={cn(
+            "flex shrink-0 items-center gap-0.5 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100",
+            isActive ? "opacity-100" : "opacity-0"
+          )}
+        >
         <button
           type="button"
           onClick={onToggleEmphasis}
@@ -206,7 +191,31 @@ export function CaptionRow({
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
+        </div>
       </div>
+
+      <textarea
+        ref={registerRef}
+        value={text}
+        rows={Math.max(1, Math.ceil(text.length / 48))}
+        onChange={(e) => {
+          setText(e.target.value);
+          setDirty(true);
+        }}
+        onBlur={flush}
+        onKeyDown={handleKeyDown}
+        className={cn(
+          "w-full resize-none rounded-sm border bg-subtle px-2 py-1.5 text-body-md leading-relaxed transition-colors",
+          "focus:outline-none focus:ring-1 focus:ring-primary",
+          dirty ? "border-primary/50" : "border-border",
+          lowConfidence && !dirty && "border-warning/50"
+        )}
+        aria-label={`Caption at ${formatTimecode(caption.start_ms)}`}
+      />
+
+      {lowConfidence && (
+        <p className="mt-1 text-mono-data-sm text-warning">Low confidence — worth checking</p>
+      )}
     </div>
   );
 }

@@ -298,7 +298,7 @@ export function Timeline({
   return (
     <section className="rounded-lg border border-border bg-card p-3">
       <header className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h2 className="label-caps">
           Timeline
         </h2>
         <div className="flex items-center gap-2">

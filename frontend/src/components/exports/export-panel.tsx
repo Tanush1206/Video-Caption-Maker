@@ -83,7 +83,7 @@ export function ExportPanel({
   return (
     <Card className="p-3">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="label-caps">
           Export
         </h2>
         {createExport.isPending && (
