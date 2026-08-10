@@ -145,7 +145,18 @@ async def test_storage_bytes_is_an_integer_not_a_decimal(
     assert f'"storage_bytes":{body["storage_bytes"]}' in raw.replace(" ", "")
 
 
-@pytest.mark.parametrize("field", ["videos", "captions", "exports", "disk_free_bytes"])
+@pytest.mark.parametrize(
+    "field", ["videos", "captions", "exports", "disk_free_bytes", "disk_total_bytes"]
+)
 async def test_numeric_fields_are_never_negative(client, auth_headers, field):
     body = (await client.get("/api/stats", headers=auth_headers)).json()
     assert body[field] >= 0
+
+
+async def test_disk_total_is_at_least_disk_free(client, auth_headers):
+    """
+    The dashboard divides one by the other to draw a fill bar. If free ever
+    exceeded total the bar would render past 100% and overflow its track.
+    """
+    body = (await client.get("/api/stats", headers=auth_headers)).json()
+    assert body["disk_total_bytes"] >= body["disk_free_bytes"] > 0

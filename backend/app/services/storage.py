@@ -133,3 +133,14 @@ def delete_user_files(user_id: int) -> None:
 
 def free_space_bytes() -> int:
     return shutil.disk_usage(storage_root()).free
+
+
+def total_space_bytes() -> int:
+    """
+    Capacity of the disk holding the storage root.
+
+    Reported alongside free space so the UI can draw how full the *machine* is.
+    It is not a per-user quota and must not be presented as one — there are no
+    quotas, and a bar implying an allowance would be inventing a limit.
+    """
+    return shutil.disk_usage(storage_root()).total

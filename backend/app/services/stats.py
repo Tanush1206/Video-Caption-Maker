@@ -29,6 +29,7 @@ class LibraryStats:
     captions: int = 0
     exports: int = 0
     disk_free_bytes: int = 0
+    disk_total_bytes: int = 0
 
 
 async def library_stats(db: AsyncSession, owner_id: int) -> LibraryStats:
@@ -87,5 +88,6 @@ async def library_stats(db: AsyncSession, owner_id: int) -> LibraryStats:
     # report is how much room the machine has left. The client labels it as
     # such rather than presenting it as an allowance.
     stats.disk_free_bytes = storage.free_space_bytes()
+    stats.disk_total_bytes = storage.total_space_bytes()
 
     return stats
