@@ -3,60 +3,97 @@
 @tailwind utilities;
 
 /*
- * Design tokens.
+ * Registered so they can be *transitioned*. A plain custom property is a
+ * string as far as CSS is concerned, and a string cannot be interpolated —
+ * the conic gradient on the auth glass would jump between angles instead of
+ * sweeping. Declaring a syntax makes the angle a real animatable type.
  *
- * Every colour is declared as bare HSL channels so Tailwind can wrap them in
- * `hsl(var(--x) / <alpha>)` and opacity modifiers like `bg-primary/10` keep
- * working. A token holding a full `hsl(...)` string breaks that silently.
+ * Top level rather than inside @layer, and not in a component's <style> tag:
+ * @property is global no matter where it is written, so it belongs somewhere
+ * a reader can find it.
+ */
+@property --angle-1 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -75deg;
+}
+
+@property --angle-2 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -45deg;
+}
+
+/*
+ * Design tokens, taken from the Stitch design (design.html at the repo root).
  *
- * The two themes are not the same palette inverted. Light builds depth by
- * darkening a shared white with borders and shadow; dark builds it by lifting
- * surfaces off a near-black, because a shadow on a dark background is
- * invisible. That is why --card is *lighter* than --background in dark and
- * identical to it in light.
+ * Stitch produced a Material-3 palette with names like `surface-container-high`
+ * and `on-surface-variant`. Those values are adopted verbatim; the *names* are
+ * not. Material's scheme carries pairings this app does not use, and renaming
+ * every className to match would have churned the whole frontend to say the
+ * same thing. So the values land on the semantic names already in use, plus
+ * three elevation levels the old palette was missing.
+ *
+ * Every colour is bare HSL channels so Tailwind can wrap them in
+ * `hsl(var(--x) / <alpha>)`. A token holding a full `hsl(...)` string silently
+ * breaks every opacity modifier like `bg-primary/10`.
+ *
+ * Stitch only produced a dark theme. The light theme below is derived from it,
+ * not inverted: same navy-tinted neutral family and the same violet hue, but
+ * the violet is darkened, because #cebdff on white is unreadable.
  */
 
 @layer base {
   :root {
-    /* Neutrals: a hair of blue (220-ish hue) rather than pure grey, which
-       reads as dinginess on most displays. */
-    --background: 0 0% 100%;
+    /* Neutrals carry a hint of the same navy as dark, so the two themes feel
+       related rather than like two different products. */
+    --background: 220 40% 99%;
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
 
-    /* One step down from the page, for inset areas like the upload dropzone. */
+    /* Elevation, low to high. In light these barely separate and the border
+       does the work; in dark they are the whole mechanism. Named by level so
+       a component asks for depth, not for a colour. */
+    --surface-1: 220 33% 98%;
+    --surface-2: 220 28% 96%;
+    --surface-3: 220 24% 93%;
+
     --subtle: 220 33% 98%;
+    --muted: 220 20% 95%;
+    --muted-foreground: 262 8% 42%;
 
-    --muted: 220 20% 96%;
-    --muted-foreground: 220 12% 46%;
-
-    /* Violet rather than the default blue: blue is what every framework ships
-       with, and this needs to look like a decision. It also stays clear of the
-       red/amber/green already carrying status meaning on the video cards. */
-    --primary: 258 82% 57%;
+    /* Stitch's violet, darkened for a light background. Its #cebdff is the
+       dark-theme value and fails contrast on white by a wide margin. */
+    --primary: 258 68% 52%;
     --primary-foreground: 0 0% 100%;
     --primary-muted: 258 82% 96%;
 
-    --accent: 190 90% 42%;
+    /* Stitch's cyan, likewise darkened. Used for the gradient pair. */
+    --accent: 190 82% 38%;
 
-    --success: 142 66% 36%;
-    --warning: 32 92% 46%;
-    --destructive: 0 74% 51%;
+    --success: 142 66% 34%;
+    --warning: 32 92% 42%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 18% 90%;
-    /* Slightly darker than --border, for inputs, which need to read as
-       interactive rather than decorative. */
-    --input: 220 16% 86%;
-    --ring: 258 82% 57%;
+    --border: 258 12% 88%;
+    --input: 258 10% 82%;
+    --ring: 258 68% 52%;
 
-    --radius: 0.625rem;
+    /* 4px. Stitch is tighter than the 10px this had before, and it reads as a
+       technical tool rather than a consumer app - which is what this is. */
+    --radius: 0.25rem;
+
+    /* Shared by the auth glass. em-based so the rim scales with the control
+       it is drawn on, clamped so it never vanishes or turns into a frame. */
+    --glass-time: 400ms;
+    --glass-ease: cubic-bezier(0.25, 1, 0.5, 1);
+    --glass-border: clamp(1px, 0.0625em, 4px);
 
     /* Layered rather than one blur: a tight shadow for the contact edge and a
-       wide one for the ambient falloff. A single shadow always looks either
-       hard or muddy. */
+       wide one for ambient falloff. A single shadow looks hard or muddy. */
     --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
     --shadow-md:
       0 1px 3px 0 hsl(222 47% 11% / 0.07), 0 4px 12px -2px hsl(222 47% 11% / 0.06);
@@ -65,38 +102,41 @@
   }
 
   .dark {
-    --background: 224 32% 7%;
-    --foreground: 220 20% 96%;
+    /* Straight from Stitch. */
+    --background: 222 55% 10%; /* #0b1326 */
+    --foreground: 226 90% 92%; /* #dae2fd */
 
-    /* Lifted off the page, because shadows do not read on dark surfaces.
-       Elevation here is expressed as lightness, not as blur. */
-    --card: 224 26% 10%;
-    --card-foreground: 220 20% 96%;
+    --card: 223 38% 15%; /* #171f33  surface-container */
+    --card-foreground: 226 90% 92%;
 
-    --subtle: 224 28% 9%;
+    --surface-1: 222 42% 13%; /* #131b2e  container-low  */
+    --surface-2: 222 28% 19%; /* #222a3d  container-high */
+    --surface-3: 225 24% 23%; /* #2d3449  container-highest */
 
-    --muted: 223 22% 16%;
-    --muted-foreground: 220 12% 62%;
+    /* Below the page, for wells and inset areas - the one surface that goes
+       darker rather than lighter. */
+    --subtle: 222 68% 7%; /* #060e20  container-lowest */
 
-    /* Lighter and less saturated than the light-theme violet. The same colour
-       on a dark background reads heavier and vibrates against it. */
-    --primary: 258 90% 71%;
-    --primary-foreground: 258 50% 12%;
-    --primary-muted: 258 40% 18%;
+    --muted: 225 24% 23%; /* #2d3449  surface-variant */
+    --muted-foreground: 262 16% 80%; /* #cac4d4 */
 
-    --accent: 190 85% 55%;
+    --primary: 255 92% 76%; /* #a78bfa  primary-container */
+    --primary-foreground: 259 75% 30%; /* #381385 */
+    --primary-muted: 258 30% 22%;
+
+    --accent: 188 76% 64%; /* #5ed7e9 */
 
     --success: 142 60% 52%;
     --warning: 32 92% 60%;
-    --destructive: 0 78% 64%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 6 100% 84%; /* #ffb4ab */
+    --destructive-foreground: 0 55% 15%;
 
-    --border: 222 20% 19%;
-    --input: 222 18% 24%;
-    --ring: 258 90% 71%;
+    --border: 258 9% 30%; /* #494552  outline-variant */
+    --input: 258 9% 34%;
+    --ring: 255 100% 87%; /* #cebdff */
 
-    /* Kept, and deliberately deeper: they do almost nothing on the card
-       surfaces but still separate overlays and dropdowns from the page. */
+    /* Nearly invisible on these surfaces, which is correct - elevation here is
+       lightness. Kept so overlays and dropdowns still detach from the page. */
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
     --shadow-md: 0 2px 6px -1px hsl(0 0% 0% / 0.4), 0 8px 20px -6px hsl(0 0% 0% / 0.35);
     --shadow-lg: 0 4px 10px -2px hsl(0 0% 0% / 0.45), 0 18px 40px -10px hsl(0 0% 0% / 0.5);
@@ -108,21 +148,18 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    /* Inter ships proper contextual alternates and tabular figures; without
-       cv11 the lowercase l and uppercase I are hard to tell apart in filenames
-       and error messages. */
+    /* Inter's contextual alternates. Without cv11 the lowercase l and
+       uppercase I are hard to tell apart in filenames and error messages. */
     font-feature-settings: "cv11", "ss01";
   }
 
-  /* Headings are set tighter than body text. At display sizes the default
-     tracking looks loose and unresolved. */
   h1, h2, h3 {
     @apply tracking-tight;
   }
 
   /* One focus treatment everywhere, rather than each component inventing its
-     own. Applied on :focus-visible only, so a mouse click doesn't leave a ring
-     behind while the keyboard path stays fully visible. */
+     own. :focus-visible only, so a mouse click doesn't leave a ring behind
+     while the keyboard path stays fully visible. */
   :focus-visible {
     @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
   }
@@ -134,8 +171,222 @@
   }
 }
 
+@layer components {
+  /* Stitch leans on one recurring label style: 11px, uppercase, wide-tracked,
+     bold. It is what makes the panel headers read as instrument labels rather
+     than headings, so it earns a class instead of six utilities per use. */
+  .label-caps {
+    @apply text-[11px] font-bold uppercase leading-4 tracking-[0.05em] text-muted-foreground;
+  }
+
+  /* The primary-to-accent sweep, used on progress and relevance bars. Defined
+     once so every bar in the app is the same gradient. */
+  .bar-fill {
+    @apply bg-gradient-to-r from-primary to-accent;
+  }
+
+  /*
+   * ---------------------------------------------------------------------
+   * The glass treatment on the auth screens.
+   *
+   * Ported from a 21st.dev component that expressed every colour as
+   * `oklch(from var(--background) l c h / 5%)`. Relative colour syntax needs
+   * its origin to *be* a colour, and our tokens are bare HSL channels
+   * (`222 55% 10%`) so that Tailwind can wrap them with an alpha placeholder.
+   * Feeding those channels to `oklch(from …)` yields an invalid colour and
+   * every one of these declarations is dropped — the whole effect silently
+   * disappears rather than failing loudly.
+   *
+   * `hsl(var(--x) / 5%)` does the same job, works with the tokens we already
+   * have, and needs no relative-colour support in the browser.
+   *
+   * The original also repeated the full box-shadow stack four times across
+   * two components. It is one class here, shared by the inputs and the round
+   * buttons, so a change to the material happens in one place.
+   * ---------------------------------------------------------------------
+   */
+  .glass-surface {
+    position: relative;
+    border-radius: 9999px;
+    -webkit-tap-highlight-color: transparent;
+    background: linear-gradient(
+      -75deg,
+      hsl(var(--background) / 0.05),
+      hsl(var(--background) / 0.2),
+      hsl(var(--background) / 0.05)
+    );
+    backdrop-filter: blur(clamp(1px, 0.125em, 4px));
+    box-shadow:
+      inset 0 0.125em 0.125em hsl(var(--foreground) / 0.05),
+      inset 0 -0.125em 0.125em hsl(var(--background) / 0.5),
+      inset 0 0 0.1em 0.25em hsl(var(--background) / 0.2),
+      0 0.25em 0.125em -0.125em hsl(var(--foreground) / 0.2);
+    transition:
+      box-shadow var(--glass-time) var(--glass-ease),
+      backdrop-filter var(--glass-time) var(--glass-ease),
+      transform var(--glass-time) var(--glass-ease);
+  }
+
+  /* The lit rim. A conic gradient clipped to a ring by two masks that exclude
+     the content box, which is the only way to paint a gradient *border* on a
+     fully rounded element. */
+  .glass-surface::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset: calc(var(--glass-border) / -2);
+    border-radius: 9999px;
+    padding: var(--glass-border);
+    box-sizing: border-box;
+    pointer-events: none;
+    background:
+      conic-gradient(
+        from var(--angle-1) at 50% 50%,
+        hsl(var(--foreground) / 0.5) 0%,
+        transparent 5% 40%,
+        hsl(var(--foreground) / 0.5) 50%,
+        transparent 60% 95%,
+        hsl(var(--foreground) / 0.5) 100%
+      ),
+      linear-gradient(180deg, hsl(var(--background) / 0.5), hsl(var(--background) / 0.5));
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    box-shadow: inset 0 0 0 calc(var(--glass-border) / 2) hsl(var(--background) / 0.5);
+    transition:
+      box-shadow var(--glass-time) var(--glass-ease),
+      --angle-1 500ms ease;
+  }
+
+  /* Rotating the conic gradient is what makes the rim look like it catches
+     light as you move over it. Focus-within, not just hover, so the keyboard
+     path gets the same feedback. */
+  .glass-surface:hover,
+  .glass-surface:focus-within {
+    backdrop-filter: blur(0.01em);
+    box-shadow:
+      inset 0 0.125em 0.125em hsl(var(--foreground) / 0.05),
+      inset 0 -0.125em 0.125em hsl(var(--background) / 0.5),
+      inset 0 0 0.05em 0.1em hsl(var(--background) / 0.5),
+      0 0.15em 0.05em -0.1em hsl(var(--foreground) / 0.25);
+  }
+
+  .glass-surface:hover::after,
+  .glass-surface:focus-within::after {
+    --angle-1: -125deg;
+  }
+
+  /* A sheen that slides across on hover. Its own element rather than a second
+     pseudo on the surface, because ::after is already the rim. */
+  .glass-sheen {
+    position: absolute;
+    inset: calc(var(--glass-border) / 2);
+    border-radius: 9999px;
+    z-index: 3;
+    pointer-events: none;
+    overflow: clip;
+    mix-blend-mode: screen;
+    background: linear-gradient(
+      var(--angle-2),
+      transparent 0%,
+      hsl(var(--background) / 0.5) 40% 50%,
+      transparent 55%
+    );
+    background-size: 200% 200%;
+    background-position: 0% 50%;
+    transition:
+      background-position calc(var(--glass-time) * 1.25) var(--glass-ease),
+      --angle-2 calc(var(--glass-time) * 1.25) var(--glass-ease);
+  }
+
+  .glass-surface:hover > .glass-sheen,
+  .glass-surface:focus-within > .glass-sheen {
+    background-position: 25% 50%;
+  }
+
+  .glass-surface:active {
+    transform: scale(0.975);
+  }
+
+  .glass-surface:active > .glass-sheen {
+    background-position: 50% 15%;
+    --angle-2: -15deg;
+  }
+
+  /*
+   * Focus, on a rounded control.
+   *
+   * The app-wide `:focus-visible` treatment is a *ring*, which Tailwind draws
+   * as a box-shadow on the focused element itself. Inside a glass pill the
+   * focused element is the bare <input>, which has no radius — so the ring
+   * came out as a rectangle inside a fully rounded control, running past the
+   * leading icon. Nothing wrong with the rule; it just cannot know it is
+   * being applied to the inside of something.
+   *
+   * So it is suppressed there and redrawn on the pill. `outline` rather than
+   * a ring for two reasons: it follows `border-radius`, and it is a separate
+   * property from `box-shadow`, which here is not decoration — the stacked
+   * shadows *are* the glass, and a ring utility would replace them.
+   *
+   * `:has(input:focus-visible)` rather than `:focus-within`, so a mouse click
+   * doesn't leave a ring behind (the convention set at the top of this file),
+   * and so the reveal toggle inside the pill keeps its own smaller ring —
+   * otherwise tabbing between the two would highlight the same thing twice.
+   */
+  .glass-surface input:focus-visible {
+    @apply ring-0 ring-offset-0;
+  }
+
+  .glass-surface:focus-visible,
+  .glass-surface:has(input:focus-visible) {
+    outline: 2px solid hsl(var(--ring) / 0.6);
+    outline-offset: 2px;
+  }
+
+  /*
+   * Chrome paints autofilled inputs with an opaque background it will not let
+   * you override with `background`, which puts a solid yellow-blue box on top
+   * of the glass. The `transition` is the standard trick: the property is
+   * animated over 5000s so the browser's value never actually arrives.
+   *
+   * Scoped to the glass inputs rather than applied globally — the ordinary
+   * Field inputs elsewhere are opaque and should keep the autofill tint,
+   * which is a genuine signal that the browser filled something in.
+   */
+  .glass-surface input:-webkit-autofill,
+  .glass-surface input:-webkit-autofill:hover,
+  .glass-surface input:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    background-clip: content-box;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  /* Chromium and Edge add their own reveal/clear affordances inside password
+     inputs, which would sit next to ours and toggle a different thing. */
+  .glass-surface input[type="password"]::-ms-reveal,
+  .glass-surface input[type="password"]::-ms-clear {
+    display: none;
+  }
+
+  /* A touch device has no hover to reveal these, and leaving the transitions
+     armed makes the first tap animate through a state nobody saw. */
+  @media (hover: none) and (pointer: coarse) {
+    .glass-surface::after,
+    .glass-surface:hover::after,
+    .glass-surface:focus-within::after {
+      --angle-1: -75deg;
+    }
+    .glass-sheen,
+    .glass-surface:active > .glass-sheen {
+      --angle-2: -45deg;
+    }
+  }
+}
+
 @layer utilities {
-  /* Respected globally rather than per-animation: everything below is
+  /* Respected globally rather than per-animation: everything animated here is
      decoration, and a vestibular disorder is not a preference. */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -145,6 +396,22 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+      /* Delays too. Collapsing only the durations leaves a staggered entrance
+         holding its elements invisible for the length of the stagger, which is
+         the slow reveal this preference asked us not to do. */
+      animation-delay: 0ms !important;
+      transition-delay: 0ms !important;
+    }
+  }
+
+  /* The rule above collapses an animation to its *end* state, which is right
+     for a one-shot entrance and wrong for a loop: a marquee would jump to
+     -50% and freeze there, showing a half-scrolled row that looks broken.
+     A class selector outscores `*`, so this wins regardless of source order. */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee {
+      animation-name: none !important;
+      transform: none !important;
     }
   }
 }
