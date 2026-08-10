@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Captions, Search, Sparkles, Wand2 } from "lucide-react";
+import { Captions, Search, Wand2 } from "lucide-react";
 
+import { Hero } from "@/components/landing/hero";
 import { Brand } from "@/components/layout/brand";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -26,7 +27,9 @@ const FEATURES = [
 export default function LandingPage() {
   return (
     <div className="min-h-screen">
-      <header className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+      {/* Transparent and overlapping the hero, so the backdrop's glow runs up
+          behind it rather than stopping at a seam under the header. */}
+      <header className="relative z-20 mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Brand />
         <div className="flex items-center gap-1">
           <ThemeToggle />
@@ -36,59 +39,26 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6">
-        <section className="relative py-20 text-center sm:py-28">
-          {/* A soft wash behind the headline rather than a hard gradient panel.
-              aria-hidden and pointer-events-none: it is atmosphere, and must
-              never intercept a click meant for the buttons. */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-2xl bg-gradient-to-b from-primary/15 to-transparent blur-3xl"
-          />
+      <main>
+        <Hero />
 
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm">
-            <Sparkles className="size-3 text-primary" />
-            Local transcription · semantic search · grounded answers
-          </span>
-
-          <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
-            Captions for your video,
-            <br />
-            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              and a way back to any moment
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-xl text-pretty text-lg text-muted-foreground">
-            Upload a video, get an accurate transcript, edit and style the captions,
-            then search your whole library by what was actually said.
-          </p>
-
-          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/register" className={buttonVariants({ size: "lg" })}>
-              Get started
-              <ArrowRight />
-            </Link>
-            <Link
-              href="/login"
-              className={buttonVariants({ variant: "secondary", size: "lg" })}
-            >
-              Sign in
-            </Link>
-          </div>
-        </section>
-
-        <section className="grid gap-4 pb-24 sm:grid-cols-3">
+        <section className="mx-auto grid max-w-6xl gap-3 px-6 pb-24 sm:grid-cols-3">
           {FEATURES.map((feature) => (
             <div
               key={feature.title}
-              className="rounded-lg border border-border bg-card p-5 shadow-sm"
+              className="group relative overflow-hidden rounded-xl border border-border bg-surface-1 p-6 transition-colors hover:bg-card"
             >
-              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <feature.icon className="size-[18px]" />
+              {/* A wash that fades in from the icon's corner. Cheap, and it
+                  makes a static card feel like it responds to the pointer. */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.06] to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+              />
+              <span className="relative flex size-12 items-center justify-center rounded-lg border border-border bg-card text-primary transition-colors group-hover:border-primary/50">
+                <feature.icon className="size-5" />
               </span>
-              <h2 className="mt-4 text-sm font-semibold">{feature.title}</h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              <h2 className="relative mt-6 text-h2">{feature.title}</h2>
+              <p className="relative mt-2 text-body-sm leading-relaxed text-muted-foreground">
                 {feature.body}
               </p>
             </div>
