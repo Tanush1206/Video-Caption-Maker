@@ -40,8 +40,19 @@ class CaptionStyle(Base):
     do (a gradient fill, a blurred shadow) would make the preview a promise the
     renderer cannot keep, and the preview is supposed to be the contract.
 
-    So the knobs are the intersection: font, size, weight, slant, fill colour,
-    outline colour and width, an optional opaque box, alignment and margin.
+    So the knobs are the intersection: font, size, weight, slant, decoration,
+    tracking, fill colour, outline, drop shadow, an optional opaque box,
+    alignment and margin.
+
+    `uppercase` is the single exception, and it earns it: ASS has no property
+    for letter case, so the burn-in transforms the text and the preview uses
+    `text-transform`. Two mechanisms, one visible result — which is allowed,
+    where "a gradient the renderer cannot draw" is not.
+
+    Deliberately absent: `ScaleX`/`ScaleY` (stretch) and `Angle` (rotation).
+    ASS has all three and CSS can imitate them, but stretching glyphs changes
+    their advance widths, so the two renderers would wrap lines in different
+    places — the exact failure this class is shaped to prevent.
     """
 
     __tablename__ = "caption_styles"
@@ -70,10 +81,44 @@ class CaptionStyle(Base):
     outline_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
     outline_width: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
 
+    # Drop shadow, in reference pixels. ASS offsets it down-and-right by this
+    # distance with no blur, which is exactly what a CSS `text-shadow` with a
+    # zero blur radius draws — the two agree without either side approximating.
+    #
+    # Its own colour rather than reusing the outline's, because a shadow is
+    # usually a softer version of the text and an outline usually is not.
+    shadow: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    shadow_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
+
     box_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
     # 0 disables the box entirely, which is also what switches ASS BorderStyle
     # from 3 (opaque box) back to 1 (outline and shadow).
     box_opacity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Space between the glyphs and the edge of the box, in reference pixels.
+    #
+    # This used to be derived as `max(outline_width, 8)`, which meant widening
+    # an outline that is not even drawn when boxed silently changed the box.
+    # An explicit column is one fewer surprise, and the migration seeds every
+    # existing row with what the old rule would have produced so no box moves.
+    box_padding: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=BOX_PADDING_MIN
+    )
+
+    # ASS has real fields for these, in the Style line, so they cost nothing to
+    # honour in the burn-in and map one-to-one onto `text-decoration-line`.
+    underline: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    strikeout: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # ASS `Spacing`, in reference pixels — extra tracking between glyphs.
+    letter_spacing: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # The one field with no ASS equivalent. There is no "render this uppercase"
+    # style property, so the burn-in upper-cases the dialogue text itself and
+    # the preview uses `text-transform`. Deliberately *not* applied to the
+    # stored captions or to the SRT/VTT sidecars: this is how the captions are
+    # drawn on the video, not what they say.
+    uppercase: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     position: Mapped[VerticalPosition] = mapped_column(
         Enum(VerticalPosition, name="caption_vertical_position",
@@ -100,20 +145,6 @@ class CaptionStyle(Base):
     )
 
     video = relationship("Video", back_populates="style")
-
-    @property
-    def box_padding(self) -> int:
-        """
-        Space between the glyphs and the edge of the box, in reference pixels.
-
-        A property on the model rather than a rule each renderer reimplements.
-        The ASS conversion and the browser's CSS both read this, so the box in
-        the preview is the same size as the box in the export — recomputing it
-        in TypeScript would be one more place for the two to drift apart.
-        """
-        if self.box_opacity <= 0:
-            return 0
-        return max(self.outline_width, BOX_PADDING_MIN)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<CaptionStyle video={self.video_id} {self.font_key} {self.font_size}px>"
