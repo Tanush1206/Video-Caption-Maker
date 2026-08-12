@@ -125,6 +125,18 @@
 
 @layer base {
   :root {
+    /*
+     * Which way the browser should paint the parts of the UI we do not draw:
+     * scrollbars, the <select> popup, the colour picker, native form control
+     * defaults.
+     *
+     * The theme here is a `.dark` class, which is a CSS fact — and the native
+     * control renderer cannot see CSS classes. Without this it assumes light
+     * and paints a white scrollbar down the side of a navy panel, and it was
+     * also why `accent-color` came out re-derived on the old sliders.
+     */
+    color-scheme: light;
+
     /* Neutrals carry a hint of the same navy as dark, so the two themes feel
        related rather than like two different products. */
     --background: 220 40% 99%;
@@ -182,6 +194,8 @@
   }
 
   .dark {
+    color-scheme: dark;
+
     /* Straight from Stitch. */
     --background: 222 55% 10%; /* #0b1326 */
     --foreground: 226 90% 92%; /* #dae2fd */
@@ -248,6 +262,68 @@
      not reflow as its digits change. */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Scrollbars.
+   *
+   * Thin, transparent-tracked and drawn in the border colour, so the editor's
+   * two scroll containers - the right rail and the caption list inside it -
+   * stop putting a pair of solid channels down the middle of the layout.
+   *
+   * Narrowed rather than removed. `scrollbar-width: none` takes the affordance
+   * with it, and neither of those panels has any other hint that there is more
+   * content below the fold. A 4px bar is quiet; no bar is a guess.
+   *
+   * Two syntaxes, and they must not both reach the same browser. Firefox only
+   * has the standard properties; Chromium and Safari have the ::-webkit-
+   * pseudo-elements. Give Chromium both and `scrollbar-width: thin` *wins* —
+   * you get a native thin bar, complete with the stepper arrows, and the
+   * pseudo-element rules are ignored. Measured, not assumed: rendering the two
+   * together put the arrows straight back.
+   *
+   * So the standard properties are gated to engines that have no webkit
+   * pseudo-elements, which is exactly Firefox. `CSS.supports` confirms Chrome
+   * evaluates `selector(::-webkit-scrollbar)` as true and skips the block.
+   *
+   * `scrollbar-width` is not an inherited property, hence the `*`.
+   */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: hsl(var(--border)) transparent;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Chromium still draws stepper arrows at both ends unless told not to, and
+     they are the most dated part of the default bar. Firefox has not had them
+     for years, so hiding them also makes the two agree. */
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 9999px;
+    /* A transparent border clipped to the content box is the only way to inset
+       this pseudo-element - it takes no padding. 3px each side of a 10px
+       gutter leaves a 4px bar with room to breathe. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
   }
 }
 
