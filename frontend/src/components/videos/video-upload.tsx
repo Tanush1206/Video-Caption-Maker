@@ -6,7 +6,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { statsKeys } from "@/hooks/use-stats";
+import { statsKeys, useStats } from "@/hooks/use-stats";
 import { videoKeys } from "@/hooks/use-videos";
 import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/lib/format";
@@ -30,6 +30,8 @@ function isAcceptedFile(file: File): boolean {
 export function VideoUpload() {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Already cached by the strip above, so this costs nothing.
+  const { data: stats } = useStats();
 
   const [dragging, setDragging] = useState(false);
   const [active, setActive] = useState<ActiveUpload | null>(null);
@@ -131,6 +133,12 @@ export function VideoUpload() {
     );
   }
 
+  // A drop target has to be a bounded region, so this one stays a box — but
+  // it only earns a tall one while there is nothing else on the page. Once
+  // the library has videos, the primary act is reading it, and a 10rem dashed
+  // rectangle above the list is the loudest thing on screen for no reason.
+  const compact = (stats?.videos ?? 0) > 0;
+
   return (
     <div>
       <div
@@ -148,7 +156,10 @@ export function VideoUpload() {
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "group flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors duration-200 sm:p-10",
+          "group cursor-pointer rounded-lg border border-dashed transition-colors duration-200",
+          compact
+            ? "flex items-center gap-3 px-4 py-3"
+            : "flex flex-col items-center justify-center p-8 text-center sm:p-10",
           dragging
             ? "border-primary bg-primary/5"
             : "border-border bg-subtle hover:border-muted-foreground/40 hover:bg-muted/50"
@@ -156,16 +167,17 @@ export function VideoUpload() {
       >
         <span
           className={cn(
-            "flex size-11 items-center justify-center rounded-xl transition-all duration-200 ease-out",
+            "flex items-center justify-center rounded-lg transition-all duration-200 ease-out",
+            compact ? "size-8" : "size-11",
             dragging
               ? "scale-110 bg-primary text-primary-foreground"
               : "bg-muted text-muted-foreground group-hover:scale-105"
           )}
         >
-          <Upload className="size-5" />
+          <Upload className={compact ? "size-4" : "size-5"} />
         </span>
 
-        <p className="mt-3.5 text-sm font-medium">
+        <p className={cn("font-medium", compact ? "text-body-md" : "mt-3.5 text-sm")}>
           {dragging ? (
             "Drop to upload"
           ) : (
@@ -174,7 +186,12 @@ export function VideoUpload() {
             </>
           )}
         </p>
-        <p className="mt-1 font-mono text-xs text-muted-foreground">
+        <p
+          className={cn(
+            "font-mono text-body-sm text-muted-foreground",
+            compact ? "ml-auto hidden sm:block" : "mt-1"
+          )}
+        >
           {ACCEPTED_EXTENSIONS.join("  ·  ")}
         </p>
 
