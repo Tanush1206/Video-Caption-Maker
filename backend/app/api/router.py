@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import auth, caption_styles, captions, exports, search, stats, videos
+from app.api import auth, caption_styles, captions, exports, fonts, search, stats, videos
 
 api_router = APIRouter(prefix="/api")
 
@@ -19,5 +19,7 @@ api_router.include_router(captions.router, prefix="/captions", tags=["captions"]
 api_router.include_router(caption_styles.router)
 # Also unprefixed: exports hang off both /videos/{id}/exports and /exports/{id}.
 api_router.include_router(exports.router)
+# Unprefixed as well: /fonts and /fonts/{key}/{weight}.ttf.
+api_router.include_router(fonts.router)
 api_router.include_router(search.router)
 api_router.include_router(stats.router)

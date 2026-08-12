@@ -26,6 +26,7 @@ from app.models.caption_style import (
     CaptionStyle,
     VerticalPosition,
 )
+from app.services import font_library
 
 
 @dataclass(frozen=True)
@@ -98,8 +99,30 @@ DEFAULT_FONT_KEY = "sans"
 
 
 def get_font(key: str) -> Font:
-    """Never raises: an unknown key falls back rather than breaking playback."""
-    return FONTS_BY_KEY.get(key, FONTS_BY_KEY[DEFAULT_FONT_KEY])
+    """
+    Resolve a font key, from the built-in table or the Google Fonts library.
+
+    Never raises: an unknown key falls back rather than breaking playback.
+
+    The built-ins are checked first and always work offline — four system faces
+    from the image and five vendored in the repo. Everything else comes from
+    the catalogue and is downloaded on first use; by the time a style names one
+    the file is already on disk, because the editor cannot select a font
+    without the endpoint having fetched it.
+    """
+    builtin = FONTS_BY_KEY.get(key)
+    if builtin is not None:
+        return builtin
+
+    entry = font_library.get(key)
+    if entry is not None:
+        # The browser is served this exact file from /api/fonts, so the stack
+        # names the family alone — there is no metric-compatible stand-in to
+        # fall back to, and a generic fallback would hide a failed download
+        # behind text that renders in something else.
+        return Font(entry.key, entry.family, entry.family, f'"{entry.family}", sans-serif')
+
+    return FONTS_BY_KEY[DEFAULT_FONT_KEY]
 
 
 # Presets are plain dicts of column values so applying one is an ordinary

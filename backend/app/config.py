@@ -88,6 +88,15 @@ class Settings(BaseSettings):
     storage_local_path: str = "/app/storage"
     max_upload_size_mb: int = 2048
 
+    # Where Google Fonts downloaded on demand are kept. A shared volume rather
+    # than a per-container directory: the backend writes it, the worker reads
+    # it, and libass must load the *same file* the browser was served or the
+    # preview stops predicting the export.
+    #
+    # Under /usr/share/fonts so fontconfig finds it without extra config,
+    # matching the vendored faces alongside it.
+    font_cache_dir: str = "/usr/share/fonts/truetype/vcm-cache"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

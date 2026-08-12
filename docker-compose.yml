@@ -63,6 +63,11 @@ services:
       # way to guarantee that is for both to read the same bytes. Under
       # /usr/share/fonts so fontconfig picks it up without extra config.
       - ./frontend/public/fonts:/usr/share/fonts/truetype/vcm:ro
+      # Google Fonts fetched on demand. Read-write here and in the worker, and
+      # a named volume rather than a bind mount: 618MB of downloadable faces
+      # has no business in the repository, and the cache is derived data that
+      # can be thrown away and refetched.
+      - font_cache:/usr/share/fonts/truetype/vcm-cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,6 +94,11 @@ services:
       # way to guarantee that is for both to read the same bytes. Under
       # /usr/share/fonts so fontconfig picks it up without extra config.
       - ./frontend/public/fonts:/usr/share/fonts/truetype/vcm:ro
+      # Google Fonts fetched on demand. Read-write here and in the worker, and
+      # a named volume rather than a bind mount: 618MB of downloadable faces
+      # has no business in the repository, and the cache is derived data that
+      # can be thrown away and refetched.
+      - font_cache:/usr/share/fonts/truetype/vcm-cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,3 +146,4 @@ volumes:
   redis_data:
   chroma_data:
   media_storage:
+  font_cache:

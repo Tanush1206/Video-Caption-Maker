@@ -1,7 +1,8 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.caption_style import REFERENCE_HEIGHT, Alignment, VerticalPosition
-from app.services.caption_style import FONTS_BY_KEY, PRESETS
+from app.services import font_library
+from app.services.caption_style import FONTS_BY_KEY, PRESETS, get_font
 
 # #RRGGBB only. Short form (#FFF) and named colours are rejected rather than
 # normalised: the ASS conversion slices fixed byte positions out of this string,
@@ -36,6 +37,23 @@ class CaptionStyleRead(BaseModel):
 
     # Echoed so the client never has to hardcode it to size the preview.
     reference_height: int = REFERENCE_HEIGHT
+
+    # Resolved from font_key below, not stored.
+    #
+    # The overlay needs a CSS family for whatever font is selected, and with
+    # 1301 of them the client can no longer look that up in a list it already
+    # holds. Deciding it here keeps the rule that the pairing between what
+    # libass renders and what the browser is asked for lives in one place,
+    # server-side — which is the same reason FontRead carries css_stack.
+    font_family: str = ""
+    font_css_stack: str = ""
+
+    @model_validator(mode="after")
+    def resolve_font(self) -> "CaptionStyleRead":
+        font = get_font(self.font_key)
+        self.font_family = font.render_name
+        self.font_css_stack = font.css_stack
+        return self
 
 
 class CaptionStyleUpdate(BaseModel):
@@ -77,7 +95,15 @@ class CaptionStyleUpdate(BaseModel):
         # libass substitutes a font it cannot find without complaining, so an
         # unknown family here would render as something else entirely while the
         # browser previewed the real thing.
-        if value is not None and value not in FONTS_BY_KEY:
+        #
+        # Two sources now: the nine built-ins, which are always present, and the
+        # Google Fonts catalogue, whose files are fetched on demand. Membership
+        # of the catalogue is enough to accept the key — the file is guaranteed
+        # to exist by render time because the editor cannot display a font it
+        # has not already pulled through /api/fonts.
+        if value is None:
+            return value
+        if value not in FONTS_BY_KEY and font_library.get(value) is None:
             raise ValueError(f"Unknown font: {value}")
         return value
 

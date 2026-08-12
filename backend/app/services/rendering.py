@@ -11,6 +11,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 RENDER_TIMEOUT_SECONDS = 60 * 60 * 3
@@ -48,7 +50,16 @@ def burn_captions(
         "-i", str(source),
         # libass draws onto the decoded frames. There is no way to burn text in
         # without re-encoding the video — the pixels themselves change.
-        "-vf", f"subtitles={_escape_filter_path(subtitle_file)}",
+        #
+        # `fontsdir` is named explicitly rather than left to fontconfig. The
+        # on-demand cache is written by the *backend* container and read here,
+        # and fontconfig keeps a per-process scan of the directories it knows
+        # about — a font downloaded a moment ago can be on disk and still
+        # invisible to this worker. Pointing libass straight at the directory
+        # skips that entirely.
+        "-vf",
+        f"subtitles={_escape_filter_path(subtitle_file)}"
+        f":fontsdir={_escape_filter_path(Path(get_settings().font_cache_dir))}",
         "-c:v", "libx264",
         "-crf", str(CRF),
         "-preset", "medium",
