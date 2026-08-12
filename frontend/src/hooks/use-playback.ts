@@ -169,6 +169,7 @@ export function usePlayback(
         previous.onratechange = null;
         previous.ondurationchange = null;
         previous.onloadedmetadata = null;
+        previous.onresize = null;
         previous.onvolumechange = null;
       }
 
@@ -188,12 +189,39 @@ export function usePlayback(
           setDurationMs(Math.round(seconds * 1000));
         }
         if (node.videoWidth > 0) {
-          setIntrinsic({ width: node.videoWidth, height: node.videoHeight });
+          setIntrinsic((current) =>
+            current?.width === node.videoWidth && current?.height === node.videoHeight
+              ? // Same object identity when nothing changed, so `resize` firing
+                // repeatedly during playback doesn't re-render the player.
+                current
+              : { width: node.videoWidth, height: node.videoHeight }
+          );
         }
       };
 
       node.onloadedmetadata = readMetadata;
       node.ondurationchange = readMetadata;
+      // `resize` reports a *change* of intrinsic size — an adaptive source, or
+      // a track switch. Cheap to listen for and it costs a render only when
+      // the numbers actually differ.
+      node.onresize = readMetadata;
+
+      // And read what is already there.
+      //
+      // `loadedmetadata` fires exactly once per load, so subscribing to it is
+      // only half the job: if the element already has metadata by the time
+      // these handlers are attached, the event is long gone and the value is
+      // never read at all. That is not hypothetical — it is what made the
+      // player inconsistent between visits. On a cold load the request is
+      // still in flight when the ref callback runs, so the handler catches the
+      // event; on a warm one the response is in the HTTP cache and the event
+      // can land in the gap while handlers are detached during a remount
+      // (StrictMode double-invokes refs in development). Metadata was loaded
+      // either way — the frame renders — but `intrinsic` stayed null.
+      //
+      // Reading the current value and *also* subscribing is the general shape
+      // for anything event-driven that has a present state.
+      readMetadata();
       node.onplay = () => {
         setIsPlaying(true);
         startLoop();

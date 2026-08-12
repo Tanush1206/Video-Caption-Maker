@@ -109,10 +109,17 @@ export function VideoPlayer({
         // The real aspect ratio, not a hardcoded 16:9 — a portrait or 4:3
         // video would otherwise sit in a letterboxed 16:9 box for no reason.
         aspectRatio: intrinsic ? `${intrinsic.width} / ${intrinsic.height}` : "16 / 9",
-        // Never scale past the source's own pixels. Stretching a 640x360 file
-        // across an 800px column is upscaling, and it reads as the video
-        // having lost quality when nothing was ever re-encoded.
-        maxWidth: intrinsic ? `${intrinsic.width}px` : undefined,
+        // No cap at the source's own width.
+        //
+        // This used to be `maxWidth: intrinsic.width`, on the reasoning that
+        // upscaling a small file reads as lost quality. True, but it is the
+        // wrong trade in an editor: a genuinely 256x144 download rendered as a
+        // 256px-wide player, and the caption overlay — which scales with the
+        // box — became too small to read, in the one view whose entire job is
+        // positioning captions on the frame.
+        //
+        // The transport bar prints the source resolution, which tells the
+        // truth about quality without shrinking the workspace to say it.
       }}
       className="group relative mx-auto w-full overflow-hidden rounded-lg bg-black"
     >
