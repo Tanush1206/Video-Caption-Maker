@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthBootstrap } from "@/components/layout/auth-bootstrap";
 import { Providers } from "@/components/layout/providers";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { ScrollActivity } from "@/components/scroll-activity";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 // Runs before first paint, so the correct theme is applied without a flash
@@ -55,6 +56,9 @@ export default function RootLayout({
           <Providers>
             {/* Silently restores the session from the refresh cookie on load. */}
             <AuthBootstrap />
+            {/* Flags the element being scrolled, so scrollbars can stay hidden
+                until they are actually in use. Renders nothing. */}
+            <ScrollActivity />
             {children}
           </Providers>
         </ThemeProvider>

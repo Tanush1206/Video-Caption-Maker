@@ -287,10 +287,26 @@
    * evaluates `selector(::-webkit-scrollbar)` as true and skips the block.
    *
    * `scrollbar-width` is not an inherited property, hence the `*`.
+   *
+   * The thumb is transparent at rest and only paints while a container is
+   * being scrolled, or while the pointer is inside one. The *gutter* is always
+   * reserved, which is the point: a genuinely overlay scrollbar reflows the
+   * text under it every time it appears, and 10px of permanently empty margin
+   * is cheaper than a paragraph that rewraps whenever you touch the wheel.
+   *
+   * `data-scrolling` is set on the scrolling element itself by ScrollActivity
+   * (components/scroll-activity.tsx) and removed shortly after it stops. It is
+   * needed because there is no CSS state for "is scrolling" — :hover is the
+   * closest thing and it is not the same question.
    */
   @supports not selector(::-webkit-scrollbar) {
     * {
       scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
+
+    [data-scrolling],
+    :not(html):not(body):hover {
       scrollbar-color: hsl(var(--border)) transparent;
     }
   }
@@ -313,13 +329,31 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
+    background-color: transparent;
     border-radius: 9999px;
     /* A transparent border clipped to the content box is the only way to inset
        this pseudo-element - it takes no padding. 3px each side of a 10px
        gutter leaves a 4px bar with room to breathe. */
     border: 3px solid transparent;
     background-clip: content-box;
+  }
+
+  /*
+   * Reveal, in two rules that must stay separate — one unknown selector
+   * invalidates a whole comma-separated list, and `[data-scrolling]` is fine
+   * everywhere while the pseudo-element is not.
+   *
+   * Hover deliberately excludes <html> and <body>: both of them are under the
+   * cursor whenever it is anywhere in the window, so including them would make
+   * the page's own scrollbar permanently visible and undo the whole thing.
+   * The document scrollbar therefore appears on scroll only.
+   */
+  [data-scrolling]::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+  }
+
+  :not(html):not(body):hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
   }
 
   ::-webkit-scrollbar-thumb:hover {
