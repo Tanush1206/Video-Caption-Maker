@@ -17,19 +17,22 @@ class CaptionStyleRead(BaseModel):
     font_size: int
     bold: bool
     italic: bool
+    underline: bool
+    strikeout: bool
+    uppercase: bool
+    letter_spacing: int
     text_color: str
     outline_color: str
     outline_width: int
+    shadow: int
+    shadow_color: str
     box_color: str
     box_opacity: float
+    box_padding: int
     position: VerticalPosition
     alignment: Alignment
     margin_v: int
     margin_h: int
-
-    # Derived, not stored. Sent so the browser applies the same box padding as
-    # the renderer rather than reimplementing the rule and drifting from it.
-    box_padding: int
 
     # Echoed so the client never has to hardcode it to size the preview.
     reference_height: int = REFERENCE_HEIGHT
@@ -48,11 +51,21 @@ class CaptionStyleUpdate(BaseModel):
     font_size: int | None = Field(default=None, ge=12, le=200)
     bold: bool | None = None
     italic: bool | None = None
+    underline: bool | None = None
+    strikeout: bool | None = None
+    uppercase: bool | None = None
+    # Negative is legitimate — tightening tracking is a real typographic choice
+    # and ASS `Spacing` accepts it. Floored well short of the point where
+    # glyphs stack on top of each other.
+    letter_spacing: int | None = Field(default=None, ge=-10, le=50)
     text_color: str | None = Field(default=None, pattern=HEX_COLOUR)
     outline_color: str | None = Field(default=None, pattern=HEX_COLOUR)
     outline_width: int | None = Field(default=None, ge=0, le=20)
+    shadow: int | None = Field(default=None, ge=0, le=20)
+    shadow_color: str | None = Field(default=None, pattern=HEX_COLOUR)
     box_color: str | None = Field(default=None, pattern=HEX_COLOUR)
     box_opacity: float | None = Field(default=None, ge=0.0, le=1.0)
+    box_padding: int | None = Field(default=None, ge=0, le=60)
     position: VerticalPosition | None = None
     alignment: Alignment | None = None
     margin_v: int | None = Field(default=None, ge=0, le=500)
@@ -68,7 +81,7 @@ class CaptionStyleUpdate(BaseModel):
             raise ValueError(f"Unknown font: {value}")
         return value
 
-    @field_validator("text_color", "outline_color", "box_color")
+    @field_validator("text_color", "outline_color", "shadow_color", "box_color")
     @classmethod
     def normalise_case(cls, value: str | None) -> str | None:
         return value.upper() if value else value

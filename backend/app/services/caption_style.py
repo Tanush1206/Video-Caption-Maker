@@ -104,8 +104,25 @@ def get_font(key: str) -> Font:
 
 # Presets are plain dicts of column values so applying one is an ordinary
 # update — no separate code path that could drift from a hand-made style.
+#
+# Every preset must name *every* styling column. A preset is "make it look like
+# this", and a field left out is a field left at whatever the user last set,
+# so an omitted key means picking YouTube would keep the shadow you added
+# five minutes ago. `test_presets_are_complete` enforces it against the model
+# rather than trusting this comment.
+_PRESET_BASELINE: dict = {
+    "shadow": 0,
+    "shadow_color": "#000000",
+    "underline": False,
+    "strikeout": False,
+    "letter_spacing": 0,
+    "uppercase": False,
+    "box_padding": 8,
+}
+
 PRESETS: dict[str, dict] = {
     "youtube": {
+        **_PRESET_BASELINE,
         "font_key": "sans",
         "font_size": 48,
         "bold": False,
@@ -121,10 +138,14 @@ PRESETS: dict[str, dict] = {
         "margin_h": 60,
     },
     "tiktok": {
+        **_PRESET_BASELINE,
         "font_key": "sans",
         "font_size": 64,
         "bold": True,
         "italic": False,
+        # The look is set in caps far more often than not, and it is the one
+        # part of this style that a size or colour change cannot approximate.
+        "uppercase": True,
         "text_color": "#FFFFFF",
         "outline_color": "#000000",
         "outline_width": 5,
@@ -138,6 +159,7 @@ PRESETS: dict[str, dict] = {
         "margin_h": 80,
     },
     "minimal": {
+        **_PRESET_BASELINE,
         "font_key": "sans",
         "font_size": 44,
         "bold": False,
@@ -145,6 +167,9 @@ PRESETS: dict[str, dict] = {
         "text_color": "#FFFFFF",
         "outline_color": "#000000",
         "outline_width": 2,
+        # A hair of shadow instead of a heavier outline: it lifts the text off
+        # a busy frame without the stroke reading as a border.
+        "shadow": 3,
         "box_color": "#000000",
         "box_opacity": 0.0,
         "position": VerticalPosition.BOTTOM,
@@ -291,17 +316,33 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
         # libass treats it as false.
         "Bold": -1 if style.bold else 0,
         "Italic": -1 if style.italic else 0,
+        "Underline": -1 if style.underline else 0,
+        "StrikeOut": -1 if style.strikeout else 0,
         "PrimaryColour": to_ass_colour(style.text_color),
         "OutlineColour": to_ass_colour(style.outline_color),
-        # Doubles as the box fill at BorderStyle 3 and the drop shadow at 1.
-        "BackColour": to_ass_colour(style.box_color, style.box_opacity),
+        #
+        # BackColour is two different things depending on BorderStyle: the box
+        # fill at 3, the drop-shadow colour at 1. One field, so it has to follow
+        # whichever is actually being drawn.
+        #
+        # Getting this wrong is invisible rather than loud. Leaving it as the
+        # box colour at box_opacity means an unboxed style hands the shadow an
+        # alpha of 0 — ASS alpha is *transparency* — and the shadow renders
+        # perfectly, fully invisible, with no error anywhere.
+        "BackColour": (
+            to_ass_colour(style.box_color, style.box_opacity)
+            if boxed
+            else to_ass_colour(style.shadow_color)
+        ),
         # 3 draws an opaque box behind the text; 1 draws an outline and shadow.
         "BorderStyle": 3 if boxed else 1,
-        # This field changes meaning with BorderStyle: stroke width at 1, box
-        # padding at 3. The padding rule lives on the model so the browser
-        # preview can apply the identical number.
+        # This field changes meaning with BorderStyle too: stroke width at 1,
+        # box padding at 3.
         "Outline": round((style.box_padding if boxed else style.outline_width) * scale),
-        "Shadow": 0,
+        # A box already separates the text from the frame, and BackColour is
+        # spoken for, so the shadow is only drawn when there is no box.
+        "Shadow": 0 if boxed else round(style.shadow * scale),
+        "Spacing": round(style.letter_spacing * scale),
         "Alignment": to_ass_alignment(style),
         "MarginL": round(style.margin_h * scale),
         "MarginR": round(style.margin_h * scale),
@@ -323,14 +364,17 @@ ASS_STYLE_FIELDS: tuple[str, ...] = (
 )
 
 # Fields we don't expose but that must still occupy their position in the row.
+#
+# ScaleX/ScaleY and Angle stay fixed deliberately rather than for lack of a
+# control: stretching or rotating glyphs changes their advance widths, so
+# libass and the browser would break lines in different places and the preview
+# would stop being a promise. SecondaryColour is only read for karaoke, which
+# needs word timings we do not store.
 _ASS_DEFAULTS: dict[str, str | int] = {
     "Name": "Default",
     "SecondaryColour": "&H000000FF",
-    "Underline": 0,
-    "StrikeOut": 0,
     "ScaleX": 100,
     "ScaleY": 100,
-    "Spacing": 0,
     "Angle": 0,
     "Encoding": 1,
 }

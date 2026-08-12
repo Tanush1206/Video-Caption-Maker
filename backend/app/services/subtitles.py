@@ -169,7 +169,12 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
     for caption in captions:
-        text = _emphasis_tags(caption, style, scale) + escape_ass_text(caption.text)
+        # `uppercase` is the one style field ASS cannot express, so it is applied
+        # to the text instead of to the Style line. Only here: the stored caption
+        # and the SRT/VTT sidecars keep their original case, because this is how
+        # the captions are *drawn on the video*, not what they say.
+        body = caption.text.upper() if style.uppercase else caption.text
+        text = _emphasis_tags(caption, style, scale) + escape_ass_text(body)
         events.append(
             f"Dialogue: 0,{ass_time(caption.start_ms)},{ass_time(caption.end_ms)},"
             f"Default,,0,0,0,,{text}"
