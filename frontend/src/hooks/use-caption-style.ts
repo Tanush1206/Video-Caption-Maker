@@ -52,15 +52,36 @@ export function useUpdateCaptionStyle(videoId: number) {
 
   const pending = useRef<Partial<CaptionStyle>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which save is the newest. Responses are not guaranteed to come back in the
+  // order they were sent, and an older one carries an older style.
+  const latest = useRef(0);
 
   const mutation = useMutation({
-    mutationFn: (patch: Partial<CaptionStyle>) =>
+    mutationFn: ({ patch }: { patch: Partial<CaptionStyle>; seq: number }) =>
       api.patch<CaptionStyle>(`/api/videos/${videoId}/style`, patch),
-    // Trust the server's copy over the optimistic one — it has applied the
-    // column bounds, so a value clamped server-side snaps back visibly rather
-    // than leaving the preview showing something that was never saved.
-    onSuccess: (saved) => queryClient.setQueryData(key, saved),
+    onSuccess: (saved, { seq }) => {
+      // A newer save is already out. Applying this reply would drag every
+      // slider back to where it was when this request left.
+      if (seq < latest.current) return;
+
+      // Otherwise the server's copy wins, because it has applied the column
+      // bounds — a value clamped server-side must snap back visibly rather
+      // than leave the preview showing something that was never saved.
+      //
+      // But only for fields the user is not still editing. `pending` holds
+      // everything changed since this request went out, and re-applying it on
+      // top is what stops a mid-drag response from fighting the thumb.
+      queryClient.setQueryData<CaptionStyle>(key, { ...saved, ...pending.current });
+    },
   });
+
+  // `mutation.mutate` is stable across renders — it is a useCallback bound to
+  // the observer. The mutation *object* is not: useMutation returns a fresh
+  // `{ ...result, mutate, mutateAsync }` literal every time. Depending on the
+  // object made `flush` change identity on every render, which re-ran the
+  // unmount effect below and therefore fired its cleanup — so every keystroke
+  // of a drag saved immediately and the debounce never once took effect.
+  const { mutate } = mutation;
 
   const flush = useCallback(() => {
     if (timer.current) {
@@ -69,8 +90,11 @@ export function useUpdateCaptionStyle(videoId: number) {
     }
     const patch = pending.current;
     pending.current = {};
-    if (Object.keys(patch).length > 0) mutation.mutate(patch);
-  }, [mutation]);
+    if (Object.keys(patch).length === 0) return;
+
+    latest.current += 1;
+    mutate({ patch, seq: latest.current });
+  }, [mutate]);
 
   const update = useCallback(
     (patch: Partial<CaptionStyle>) => {
@@ -90,8 +114,13 @@ export function useUpdateCaptionStyle(videoId: number) {
   );
 
   // A style change still sitting in the debounce window when the editor
-  // unmounts would otherwise be lost.
-  useEffect(() => () => flush(), [flush]);
+  // unmounts would otherwise be lost. Read through a ref with an empty
+  // dependency list, so this means "on unmount" and cannot quietly become
+  // "after every render" again if `flush` ever picks up an unstable
+  // dependency — which is the failure this hook already had once.
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => () => flushRef.current(), []);
 
   return { update, isSaving: mutation.isPending };
 }
