@@ -2,6 +2,7 @@ import pytest
 
 from app.models.caption_style import Alignment, CaptionStyle, VerticalPosition
 from app.services import caption_style as style_service
+from tests.conftest import a_style
 
 
 async def upload(client, headers, content: bytes):
@@ -92,7 +93,7 @@ def test_ass_alpha_is_transparency_not_opacity():
     ],
 )
 def test_alignment_follows_the_numeric_keypad(position, alignment, expected):
-    style = CaptionStyle(video_id=1, position=position, alignment=alignment)
+    style = a_style(position=position, alignment=alignment)
     assert style_service.to_ass_alignment(style) == expected
 
 
@@ -106,22 +107,7 @@ def test_sizes_scale_with_video_height():
     Sizes are stored against a 1080p canvas, so a 54px caption is 18px on 360p
     and 108px on 2160p — the same fraction of the frame in all three.
     """
-    style = CaptionStyle(
-        video_id=1,
-        font_key="sans",
-        font_size=54,
-        bold=False,
-        italic=False,
-        text_color="#FFFFFF",
-        outline_color="#000000",
-        outline_width=3,
-        box_color="#000000",
-        box_opacity=0.0,
-        position=VerticalPosition.BOTTOM,
-        alignment=Alignment.CENTER,
-        margin_v=60,
-        margin_h=60,
-    )
+    style = a_style(font_size=54, margin_v=60)
 
     assert style_service.to_ass_style(style, 1080)["Fontsize"] == 54
     assert style_service.to_ass_style(style, 360)["Fontsize"] == 18
@@ -130,15 +116,8 @@ def test_sizes_scale_with_video_height():
 
 
 def test_a_box_switches_border_style_and_keeps_padding():
-    base = dict(
-        video_id=1, font_key="sans", font_size=54, bold=False, italic=False,
-        text_color="#FFFFFF", outline_color="#000000", outline_width=0,
-        box_color="#000000", position=VerticalPosition.BOTTOM,
-        alignment=Alignment.CENTER, margin_v=60, margin_h=60,
-    )
-
-    outlined = style_service.to_ass_style(CaptionStyle(**base, box_opacity=0.0), 1080)
-    boxed = style_service.to_ass_style(CaptionStyle(**base, box_opacity=0.75), 1080)
+    outlined = style_service.to_ass_style(a_style(outline_width=0, box_opacity=0.0), 1080)
+    boxed = style_service.to_ass_style(a_style(outline_width=0, box_opacity=0.75), 1080)
 
     assert outlined["BorderStyle"] == 1
     assert boxed["BorderStyle"] == 3
@@ -147,17 +126,68 @@ def test_a_box_switches_border_style_and_keeps_padding():
     assert boxed["Outline"] > 0
 
 
+def test_backcolour_follows_whichever_thing_is_being_drawn():
+    """
+    BackColour is the box fill at BorderStyle 3 and the shadow colour at 1.
+
+    This is the failure mode worth a test of its own, because it is silent. If
+    an unboxed style kept the box colour at box_opacity, ASS would be handed an
+    alpha of 0 — and ASS alpha is *transparency* — so the shadow would render
+    exactly as asked and be completely invisible.
+    """
+    shadowed = style_service.to_ass_style(
+        a_style(box_opacity=0.0, shadow=4, shadow_color="#FF0000"), 1080
+    )
+    boxed = style_service.to_ass_style(
+        a_style(box_opacity=0.75, shadow=4, box_color="#0000FF"), 1080
+    )
+
+    # Opaque (alpha 00) and the shadow's own colour, in ASS's backwards BGR.
+    assert shadowed["BackColour"] == "&H000000FF"
+    assert shadowed["Shadow"] == 4
+
+    # Boxed: the box wins the field, and the shadow is not drawn at all rather
+    # than drawn in the box's colour on top of the box.
+    assert boxed["BackColour"] == "&H40FF0000"
+    assert boxed["Shadow"] == 0
+
+
+def test_shadow_and_tracking_scale_with_the_frame():
+    """Every reference-pixel length has to scale, not just the font size."""
+    style = a_style(box_opacity=0.0, shadow=6, letter_spacing=4)
+
+    assert style_service.to_ass_style(style, 1080)["Shadow"] == 6
+    assert style_service.to_ass_style(style, 360)["Shadow"] == 2
+    assert style_service.to_ass_style(style, 1080)["Spacing"] == 4
+    assert style_service.to_ass_style(style, 2160)["Spacing"] == 8
+
+
+def test_presets_set_every_styling_field():
+    """
+    A preset is "make it look like this", so a field it omits is a field left
+    at whatever the user last chose — pick YouTube and keep your shadow.
+
+    Checked against the model's own columns so a new one cannot be added to the
+    schema and forgotten in three preset dicts.
+    """
+    expected = set(style_service.default_style_fields())
+
+    for name, preset in style_service.PRESETS.items():
+        assert set(preset) == expected, (
+            f"preset {name!r} is missing {sorted(expected - set(preset))} "
+            f"and has unknown {sorted(set(preset) - expected)}"
+        )
+
+
 def test_ass_booleans_are_minus_one():
     """libass reads 1 as false here; only -1 is true."""
-    style = CaptionStyle(video_id=1, bold=True, italic=False, box_opacity=0.0,
-                         font_key="sans", font_size=54, text_color="#FFFFFF",
-                         outline_color="#000000", outline_width=2, box_color="#000000",
-                         position=VerticalPosition.BOTTOM, alignment=Alignment.CENTER,
-                         margin_v=60, margin_h=60)
-
-    rendered = style_service.to_ass_style(style, 1080)
+    rendered = style_service.to_ass_style(
+        a_style(bold=True, italic=False, underline=True, strikeout=False), 1080
+    )
     assert rendered["Bold"] == -1
     assert rendered["Italic"] == 0
+    assert rendered["Underline"] == -1
+    assert rendered["StrikeOut"] == 0
 
 
 def test_defaults_come_from_the_columns_not_an_unsaved_instance():
@@ -222,13 +252,7 @@ def test_libass_resolves_the_font_we_asked_for(font, tmp_path):
     field: every value shifted one column left, libass read the style name as
     the font name, and quietly rendered in DejaVu.
     """
-    style = CaptionStyle(
-        video_id=1, font_key=font.key, font_size=54, bold=True, italic=False,
-        text_color="#FFCC00", outline_color="#000000", outline_width=4,
-        box_color="#000000", box_opacity=0.0,
-        position=VerticalPosition.BOTTOM, alignment=Alignment.CENTER,
-        margin_v=60, margin_h=60,
-    )
+    style = a_style(font_key=font.key, bold=True, text_color="#FFCC00", outline_width=4)
 
     log = _render_with_libass(style, 720, tmp_path)
 
@@ -241,15 +265,7 @@ def test_libass_resolves_the_font_we_asked_for(font, tmp_path):
 
 def test_the_style_block_is_self_consistent():
     """Format and Style must describe the same columns, in the same order."""
-    style = CaptionStyle(
-        video_id=1, font_key="sans", font_size=54, bold=False, italic=False,
-        text_color="#FFFFFF", outline_color="#000000", outline_width=3,
-        box_color="#000000", box_opacity=0.0,
-        position=VerticalPosition.BOTTOM, alignment=Alignment.CENTER,
-        margin_v=60, margin_h=60,
-    )
-
-    lines = style_service.to_ass_style_block(style, 1080).strip().splitlines()
+    lines = style_service.to_ass_style_block(a_style(font_key="sans"), 1080).strip().splitlines()
     header = [f.strip() for f in lines[1].removeprefix("Format:").split(",")]
     values = lines[2].removeprefix("Style:").split(",")
 

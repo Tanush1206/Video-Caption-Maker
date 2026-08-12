@@ -8,9 +8,28 @@ from sqlalchemy import delete, select
 
 from app.database import AsyncSessionLocal
 from app.main import app
+from app.models.caption_style import CaptionStyle
 from app.models.user import User
 from app.services import storage
+from app.services.caption_style import default_style_fields
 from app.utils.rate_limit import get_redis
+
+
+def a_style(**overrides) -> CaptionStyle:
+    """
+    A fully populated, unsaved CaptionStyle.
+
+    SQLAlchemy applies `default=` at *flush*, so `CaptionStyle(video_id=1)` has
+    None in every styling column and anything that reads one dies on an
+    attribute that looks like it should have a value.
+
+    Built from `default_style_fields()`, which introspects the columns, rather
+    than from a hand-written dict of every field. The dicts this replaces had
+    to be edited in step with the model and were not — adding six columns turned
+    fifteen unrelated tests red, all with the same NoneType error. This cannot
+    go stale, because there is nothing in it to forget to update.
+    """
+    return CaptionStyle(video_id=1, **{**default_style_fields(), **overrides})
 
 
 @pytest.fixture

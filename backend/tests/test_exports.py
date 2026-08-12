@@ -10,6 +10,7 @@ from app.models.caption import Caption
 from app.models.caption_style import Alignment, CaptionStyle, VerticalPosition
 from app.models.export import ExportStatus
 from app.services import subtitles
+from tests.conftest import a_style
 
 
 async def make_video(client, headers, sample_video_bytes) -> int:
@@ -44,17 +45,6 @@ async def exportable(client, auth_headers, sample_video_bytes):
     video_id = await make_video(client, auth_headers, sample_video_bytes)
     await seed_captions(video_id)
     return video_id
-
-
-def a_style(**overrides) -> CaptionStyle:
-    base = dict(
-        video_id=1, font_key="sans", font_size=54, bold=True, italic=False,
-        text_color="#FFFFFF", outline_color="#000000", outline_width=3,
-        box_color="#000000", box_opacity=0.0,
-        position=VerticalPosition.BOTTOM, alignment=Alignment.CENTER,
-        margin_v=60, margin_h=60,
-    )
-    return CaptionStyle(**{**base, **overrides})
 
 
 def a_caption(**overrides) -> Caption:
@@ -170,6 +160,29 @@ def test_emphasis_produces_inline_tags():
     assert "\\b1" in dialogue
     assert "\\c&H00D4FF&" in dialogue
     assert "\\fs" in dialogue
+
+
+def test_uppercase_transforms_the_burned_text_and_nothing_else():
+    """
+    ASS has no property for letter case, so `uppercase` is the one style field
+    applied to the text instead of to the Style line.
+
+    Which makes the second half of this test the important half: the sidecars
+    are the caption *content* and must keep the case they were transcribed in.
+    Upper-casing an SRT would quietly rewrite the user's transcript because
+    they wanted their burned-in captions to look shouty.
+    """
+    caption = a_caption(text="hello there")
+
+    shouted = subtitles.to_ass([caption], a_style(uppercase=True), 1280, 720)
+    normal = subtitles.to_ass([caption], a_style(uppercase=False), 1280, 720)
+
+    assert "HELLO THERE" in shouted
+    assert "hello there" not in shouted
+    assert "hello there" in normal
+
+    assert "hello there" in subtitles.to_srt([caption])
+    assert "hello there" in subtitles.to_vtt([caption])
 
 
 def test_ass_canvas_matches_the_frame():
