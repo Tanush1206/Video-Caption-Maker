@@ -1,0 +1,168 @@
+/*
+ * A range input drawn by us instead of by the browser.
+ *
+ * Measured off the style panel as it shipped. The unfilled track rendered
+ * #3B3B3B — a pure neutral, no blue in it at all — on a card whose every other
+ * grey is navy-tinted (--muted is #2D3449). It was the one thing on the panel
+ * painted a colour that is not in the palette.
+ *
+ * `accent-color: hsl(var(--primary))` did not survive either: the token is
+ * #A78BFA and what reached the screen was #7A42F0. Nothing on the page declares
+ * `color-scheme`, so Chrome draws a light-mode control on a dark panel and
+ * re-derives the accent for contrast against a background that isn't there.
+ *
+ * Rather than chase that, `appearance: none` and paint all of it. That also
+ * makes the three engines agree — each ships its own track height, thumb size
+ * and fill behaviour, so "native" was never one look to begin with.
+ *
+ * A CSS module rather than globals.css: this is one control's pseudo-elements,
+ * not a token or a shared material like .glass-surface, and
+ * ::-webkit-slider-thumb is not something Tailwind can say without a dozen
+ * arbitrary variants. The webkit and moz rules are duplicated rather than
+ * grouped because one unknown pseudo-element invalidates a whole selector list
+ * — grouping them means neither browser gets a track.
+ */
+
+.range {
+  --track: 6px;
+  --thumb: 16px;
+
+  /* The thumb's centre travels from thumb/2 to width - thumb/2, but a
+     percentage background stop measures from 0 to width. Left alone the fill
+     edge misses the thumb by up to 8px, worst exactly at 0 and at max where
+     it is most obvious. */
+  --fill-width: calc(var(--fill, 0) * (100% - var(--thumb)) + var(--thumb) / 2);
+
+  -webkit-appearance: none;
+  appearance: none;
+  /* Taller than the track deliberately: the pointer target is this box, and a
+     6px strip is a miserable thing to hit on a trackpad. */
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/*
+ * Layout defaults, at zero specificity. `:where()` means a caller's `w-16` or
+ * `hidden` simply wins — no !important, and no dependence on whether Next
+ * happens to inject this module before or after Tailwind's utilities, which is
+ * not something a component should have to know.
+ */
+:where(.range) {
+  display: block;
+  width: 100%;
+}
+
+/* --- track ------------------------------------------------------------- */
+
+.range::-webkit-slider-runnable-track {
+  height: var(--track);
+  border-radius: 9999px;
+  background-color: hsl(var(--input));
+  background-image: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  background-repeat: no-repeat;
+  background-size: var(--fill-width) 100%;
+}
+
+.range::-moz-range-track {
+  height: var(--track);
+  border-radius: 9999px;
+  background-color: hsl(var(--input));
+  background-image: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  background-repeat: no-repeat;
+  background-size: var(--fill-width) 100%;
+}
+
+/* --- thumb ------------------------------------------------------------- */
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: var(--thumb);
+  width: var(--thumb);
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  /* A ring of the panel colour, so the thumb reads as a separate object rather
+     than a bulge in the bar it is sitting on. */
+  border: 2px solid hsl(var(--card));
+  /* Zero-spread and transparent rather than `none`, so the hover ring below
+     has something to grow from instead of popping into place. */
+  box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  /* WebKit puts the thumb's top edge at the track's top and leaves centring to
+     us. Gecko centres it already, which is why these are separate rules and
+     not one — applying this there would push it off by 5px. */
+  margin-top: calc((var(--track) - var(--thumb)) / 2);
+  transition: box-shadow 120ms ease;
+}
+
+.range::-moz-range-thumb {
+  height: var(--thumb);
+  width: var(--thumb);
+  box-sizing: border-box;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  border: 2px solid hsl(var(--card));
+  box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  transition: box-shadow 120ms ease;
+}
+
+/* Gecko's own dotted inner border on a focused range. */
+.range::-moz-focus-outer {
+  border: 0;
+}
+
+/* --- pointer states ---------------------------------------------------- */
+
+.range:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2);
+}
+
+.range:hover::-moz-range-thumb {
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2);
+}
+
+.range:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px hsl(var(--primary) / 0.28);
+}
+
+.range:active::-moz-range-thumb {
+  box-shadow: 0 0 0 6px hsl(var(--primary) / 0.28);
+}
+
+/* --- focus ------------------------------------------------------------- */
+
+/*
+ * The app-wide :focus-visible draws a ring on the focused element. On a
+ * full-width range that is a 20px-tall rectangle spanning the whole panel, and
+ * there are five of these stacked. So it is suppressed here — a class plus a
+ * pseudo-class outscores the bare `:focus-visible`, regardless of which
+ * stylesheet lands first — and redrawn on the thumb, which is the part that
+ * actually moves and the part the arrow keys act on.
+ */
+.range:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.5);
+}
+
+.range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.5);
+}
+
+/* --- disabled ---------------------------------------------------------- */
+
+.range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.range:disabled:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+}
+
+.range:disabled:hover::-moz-range-thumb {
+  box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+}

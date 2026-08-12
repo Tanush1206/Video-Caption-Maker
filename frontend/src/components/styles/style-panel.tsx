@@ -2,6 +2,7 @@
 
 import { Loader2, RotateCcw } from "lucide-react";
 
+import { Range } from "@/components/ui/range";
 import {
   useApplyPreset,
   useCaptionStyle,
@@ -49,14 +50,12 @@ function Slider({
 }) {
   return (
     <Field label={`${label} — ${value}${suffix ?? ""}`}>
-      <input
-        type="range"
+      <Range
         min={min}
         max={max}
         step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full accent-primary"
       />
     </Field>
   );
