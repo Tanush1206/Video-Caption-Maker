@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { startDownload } from "@/lib/download";
 import type {
   DownloadTicket,
   ExportFormat,
@@ -60,10 +61,6 @@ export function useDeleteExport(videoId: number) {
  * The token is minted on click rather than alongside the list: it expires in
  * fifteen minutes, so one issued when the page loaded would be dead by the
  * time someone came back to it.
- *
- * A generated anchor rather than assigning `location.href` — the response
- * carries `Content-Disposition: attachment`, so this starts a download without
- * the browser ever treating it as navigation away from the editor.
  */
 export function useDownloadExport() {
   return useMutation({
@@ -75,13 +72,6 @@ export function useDownloadExport() {
         ticket.token
       )}`;
     },
-    onSuccess: (url) => {
-      const link = document.createElement("a");
-      link.href = url;
-      link.rel = "noopener";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    },
+    onSuccess: startDownload,
   });
 }

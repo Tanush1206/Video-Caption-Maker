@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { startDownload } from "@/lib/download";
 import type { StreamTicket, Waveform } from "@/types/stream";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -40,8 +41,33 @@ export function streamUrl(videoId: number, token: string): string {
  * different origin from the app, so the server has to say `Content-Disposition:
  * attachment` itself — hence the flag rather than a client-side hint.
  */
-export function downloadUrl(videoId: number, token: string): string {
+function downloadUrl(videoId: number, token: string): string {
   return `${streamUrl(videoId, token)}&download=1`;
+}
+
+/**
+ * Download the source file, exactly as uploaded.
+ *
+ * A mutation rather than an <a> built from the player's ticket, so it can sit
+ * in the export panel next to the four generated formats — the panel has no
+ * business holding a stream credential just to render a link, and the player's
+ * ticket is minted once and deliberately never refreshed, so by the time
+ * someone finishes editing it may well have expired.
+ *
+ * Minting on click costs one request and is always valid. This is the only
+ * option in that panel that produces no record: there is nothing to render, so
+ * there is no export row to keep, poll, or delete afterwards.
+ */
+export function useDownloadOriginal(videoId: number) {
+  return useMutation({
+    mutationFn: async () => {
+      const ticket = await api.post<StreamTicket>(
+        `/api/videos/${videoId}/stream-token`
+      );
+      return downloadUrl(videoId, ticket.token);
+    },
+    onSuccess: startDownload,
+  });
 }
 
 /**

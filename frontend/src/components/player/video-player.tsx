@@ -1,13 +1,13 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { CaptionOverlay } from "@/components/captions/caption-overlay";
 import type { Playback } from "@/hooks/use-playback";
-import { downloadUrl, streamKeys, streamUrl, useStreamTicket } from "@/hooks/use-stream";
+import { streamKeys, streamUrl, useStreamTicket } from "@/hooks/use-stream";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 import type { Video } from "@/types/video";
@@ -121,7 +121,7 @@ export function VideoPlayer({
         // The transport bar prints the source resolution, which tells the
         // truth about quality without shrinking the workspace to say it.
       }}
-      className="group relative mx-auto w-full overflow-hidden rounded-lg bg-black"
+      className="relative mx-auto w-full overflow-hidden rounded-lg bg-black"
     >
       <video
         ref={playback.attach}
@@ -139,16 +139,11 @@ export function VideoPlayer({
         className="h-full w-full cursor-pointer"
       />
 
+      {/* Getting a file out of this video lives in one place now — the export
+          panel, as "Original". A hover-only icon here was a second, separate
+          answer to the same question, invisible on a touch screen and easy to
+          mistake for "download what I am looking at", captions included. */}
       <CaptionOverlay caption={activeCaption} style={style} font={font} />
-
-      <a
-        href={downloadUrl(video.id, ticket.token)}
-        title="Download the original file, exactly as uploaded"
-        aria-label="Download the original file"
-        className="absolute right-2 top-2 rounded-md bg-black/60 p-2 text-white/70 opacity-0 transition hover:bg-black/80 hover:text-white focus:opacity-100 group-hover:opacity-100"
-      >
-        <Download className="h-4 w-4" />
-      </a>
     </div>
   );
 }
