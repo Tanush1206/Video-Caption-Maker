@@ -1,48 +1,34 @@
 import Link from "next/link";
-import { Captions, Search, Wand2 } from "lucide-react";
 
 import { Hero } from "@/components/landing/hero";
 import { Brand } from "@/components/layout/brand";
+import { CONTAINER, PageHeader } from "@/components/layout/page-frame";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonVariants } from "@/components/ui/button-variants";
-
-const FEATURES = [
-  {
-    icon: Wand2,
-    title: "Transcribed on your own GPU",
-    body: "Whisper runs locally. Your video never leaves the machine, and there is no per-minute bill.",
-  },
-  {
-    icon: Captions,
-    title: "An editor, not a text box",
-    body: "Waveform timeline, drag the boundaries, restyle the captions, and burn them in — or export SRT.",
-  },
-  {
-    icon: Search,
-    title: "Search by meaning",
-    body: "Find the moment you half-remember. The words you type don't have to appear in the transcript.",
-  },
-];
+import { FEATURES } from "@/lib/features";
+import { cn } from "@/lib/utils";
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen">
       {/* Transparent and overlapping the hero, so the backdrop's glow runs up
-          behind it rather than stopping at a seam under the header. */}
-      <header className="relative z-20 mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          behind it rather than stopping at a seam under the header. Same
+          frame as the signed-in header, so the brand mark doesn't move when
+          you sign in. */}
+      <PageHeader className="relative">
         <Brand />
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           <Link href="/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
             Sign in
           </Link>
         </div>
-      </header>
+      </PageHeader>
 
       <main>
         <Hero />
 
-        <section className="mx-auto grid max-w-6xl gap-3 px-6 pb-24 sm:grid-cols-3">
+        <section className={cn(CONTAINER, "grid gap-3 pb-24 sm:grid-cols-3")}>
           {FEATURES.map((feature) => (
             <div
               key={feature.title}

@@ -11,6 +11,7 @@ import {
   Triangle,
 } from "lucide-react";
 
+import { CONTAINER } from "@/components/layout/page-frame";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +68,13 @@ export function Hero() {
     <section className="relative isolate overflow-hidden">
       <Backdrop />
 
-      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 pb-20 pt-16 lg:grid-cols-12 lg:gap-10 lg:pb-28 lg:pt-24">
+      <div
+        className={cn(
+          CONTAINER,
+          "grid grid-cols-1 items-center gap-12 pb-20 pt-16",
+          "lg:grid-cols-12 lg:gap-10 lg:pb-28 lg:pt-24"
+        )}
+      >
         {/* ---------------------------------------------------------- left */}
         <div className="flex flex-col gap-7 lg:col-span-7">
           <div className="animate-fade-slide-in [animation-delay:60ms]">

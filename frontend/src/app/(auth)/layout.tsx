@@ -1,5 +1,6 @@
 import { AuthBackdrop } from "@/components/auth/auth-backdrop";
 import { Brand } from "@/components/layout/brand";
+import { PageHeader } from "@/components/layout/page-frame";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 /**
@@ -22,10 +23,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute inset-0 bg-background/75 backdrop-blur-[2px]" />
       </div>
 
-      <header className="flex items-center justify-between px-6 py-5">
+      <PageHeader>
         <Brand />
-        <ThemeToggle />
-      </header>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
+      </PageHeader>
 
       <main className="flex flex-1 items-center justify-center px-6 pb-20">
         <div className="w-full max-w-md animate-fade-up">{children}</div>
