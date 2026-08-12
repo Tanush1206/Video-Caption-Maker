@@ -46,14 +46,51 @@ class Font:
     css_stack: str
 
 
-# Keep in step with the fonts installed in backend/Dockerfile. Adding an entry
-# here without installing the font produces a preview that quietly disagrees
-# with the render, which is the exact failure this table exists to prevent.
+# Every entry must resolve to a real installed face. Adding one without the
+# font present produces a preview that quietly disagrees with the render —
+# libass falls back to DejaVu Sans and says nothing. `test_caption_style.py`
+# asks fontconfig to confirm each `render_name`, so that failure is a red test
+# rather than a surprise in an exported MP4.
+#
+# Two groups, and they get there differently.
+#
+# The first four are system faces from backend/Dockerfile, paired with a
+# *metric-compatible* browser stack: Arial and Liberation Sans have identical
+# advance widths, so lines wrap in the same place even though the two
+# renderers load different files. Close enough, and it costs nothing to ship.
+#
+# The rest are vendored in frontend/public/fonts and mounted into this
+# container by docker-compose, so libass and the browser read the *same bytes*
+# — no metric-compatibility argument required, because there is only one file.
+# Their css_stack names the family directly; @font-face in globals.css points
+# the browser at the identical .ttf.
+#
+# Static weights only. Google now ships Inter, Roboto, Montserrat and Oswald
+# as variable fonts, and libass would take the default instance and synthesise
+# a fake bold while the browser interpolated a real one — a disagreement in
+# exactly the place this table exists to prevent.
 FONTS: tuple[Font, ...] = (
     Font("sans", "Sans", "Liberation Sans", 'Arial, "Liberation Sans", Helvetica, sans-serif'),
     Font("serif", "Serif", "Liberation Serif", '"Times New Roman", "Liberation Serif", serif'),
     Font("mono", "Mono", "Liberation Mono", '"Courier New", "Liberation Mono", monospace'),
     Font("dejavu", "DejaVu", "DejaVu Sans", '"DejaVu Sans", Verdana, sans-serif'),
+    # Geometric sans. The default for social captions for a reason.
+    Font("poppins", "Poppins", "Poppins", '"Poppins", sans-serif'),
+    # Humanist sans, quieter than Poppins and easier over long stretches.
+    Font("lato", "Lato", "Lato", '"Lato", sans-serif'),
+    # Condensed: fits noticeably more words on a line before wrapping, which
+    # matters most on vertical video.
+    Font(
+        "barlow-condensed",
+        "Barlow Condensed",
+        "Barlow Condensed",
+        '"Barlow Condensed", "Arial Narrow", sans-serif',
+    ),
+    # Display weights, one cut each. Both are single-weight families, so the
+    # bold toggle is synthesised — by libass and by the browser alike, which is
+    # at least the same kind of wrong in both.
+    Font("anton", "Anton", "Anton", '"Anton", Impact, sans-serif'),
+    Font("bebas-neue", "Bebas Neue", "Bebas Neue", '"Bebas Neue", Impact, sans-serif'),
 )
 
 FONTS_BY_KEY = {font.key: font for font in FONTS}

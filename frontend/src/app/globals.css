@@ -25,6 +25,86 @@
 }
 
 /*
+ * Caption faces.
+ *
+ * Self-hosted from /public/fonts, never fetched from fonts.googleapis.com.
+ * Three reasons, in order of how much they matter here: the same files are
+ * mounted into the worker so libass renders the *identical* face rather than
+ * a metric-compatible stand-in; a CDN request would hand every visitor's IP
+ * to Google on an app whose whole claim is that nothing leaves your machine;
+ * and this is served over a tunnel from one box, where a hard dependency on
+ * a third-party host is a way to be broken by someone else's outage.
+ *
+ * Adding a face means three edits that have to agree: the .ttf here, the
+ * FONTS entry in backend/app/services/caption_style.py, and nothing else —
+ * the compose mount and the test pick it up automatically.
+ *
+ * `swap`, so a caption is never invisible while a font loads. The preview
+ * reflowing once is much better than an empty frame.
+ */
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lato";
+  src: url("/fonts/Lato-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lato";
+  src: url("/fonts/Lato-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/fonts/BarlowCondensed-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/fonts/BarlowCondensed-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Single-weight display families. Declared at 400 only, deliberately: giving
+   one file a 100-900 range would let the browser pick it for bold and render
+   it at its real weight, while libass synthesises a fake bold from the same
+   file. Leaving the gap means both synthesise, and the two agree. */
+@font-face {
+  font-family: "Anton";
+  src: url("/fonts/Anton-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("/fonts/BebasNeue-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
  * Design tokens, taken from the Stitch design (design.html at the repo root).
  *
  * Stitch produced a Material-3 palette with names like `surface-container-high`

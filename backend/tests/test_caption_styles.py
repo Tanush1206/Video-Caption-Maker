@@ -19,7 +19,16 @@ async def test_options_lists_fonts_and_presets(client):
 
     assert response.status_code == 200
     body = response.json()
-    assert {f["key"] for f in body["fonts"]} == {"sans", "serif", "mono", "dejavu"}
+    # Against the table rather than a hardcoded list: this asserts the endpoint
+    # offers everything the service knows about, and adding a face does not
+    # break a test that was never about the specific names.
+    assert {f["key"] for f in body["fonts"]} == {f.key for f in style_service.FONTS}
+    # The vendored faces are the ones that can go missing — they come from a
+    # bind mount rather than the image, so a compose file without it would
+    # leave them absent while everything still starts.
+    assert {"poppins", "lato", "barlow-condensed", "anton", "bebas-neue"} <= {
+        f["key"] for f in body["fonts"]
+    }
     assert set(body["presets"]) == {"youtube", "tiktok", "minimal"}
     # The browser needs the stack to preview with; without it the client would
     # have to guess a family and the preview would stop matching the render.

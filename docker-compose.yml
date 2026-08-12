@@ -58,6 +58,11 @@ services:
     volumes:
       - ./backend:/app
       - media_storage:/app/storage
+      # The caption fonts, shared with the frontend rather than copied.
+      # libass and the browser must render the same face, and the surest
+      # way to guarantee that is for both to read the same bytes. Under
+      # /usr/share/fonts so fontconfig picks it up without extra config.
+      - ./frontend/public/fonts:/usr/share/fonts/truetype/vcm:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,6 +84,11 @@ services:
     volumes:
       - ./backend:/app
       - media_storage:/app/storage
+      # The caption fonts, shared with the frontend rather than copied.
+      # libass and the browser must render the same face, and the surest
+      # way to guarantee that is for both to read the same bytes. Under
+      # /usr/share/fonts so fontconfig picks it up without extra config.
+      - ./frontend/public/fonts:/usr/share/fonts/truetype/vcm:ro
     depends_on:
       postgres:
         condition: service_healthy
