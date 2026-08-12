@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { DashboardHeader } from "@/components/layout/dashboard-header";
+import { TopGlow } from "@/components/layout/page-frame";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function DashboardLayout({
@@ -36,7 +37,11 @@ export default function DashboardLayout({
   if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen">
+    // `relative isolate` so the glow can position against this and stay behind
+    // the content. Deliberately *not* overflow-hidden — that would make the
+    // sticky header stop sticking. The glow clips itself instead.
+    <div className="relative isolate min-h-screen">
+      <TopGlow />
       <DashboardHeader />
       {children}
     </div>
