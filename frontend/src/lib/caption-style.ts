@@ -57,7 +57,10 @@ export function captionTextStyle(
     .join(" ");
 
   const css: CSSProperties = {
-    fontFamily: font?.css_stack ?? "sans-serif",
+    // The style's own resolved stack first: it covers every catalogue font,
+    // where `font` is only ever one of the nine built-ins. The lookup is kept
+    // as a fallback for a cached style response from before this field existed.
+    fontFamily: style.font_css_stack || font?.css_stack || "sans-serif",
     fontSize: `${style.font_size * emphasisScale * scale}px`,
     fontWeight: (override?.override_bold ?? style.bold) ? 700 : 400,
     fontStyle: style.italic ? "italic" : "normal",

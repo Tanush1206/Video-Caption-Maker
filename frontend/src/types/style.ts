@@ -34,6 +34,14 @@ export interface CaptionStyle {
   margin_v: number;
   margin_h: number;
   reference_height: number;
+  /**
+   * Resolved server-side from `font_key`. With 1301 catalogue families the
+   * client can no longer look this up in a list it already holds, and the
+   * pairing between what libass renders and what the browser is asked for
+   * stays a single server-side decision.
+   */
+  font_family: string;
+  font_css_stack: string;
 }
 
 export interface Font {
@@ -49,4 +57,23 @@ export interface Font {
 export interface StyleOptions {
   fonts: Font[];
   presets: string[];
+}
+
+/** One family from the on-demand Google Fonts catalogue. */
+export interface FontLibraryEntry {
+  key: string;
+  family: string;
+  category: string;
+  has_bold: boolean;
+  css_stack: string;
+}
+
+export interface FontSearchResult {
+  /** How many families the catalogue holds — only ever right for an empty query. */
+  total: number;
+  /** How many the query found. This is the number to show beside a result list. */
+  matched: number;
+  /** How many of those came back, capped by the server. */
+  returned: number;
+  fonts: FontLibraryEntry[];
 }

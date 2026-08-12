@@ -2,9 +2,21 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { useInjectedFontFace } from "@/hooks/use-fonts";
 import { captionBoxStyle, captionTextStyle, scaleFor } from "@/lib/caption-style";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
+
+/**
+ * The nine built-ins already have an `@font-face` in globals.css, or are system
+ * faces needing none. Everything else is a catalogue family whose rule has to
+ * be added at runtime — there are 1301 of them and a stylesheet declaring all
+ * of them would be megabytes of rules for faces nobody will pick.
+ */
+const BUILT_IN = new Set([
+  "sans", "serif", "mono", "dejavu",
+  "poppins", "lato", "barlow-condensed", "anton", "bebas-neue",
+]);
 
 interface CaptionOverlayProps {
   caption: Caption | null;
@@ -24,6 +36,12 @@ interface CaptionOverlayProps {
 export function CaptionOverlay({ caption, style, font }: CaptionOverlayProps) {
   const box = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
+
+  // Unconditionally called with possibly-undefined arguments rather than behind
+  // an `if`: a hook cannot be conditional, and the hook itself no-ops on a
+  // built-in or a style that has not loaded.
+  const libraryKey = style && !BUILT_IN.has(style.font_key) ? style.font_key : undefined;
+  useInjectedFontFace(libraryKey, style?.font_family);
 
   // useLayoutEffect: measure before paint, or the first caption renders at a
   // scale of zero and visibly jumps.

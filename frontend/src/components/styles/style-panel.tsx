@@ -2,6 +2,7 @@
 
 import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
 
+import { FontPicker } from "@/components/styles/font-picker";
 import { Range } from "@/components/ui/range";
 import {
   useApplyPreset,
@@ -251,17 +252,11 @@ export function StylePanel({ videoId }: { videoId: number }) {
       <div className="space-y-3">
         <Group title="Text">
           <Field label="Font">
-            <select
+            <FontPicker
+              builtins={options?.fonts ?? []}
               value={style.font_key}
-              onChange={(event) => set({ font_key: event.target.value })}
-              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              {(options?.fonts ?? []).map((font) => (
-                <option key={font.key} value={font.key}>
-                  {font.label}
-                </option>
-              ))}
-            </select>
+              onChange={(font_key) => set({ font_key })}
+            />
           </Field>
 
           <Slider
