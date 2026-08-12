@@ -20,6 +20,32 @@ import { usePlayerShortcuts } from "@/hooks/use-player-shortcuts";
 import { useWaveform } from "@/hooks/use-stream";
 import { useVideo } from "@/hooks/use-videos";
 import { formatDuration } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+/**
+ * The editor is a workspace, not a page of prose, so it takes the screen.
+ *
+ * The rest of the app is capped at `max-w-7xl` (1280px), which is right for
+ * reading and wrong here: it left ~320px dead on either side of a 1920 screen
+ * while the video and the caption list fought over the middle. 1800px still
+ * caps it on an ultrawide, where a truly full-bleed video would be silly.
+ */
+const SHELL = "mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6";
+
+/**
+ * A side column: its own scroll container, sticky, bounded to the viewport.
+ *
+ * The height is subtracted from `100vh` rather than being `h-full` because
+ * these are grid items beside a video whose height follows its aspect ratio —
+ * a portrait clip would stretch the row taller than the screen, and a sticky
+ * element inside an over-tall parent has nothing to stick within.
+ *
+ * Each column scrolls itself and nothing scrolls inside anything else. That is
+ * the whole point of the rearrangement: the caption list used to be the third
+ * panel inside a scrolling rail, which is how you end up with two scrollbars
+ * touching and no idea which one is yours.
+ */
+const SCROLL_COLUMN = "min-h-0 lg:h-[calc(100vh-8.5rem)] lg:overflow-y-auto lg:pr-0.5";
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const videoId = Number(params.id);
@@ -58,12 +84,15 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
   if (isLoading) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <main className={SHELL}>
         <Skeleton className="h-4 w-32" />
         <Skeleton className="mt-4 h-7 w-64" />
-        <div className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-          <Skeleton className="aspect-video w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+        {/* Same tracks as the real layout, so the page does not jump sideways
+            the moment the video loads. */}
+        <div className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[300px_minmax(0,1fr)_360px]">
+          <Skeleton className="aspect-video w-full rounded-xl 2xl:order-2" />
+          <Skeleton className="h-[28rem] w-full rounded-xl 2xl:order-1" />
+          <Skeleton className="hidden h-96 w-full rounded-xl lg:block 2xl:order-3" />
         </div>
       </main>
     );
@@ -87,7 +116,7 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <main className={SHELL}>
       <Link
         href="/dashboard"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -118,8 +147,33 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
         </span>
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="space-y-3">
+      {/*
+        Three arrangements, and the middle one is why this uses explicit grid
+        placement rather than source order plus `order-*`.
+
+          < lg    everything stacked, the page scrolls
+          lg-2xl  [ video ] [ rail ]     captions under the video, page scrolls
+                  [ caps  ] [ rail ]
+          >= 2xl  [ caps ] [ video ] [ rail ]
+
+        Two columns until 1536px because three of them there would make the
+        video *smaller* than it is today — 1024px of screen split three ways is
+        worse than split two ways, and shrinking the frame you are positioning
+        captions on to gain a column is a bad trade.
+
+        The video keeps the flexible track at every size, so extra width goes to
+        the frame rather than to the panels.
+      */}
+      <div
+        className={cn(
+          "grid items-start gap-4",
+          "lg:grid-cols-[minmax(0,1fr)_360px]",
+          "2xl:grid-cols-[300px_minmax(0,1fr)_360px]"
+        )}
+      >
+        {/* Source order is video first: it is the most important thing here, and
+            on a phone and to a screen reader that is the order that ships. */}
+        <div className="space-y-3 lg:col-start-1 lg:row-start-1 2xl:col-start-2">
           <VideoPlayer
             video={video}
             playback={playback}
@@ -144,14 +198,35 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
           />
         </div>
 
-        {/* A bounded, independently scrolling column: the list has to be able
-            to follow the playhead without moving the video off screen. */}
-        <div className="flex h-[calc(100vh-13rem)] min-h-0 flex-col gap-4 overflow-y-auto lg:sticky lg:top-6">
+        {/*
+          Captions. Under the video at two columns, a column of their own at
+          three — and only sticky in the second case, because a list pinned to
+          the viewport directly below the thing it belongs to just traps itself.
+
+          The fixed height below 2xl is what lets the list scroll to follow the
+          playhead instead of growing to the length of the transcript.
+        */}
+        <div
+          className={cn(
+            "flex h-[28rem] min-h-0 flex-col lg:col-start-1 lg:row-start-2",
+            "2xl:col-start-1 2xl:row-start-1 2xl:sticky 2xl:top-6",
+            "2xl:h-[calc(100vh-8.5rem)]"
+          )}
+        >
+          <CaptionEditor video={video} playback={playback} />
+        </div>
+
+        {/* Style and export, sticky from the first two-column layout onwards. */}
+        <div
+          className={cn(
+            SCROLL_COLUMN,
+            "flex flex-col gap-4",
+            "lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-6",
+            "2xl:col-start-3 2xl:row-span-1"
+          )}
+        >
           <StylePanel videoId={videoId} />
           <ExportPanel videoId={videoId} hasCaptions={captions.length > 0} />
-          <div className="flex min-h-[24rem] flex-1 flex-col">
-            <CaptionEditor video={video} playback={playback} />
-          </div>
         </div>
       </div>
     </main>
