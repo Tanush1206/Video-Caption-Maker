@@ -16,17 +16,25 @@ export function fontFileUrl(key: string, weight: "regular" | "bold" = "regular")
 }
 
 /**
- * Search the Google Fonts catalogue.
+ * Every family matching a query — no page, no cap the user can hit.
  *
- * `staleTime: Infinity` because the catalogue is a file committed to the repo —
- * it cannot change while the tab is open, so re-fetching a query the user has
- * already run is pure latency.
+ * 2500 is above Google's whole catalogue, so this asks for all of it — matching
+ * the server's own ceiling, which exists to stop an unbounded response rather
+ * than to withhold anything. The unfiltered reply is a couple of hundred KB of
+ * JSON, which is a lot for a dropdown and nothing for a font library; it is
+ * fetched once and, because the catalogue is a file committed to the repo, can
+ * never go stale while the tab is open. Hence `staleTime: Infinity` — re-running
+ * a query the user already ran is pure latency.
+ *
+ * What made rendering that many rows affordable is the picker windowing them. It
+ * was never a JSON problem; it was that a rendered row downloads its own font to
+ * preview itself.
  */
 export function useFontSearch(query: string, enabled: boolean) {
   return useQuery({
     queryKey: fontKeys.search(query),
     queryFn: () =>
-      api.get<FontSearchResult>(`/api/fonts?q=${encodeURIComponent(query)}&limit=60`),
+      api.get<FontSearchResult>(`/api/fonts?q=${encodeURIComponent(query)}&limit=2500`),
     enabled,
     staleTime: Infinity,
   });

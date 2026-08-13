@@ -68,6 +68,18 @@ export interface FontLibraryEntry {
   css_stack: string;
 }
 
+/** What the catalogue generator kept and skipped, for the picker's info panel. */
+export interface CatalogueMeta {
+  /** Families in Google's own catalogue — what this app is measured against. */
+  google_families: number;
+  /** Shipped with a static face Google's designers drew. */
+  static: number;
+  /** Variable-only families, pinned to a static cut at download time. */
+  instanced: number;
+  skipped_oversized: number;
+  skipped_unusable: number;
+}
+
 export interface FontSearchResult {
   /** How many families the catalogue holds — only ever right for an empty query. */
   total: number;
@@ -76,4 +88,5 @@ export interface FontSearchResult {
   /** How many of those came back, capped by the server. */
   returned: number;
   fonts: FontLibraryEntry[];
+  meta: CatalogueMeta;
 }
