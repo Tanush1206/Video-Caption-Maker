@@ -43,6 +43,13 @@ dependencies = [
     "chromadb>=0.5.0",
     "google-genai>=0.1.0",
 
+    # Fonts. Google ships its most popular families as variable fonts only, and
+    # libass takes the default instance and fakes a bold while the browser
+    # interpolates a real one — the preview disagreeing with the export. This
+    # pins the axes and writes a genuine static cut, which both renderers then
+    # read from the same file.
+    "fonttools>=4.53.0",
+
     # Utilities
     "python-dotenv>=1.0.0",
 ]

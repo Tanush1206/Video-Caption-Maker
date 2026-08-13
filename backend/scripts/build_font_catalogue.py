@@ -21,11 +21,17 @@ Two sources, because neither alone is enough:
   - The google/fonts git tree gives the actual file paths and byte sizes, which
     the metadata does not contain.
 
-Only families with a real static `-Regular.ttf` are included. A variable-only
-family would have libass take the default instance and synthesise a fake bold
-while the browser interpolated a real one along the weight axis — the preview
-disagreeing with the export, which is the failure this whole area exists to
-prevent.
+A static `-Regular.ttf` is preferred wherever one exists: it needs no
+processing and it is what Google's own designers shipped.
+
+Where a family is variable-only — which is most of the popular ones, Roboto and
+Inter and Open Sans among them — the variable file is recorded along with its
+axis defaults, and a static cut is instanced from it at download time. Offering
+the variable file directly is what is not allowed: libass would take the
+default instance and synthesise a fake bold while the browser interpolated a
+real one along the weight axis, which is the preview disagreeing with the
+export. Pinning the axes produces one genuine static face that both renderers
+read from the same file, which is the same guarantee the static families have.
 """
 
 from __future__ import annotations
@@ -107,8 +113,12 @@ def main() -> None:
     ttfs = {t["path"]: t.get("size", 0) for t in tree if t["path"].endswith(".ttf")}
     print(f"  {len(ttfs)} ttf files")
 
-    # slug -> {weight file suffix: (path, size)}
+    # slug -> {"Regular"|"Bold": (path, size)}, and slug -> (path, size) for the
+    # roman variable file. Italic variable files are skipped: italic is a style
+    # flag here, not a family, and libass synthesises it the same way CSS does.
     by_slug: dict[str, dict[str, tuple[str, int]]] = {}
+    variable: dict[str, tuple[str, int]] = {}
+
     for path, size in ttfs.items():
         parts = path.split("/")
         if len(parts) < 3 or parts[0] not in {"ofl", "apache", "ufl"}:
@@ -116,6 +126,8 @@ def main() -> None:
         name = parts[-1]
         # Variable files carry their axes in brackets: Roboto[wdth,wght].ttf
         if "[" in name:
+            if "-Italic[" not in name:
+                variable[parts[1]] = (path, size)
             continue
         match = re.match(r"^(.+)-(Regular|Bold)\.ttf$", name)
         if not match:
@@ -123,45 +135,100 @@ def main() -> None:
         by_slug.setdefault(parts[1], {})[match.group(2)] = (path, size)
 
     entries = []
-    skipped_variable = skipped_big = skipped_nostatic = 0
+    from_static = from_variable = 0
+    skipped_big = skipped_nothing = 0
 
     for family, info in sorted(meta.items()):
         slug = re.sub(r"[^a-z0-9]", "", family.lower())
+        category = info.get("category", "").replace("SANS_SERIF", "sans-serif").lower()
         files = by_slug.get(slug)
-        if not files or "Regular" not in files:
-            if info.get("axes"):
-                skipped_variable += 1
-            else:
-                skipped_nostatic += 1
+
+        if files and "Regular" in files:
+            regular_path, regular_size = files["Regular"]
+            if regular_size > MAX_BYTES:
+                skipped_big += 1
+                continue
+            bold = files.get("Bold")
+            entries.append(
+                {
+                    "key": slug,
+                    "family": family,
+                    "category": category,
+                    "regular": regular_path,
+                    "bold": bold[0] if bold else None,
+                    "bytes": regular_size + (bold[1] if bold else 0),
+                    "axes": None,
+                }
+            )
+            from_static += 1
             continue
 
-        regular_path, regular_size = files["Regular"]
-        if regular_size > MAX_BYTES:
+        source = variable.get(slug)
+        if not source:
+            skipped_nothing += 1
+            continue
+
+        path, size = source
+        if size > MAX_BYTES:
             skipped_big += 1
             continue
 
-        bold = files.get("Bold")
+        # Every axis and its default. The fetcher pins wght to the weight it
+        # wants and every other axis to the value here, which is what turns a
+        # variable file into one specific static face.
+        axes = {a["tag"]: a["defaultValue"] for a in info.get("axes", [])}
+        if not axes:
+            # A variable file the metadata does not describe. Instancing needs
+            # the axis list, and guessing it is how you ship a broken font.
+            skipped_nothing += 1
+            continue
+
+        weight = next((a for a in info["axes"] if a["tag"] == "wght"), None)
+        has_bold = bool(weight and weight["max"] >= 700)
+
         entries.append(
             {
                 "key": slug,
                 "family": family,
-                "category": info.get("category", "").replace("SANS_SERIF", "sans-serif").lower(),
-                "regular": regular_path,
-                "bold": bold[0] if bold else None,
-                "bytes": regular_size + (bold[1] if bold else 0),
+                "category": category,
+                # One file serves both weights; they differ only in the pin.
+                "regular": path,
+                "bold": path if has_bold else None,
+                "bytes": size,
+                "axes": axes,
             }
         )
+        from_variable += 1
 
     print(
-        f"\nkept {len(entries)}  |  skipped: {skipped_variable} variable-only, "
-        f"{skipped_big} oversized, {skipped_nostatic} without a static regular"
+        f"\nkept {len(entries)}  ({from_static} static, {from_variable} instanced "
+        f"from variable)  |  skipped: {skipped_big} oversized, "
+        f"{skipped_nothing} with no usable file"
     )
     total = sum(e["bytes"] for e in entries)
     print(f"total if every one were downloaded: {total / 1e6:.0f} MB")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
-        json.dumps({"base_url": RAW, "fonts": entries}, indent=1, ensure_ascii=False) + "\n",
+        json.dumps(
+            {
+                "base_url": RAW,
+                # Recorded so the picker's info panel can state what is missing
+                # without hardcoding numbers that go stale the next time this
+                # script runs.
+                "meta": {
+                    "google_families": len(meta),
+                    "static": from_static,
+                    "instanced": from_variable,
+                    "skipped_oversized": skipped_big,
+                    "skipped_unusable": skipped_nothing,
+                },
+                "fonts": entries,
+            },
+            indent=1,
+            ensure_ascii=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
     print(f"wrote {OUT}  ({OUT.stat().st_size / 1024:.0f} KB)")

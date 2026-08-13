@@ -67,9 +67,14 @@ class Font:
 # the browser at the identical .ttf.
 #
 # Static weights only. Google now ships Inter, Roboto, Montserrat and Oswald
-# as variable fonts, and libass would take the default instance and synthesise
-# a fake bold while the browser interpolated a real one — a disagreement in
-# exactly the place this table exists to prevent.
+# as variable fonts, and handing one to both renderers does not work: libass
+# takes the default instance and synthesises a fake bold while the browser
+# interpolates a real one — a disagreement in exactly the place this table
+# exists to prevent.
+#
+# Those four are available all the same, through the catalogue rather than this
+# table: font_library pins the axes at download time and writes a genuine static
+# cut, which restores the one-file property this list gets from vendoring.
 FONTS: tuple[Font, ...] = (
     Font("sans", "Sans", "Liberation Sans", 'Arial, "Liberation Sans", Helvetica, sans-serif'),
     Font("serif", "Serif", "Liberation Serif", '"Times New Roman", "Liberation Serif", serif'),
