@@ -1,6 +1,26 @@
 from pydantic import BaseModel
 
 
+class CatalogueMeta(BaseModel):
+    """
+    What the catalogue generator kept and skipped.
+
+    Sent so the picker's info panel can be specific about what is missing and
+    why, without hardcoding numbers that go stale the next time the catalogue
+    is rebuilt. "Some fonts are unavailable" is not an explanation; "46 are CJK
+    families over 6MB" is.
+    """
+
+    #: Families in Google's own catalogue — the number this app is measured against.
+    google_families: int
+    #: Shipped with a static face Google's designers drew.
+    static: int
+    #: Variable-only families, pinned to a static cut at download time.
+    instanced: int
+    skipped_oversized: int
+    skipped_unusable: int
+
+
 class FontLibraryEntry(BaseModel):
     """
     One family from the Google Fonts catalogue.
@@ -32,3 +52,4 @@ class FontSearchResult(BaseModel):
     matched: int
     returned: int
     fonts: list[FontLibraryEntry]
+    meta: CatalogueMeta

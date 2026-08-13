@@ -18,7 +18,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
-from app.schemas.font import FontLibraryEntry, FontSearchResult
+from app.schemas.font import CatalogueMeta, FontLibraryEntry, FontSearchResult
 from app.services import font_library
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,13 @@ router = APIRouter()
 # A year, immutable. These files never change: the catalogue pins a specific
 # path in google/fonts, and a family that changed would be a new entry.
 CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+# Comfortably past Google's whole catalogue (1942 families), so a caller asking
+# for everything gets everything. This is a guard against an unbounded response,
+# not a product decision — and it has to *clear* the catalogue rather than merely
+# exceed what a page shows, or a full request comes back silently truncated. It
+# was 1500 until instancing took the library from 1301 families to 1832.
+MAX_LIMIT = 2500
 
 
 def _entry(font: font_library.LibraryFont) -> FontLibraryEntry:
@@ -44,20 +51,23 @@ def _entry(font: font_library.LibraryFont) -> FontLibraryEntry:
 async def search_fonts(
     q: str = Query("", max_length=64, description="Substring of the family name"),
     category: str | None = Query(None, max_length=32),
-    limit: int = Query(60, ge=1, le=200),
+    limit: int = Query(60, ge=1, le=MAX_LIMIT),
 ) -> FontSearchResult:
     """
     Search the catalogue.
 
-    Capped rather than paged. 1301 families is too many to scroll and the
-    picker is a search box, so the honest answer to a broad query is the first
-    sixty plus a count of what was left out — not a pager nobody will walk
-    through.
+    The picker windows its list and asks for everything. Sixty was the default
+    when every row rendered and therefore downloaded a font; once only the
+    visible rows draw, the reason to withhold the rest disappears, and "1241
+    more" is a worse answer than a scrollbar.
+
+    Search stays here rather than moving to the client so the prefix-first
+    ranking has one implementation instead of one per language.
 
     The full match list is built before slicing so `matched` is exact. It is a
-    list comprehension over 1301 dataclasses held in memory; measured at well
-    under a millisecond, which is cheaper than the alternative of the picker
-    lying about how many fonts a search found.
+    list comprehension over the catalogue held in memory; measured at well under
+    a millisecond, which is cheaper than the alternative of the picker lying
+    about how many fonts a search found.
     """
     found = font_library.matches(q, category=category)
     page = found[:limit]
@@ -66,6 +76,7 @@ async def search_fonts(
         matched=len(found),
         returned=len(page),
         fonts=[_entry(font) for font in page],
+        meta=CatalogueMeta(**font_library.catalogue_meta()),
     )
 
 
