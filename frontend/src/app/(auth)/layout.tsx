@@ -1,4 +1,4 @@
-import { AuthBackdrop } from "@/components/auth/auth-backdrop";
+import { GradientField } from "@/components/layout/gradient-field";
 import { Brand } from "@/components/layout/brand";
 import { PageHeader } from "@/components/layout/page-frame";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -16,7 +16,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        <AuthBackdrop />
+        <GradientField />
         {/* A scrim over the gradient. Without it the light areas take enough
             contrast out of the body text to fail on both themes — the
             backdrop is decoration and has to stay behind the reading. */}

@@ -1,5 +1,5 @@
 /**
- * The blurred gradient field behind the auth screens.
+ * The blurred gradient field the glass surfaces refract.
  *
  * The 21st.dev original referenced `var(--color-primary)`, `--color-secondary`
  * and `--color-chart-1` through `--color-chart-5`. Two problems with that
@@ -14,14 +14,23 @@
  *
  * Server component: it is inert SVG, so there is no reason to ship it to the
  * browser as JavaScript.
+ *
+ * Shared by the auth screens and the dashboard, which is the point of it
+ * living here rather than under components/auth. Glass has nothing to refract
+ * on a flat background — it reads as a grey box — so anywhere .glass-surface
+ * appears, this has to be behind it. Cloning the effect for a second screen is
+ * how the two drift apart; `className` lets a caller dial the intensity
+ * instead, which is the only thing that legitimately differs. The auth screens
+ * are a single centred card and can carry a loud field; a dashboard is read
+ * for hours and cannot.
  */
-export function AuthBackdrop() {
+export function GradientField({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 800 600"
       preserveAspectRatio="xMidYMid slice"
       aria-hidden="true"
-      className="absolute inset-0 size-full"
+      className={["absolute inset-0 size-full", className].filter(Boolean).join(" ")}
     >
       <defs>
         <linearGradient id="auth-violet" x1="0%" y1="0%" x2="100%" y2="100%">

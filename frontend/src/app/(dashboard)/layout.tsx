@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { TopGlow } from "@/components/layout/page-frame";
 import { useAuth } from "@/hooks/use-auth";
+import { useTranscriptionAlerts } from "@/hooks/use-transcription-alerts";
 
 export default function DashboardLayout({
   children,
@@ -14,6 +15,11 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const { isAuthenticated, initialized } = useAuth();
+
+  // Here rather than on any one page: a transcription outlives the screen that
+  // started it, and this layout is the only thing that stays mounted while the
+  // user moves around. It no-ops until something is actually being watched.
+  useTranscriptionAlerts();
 
   useEffect(() => {
     // Wait for the bootstrap refresh to settle. Redirecting before it does

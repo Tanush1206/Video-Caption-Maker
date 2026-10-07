@@ -396,8 +396,22 @@
    * ---------------------------------------------------------------------
    */
   .glass-surface {
+    /* Shape is a parameter, because the effect is not.
+     *
+     * This was written for the auth screens, where every glass element is a
+     * pill — an input, a button — and 9999px was hardcoded in three places:
+     * here, on ::after, and on .glass-sheen. A card wanted the same material
+     * at a different radius, and the choice was to duplicate sixty lines of
+     * conic gradients and masks or to name the one thing that differs.
+     *
+     * Duplicating it is how the auth and dashboard treatments drift apart,
+     * which is the failure this file already has a comment about. So: one
+     * implementation, two shapes. Override with .glass-rect. */
+    --glass-radius: 9999px;
+    --glass-blur: clamp(1px, 0.125em, 4px);
+
     position: relative;
-    border-radius: 9999px;
+    border-radius: var(--glass-radius);
     -webkit-tap-highlight-color: transparent;
     background: linear-gradient(
       -75deg,
@@ -405,7 +419,7 @@
       hsl(var(--background) / 0.2),
       hsl(var(--background) / 0.05)
     );
-    backdrop-filter: blur(clamp(1px, 0.125em, 4px));
+    backdrop-filter: blur(var(--glass-blur));
     box-shadow:
       inset 0 0.125em 0.125em hsl(var(--foreground) / 0.05),
       inset 0 -0.125em 0.125em hsl(var(--background) / 0.5),
@@ -425,7 +439,7 @@
     position: absolute;
     z-index: 1;
     inset: calc(var(--glass-border) / -2);
-    border-radius: 9999px;
+    border-radius: var(--glass-radius);
     padding: var(--glass-border);
     box-sizing: border-box;
     pointer-events: none;
@@ -472,7 +486,7 @@
   .glass-sheen {
     position: absolute;
     inset: calc(var(--glass-border) / 2);
-    border-radius: 9999px;
+    border-radius: var(--glass-radius);
     z-index: 3;
     pointer-events: none;
     overflow: clip;
@@ -495,13 +509,101 @@
     background-position: 25% 50%;
   }
 
-  .glass-surface:active {
+  /* Press feedback, scoped away from panels. Shrinking a control under the
+     finger reads as a button; shrinking a whole card because someone clicked
+     a row inside it reads as a bug. */
+  .glass-surface:not(.glass-rect):active {
     transform: scale(0.975);
   }
 
-  .glass-surface:active > .glass-sheen {
+  .glass-surface:not(.glass-rect):active > .glass-sheen {
     background-position: 50% 15%;
     --angle-2: -15deg;
+  }
+
+  /*
+   * The same material, shaped like a panel.
+   *
+   * Only three things change, and none of them is the effect itself: a real
+   * corner radius instead of a pill, a heavier blur because a large pane is
+   * refracting a much bigger area of the field behind it, and no press
+   * transform.
+   *
+   * Glass needs something behind it to refract or it reads as a grey box —
+   * see GradientField, which is why the dashboard grew a backdrop at the same
+   * time as it grew these.
+   */
+  .glass-rect {
+    --glass-radius: 1rem;
+    --glass-blur: 10px;
+
+    /* A heavier fill than the pill version, and the reason is the light theme.
+     *
+     * The base gradient is --background at 5-20% alpha, which works on a
+     * control small enough to read as an edge effect. Scaled up to a full
+     * panel it disappeared: near-white at 12% over a near-white page is
+     * nothing, and the panels were visible only by their rim. Dark was fine,
+     * because there the fill is lighter than what it sits on.
+     *
+     * Frosted rather than tinted: real glass over colour lightens it. So the
+     * panel is mostly background with the field showing through, not a wash of
+     * the field's own colour. */
+    background: linear-gradient(
+      -75deg,
+      hsl(var(--background) / 0.5),
+      hsl(var(--background) / 0.68),
+      hsl(var(--background) / 0.5)
+    );
+
+    /* One wide, soft shadow on top of the base's tight contact edge. A panel
+       needs ambient falloff to sit above the page; a pill does not. */
+    box-shadow:
+      inset 0 0.125em 0.125em hsl(var(--foreground) / 0.05),
+      inset 0 -0.125em 0.125em hsl(var(--background) / 0.5),
+      inset 0 0 0.1em 0.25em hsl(var(--background) / 0.2),
+      0 0.25em 0.125em -0.125em hsl(var(--foreground) / 0.2),
+      0 1.5rem 3rem -1.5rem hsl(var(--foreground) / 0.18);
+  }
+
+  /*
+   * No blur on small screens.
+   *
+   * `backdrop-filter` is cheap while what it samples holds still, and costs a
+   * re-blur every frame when the element moves across its backdrop. On desktop
+   * the editor's panes are sticky and only their contents scroll, so the blur
+   * is a static result — but below `lg` nothing is sticky, the page scrolls,
+   * and the panels travel over a fixed field. That is the expensive case, on
+   * the hardware least able to afford it.
+   *
+   * The fill, rim and shadow all stay, so the panel still reads as a panel.
+   * Only the refraction goes, and refraction is the part nobody can name when
+   * it is missing.
+   *
+   * Not measured, and worth saying so: headless Chrome renders in software and
+   * fakes its clock under virtual time, so any frame numbers from it would be
+   * fiction. This is a structural precaution, not a measurement.
+   */
+  @media (max-width: 1023px) {
+    .glass-rect {
+      --glass-blur: 0px;
+    }
+  }
+
+  /* Dark builds elevation out of lightness rather than shadow, so the panel
+     lifts by being a lighter surface than the page — the same mechanism the
+     --surface-* levels use everywhere else in this theme. */
+  .dark .glass-rect {
+    /* Two levels up, not one. --surface-1 is four RGB steps off --background,
+       which is a rounding error across a 300x800 pane: measured, the fill
+       landed on rgb(15,24,43) against a page of rgb(11,19,38) and the panel
+       was invisible except for its rim. --surface-2/3 put ~18 steps between
+       them, which is what "this is a surface above the page" needs to be. */
+    background: linear-gradient(
+      -75deg,
+      hsl(var(--surface-2) / 0.72),
+      hsl(var(--surface-3) / 0.78),
+      hsl(var(--surface-2) / 0.72)
+    );
   }
 
   /*
@@ -592,6 +694,72 @@
       animation-delay: 0ms !important;
       transition-delay: 0ms !important;
     }
+  }
+
+  /* ── The editor's glass ───────────────────────────────────────────────
+   *
+   * Distinct from `.glass-surface`, which was built for the auth screens: that
+   * one is a pill with a rotating conic rim, tuned to be looked *at*. These are
+   * work surfaces holding controls that have to stay readable for an hour, so
+   * the material is quieter and the structure does the talking — a bright top
+   * edge, a hairline rim, and a shadow deep enough to lift the pane off the
+   * gradient field behind it.
+   *
+   * `saturate` alongside the blur is what stops the frosting from washing the
+   * colour out of whatever is behind it. Blur alone reads as grey film.
+   */
+  .glass-panel {
+    position: relative;
+    border-radius: 0.875rem;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--foreground) / 0.07),
+        hsl(var(--foreground) / 0.02) 38%,
+        transparent 70%
+      ),
+      hsl(var(--card) / 0.58);
+    backdrop-filter: blur(18px) saturate(1.7);
+    -webkit-backdrop-filter: blur(18px) saturate(1.7);
+    box-shadow:
+      /* The lit top edge. One pixel, and it is most of the effect. */
+      inset 0 1px 0 hsl(var(--foreground) / 0.09),
+      /* The rim, as a shadow rather than a border so it costs no layout. */
+      inset 0 0 0 1px hsl(var(--foreground) / 0.055),
+      0 1px 2px hsl(220 40% 2% / 0.18),
+      0 14px 34px -14px hsl(220 40% 2% / 0.42);
+  }
+
+  /* No backdrop-filter (Firefox with it disabled, older engines): the pane
+     would be a flat translucent rectangle over a gradient, which is unreadable
+     rather than merely less pretty. Go opaque instead. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-panel {
+      background: hsl(var(--card));
+    }
+  }
+
+  /* A panel's header. Separated by light rather than a border line: a hairline
+     of the foreground colour at 6% reads as an edge in the material instead of
+     a rule drawn on top of it. */
+  .glass-panel-head {
+    border-bottom: 1px solid hsl(var(--foreground) / 0.07);
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.03);
+  }
+
+  /* The rail's tab strip: a recessed track with one raised, lit tab. Depth is
+     what says "this one is selected" without needing a colour that competes
+     with the caption styling being edited two panes away. */
+  .rail-tabs {
+    background: hsl(var(--foreground) / 0.05);
+    box-shadow: inset 0 1px 2px hsl(220 40% 2% / 0.18);
+  }
+
+  .rail-tab[data-selected="true"] {
+    background: hsl(var(--card) / 0.92);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.1),
+      0 1px 2px hsl(220 40% 2% / 0.22);
   }
 
   /* The rule above collapses an animation to its *end* state, which is right
