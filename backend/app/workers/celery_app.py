@@ -1,7 +1,13 @@
+import logging
+
 from celery import Celery
 from celery.signals import worker_ready
 
 from app.config import get_settings
+
+# httpx logs every request at INFO, which buries the pipeline's own lines
+# under hundreds of Hugging Face and ChromaDB round trips.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = get_settings()
 

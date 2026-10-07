@@ -110,11 +110,11 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - [ ] M13 Fresh-install test from scratch in a clean environment.
 
 ### UI
-- [ ] U1 3-step flow (Upload → Language → Export) with a stepper; editor,
+- [x] U1 3-step flow (Upload → Language → Export) with a stepper; editor,
       styling and search become secondary ("Edit captions").
-- [ ] U2 Processing states: model download (size + %), transcribing (% + ETA),
+- [x] U2 Processing states: model download (size + %), transcribing (% + ETA),
       translating, rendering, done with a download link.
-- [ ] U3 No login or landing page in local mode; Settings gets a Gemini key
+- [x] U3 No login or landing page in local mode; Settings gets a Gemini key
       field, a Whisper model override and hardware info; account UI hidden.
 - [ ] U4 Consistency pass: spacing and type scale, buttons, inputs, cards,
       overflow.
@@ -125,7 +125,7 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 ### MINOR
 - [ ] m1 Postgres/Redis/Chroma ports are exposed to the host; `chromadb:latest`
       is unpinned.
-- [ ] m2 README is stale (Milestone 1).
+- [x] m2 README is stale (Milestone 1).
 - [ ] m3 Dead code and scaffolding: empty `frontend/src/components/editor/`,
       unused deps (check `react-query-devtools`, `canvas-confetti`, `zod`,
       `framer-motion`), the comment about Milestone 4 in `backend/Dockerfile`.
@@ -160,5 +160,32 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   `scripts/e2e.py` is the reusable driver.
 - Tests: 300+ pass (`test_local_install.py` added).
 
+- M7 (code) `lib/config.ts` is the single API base, empty in production. Next
+  rewrites `/api/*` to `backend:8000`, with a 30 min proxy timeout for
+  uploads. (`fd7a368`, `52b0e45`)
+- U1 Dashboard: a stepper (Upload → Language → Export), a keyboard-reachable
+  drop zone, and the language chosen before upload. Video page: a status card
+  with one-click MP4/SRT/VTT export; editing and styling sit below it as
+  optional. (`959f113`, `7d7d1a1`)
+- U2 Processing: stage, %, ETA (from the observed rate), download size, a
+  translating stage, and a render % with the download. (`7d7d1a1`)
+- U3 Local mode: middleware sends `/`, `/login`, `/register` to the
+  dashboard; no account menu; a retrying "can't reach the app yet" state;
+  Settings shows hardware, the model choice and the Gemini key. (`bc4f74a`,
+  `9e4a046`)
+- U5 (partial) Fixed the editor's 124 px sideways scroll at 375 px and the
+  player controls wrapping.
+- U6 (partial) Light success and warning text now pass AA (5.46 and 5.29:1).
+  `next lint` had no config and prompted interactively; it is now
+  configured and clean.
+- Search is retrieval-only without a key. (`fd4e793`)
+- Found: the dev compose mounted Chroma at `/chroma/chroma`, but Chroma 1.x
+  persists to `/data`, so dev vectors were never on the volume. Fixed in both
+  compose files.
+- Production compose project renamed to `vcm`, so it can't orphan or remove
+  the dev stack (project `videocaptionmaker`).
+
 ## Next
-M6/M7/M8 — production images, same-origin `/api` proxy, prod compose.
+Finish M6/M8: build the images, then run the prod stack (GPU via the Windows
+installer on this host; CPU via `install.sh` in a clean docker:dind
+"machine"), then E2E in all languages.

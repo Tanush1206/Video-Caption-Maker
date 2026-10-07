@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,6 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import get_settings
+
+# httpx logs every request at INFO, which buries the pipeline's own lines
+# under hundreds of Hugging Face and ChromaDB round trips.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = get_settings()
 

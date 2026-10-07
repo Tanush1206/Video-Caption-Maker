@@ -107,7 +107,6 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
           there is no toggle — just a pointer to where the other one lives. */}
       {!canAsk ? (
         <p className="mb-3 text-body-sm text-muted-foreground">
-          Search finds the moments that match what you mean, not just the words.{" "}
           <Link href="/settings" className="text-primary underline-offset-4 hover:underline">
             Add a Gemini key
           </Link>{" "}
