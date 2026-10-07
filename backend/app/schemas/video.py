@@ -1,8 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.video import VideoStatus
+from app.services import languages
 
 
 class VideoRead(BaseModel):
@@ -26,6 +27,13 @@ class VideoRead(BaseModel):
     status: VideoStatus
     error_message: str | None
     has_thumbnail: bool
+
+    # What was asked for last time this video was transcribed, so the editor
+    # can show the current choice rather than resetting the controls to their
+    # defaults every time the page loads.
+    spoken_language: str = "auto"
+    caption_language: str = "same"
+
     # Meaningful only while status is "processing".
     progress: int
     stage: str | None
@@ -59,3 +67,49 @@ class Waveform(BaseModel):
 
     peaks: list[float]
     duration_ms: int | None
+
+
+class TranscribeRequest(BaseModel):
+    """
+    What to transcribe into.
+
+    Both optional: an empty body re-runs with whatever the video already had,
+    which is what "try that again" means. Sending one field changes it and
+    leaves the other alone.
+    """
+
+    spoken_language: str | None = None
+    caption_language: str | None = None
+
+    @field_validator("spoken_language")
+    @classmethod
+    def known_spoken(cls, value: str | None) -> str | None:
+        if value is not None and not languages.is_spoken_language(value):
+            raise ValueError(f"Unsupported spoken language: {value}")
+        return value
+
+    @field_validator("caption_language")
+    @classmethod
+    def known_caption(cls, value: str | None) -> str | None:
+        if value is not None and not languages.is_caption_language(value):
+            raise ValueError(f"Unsupported caption language: {value}")
+        return value
+
+
+class LanguageOption(BaseModel):
+    code: str
+    label: str
+
+
+class LanguageOptions(BaseModel):
+    """
+    Served rather than hardcoded in the client, for the same reason the font
+    list is: offering a language the pipeline cannot deliver is worse than
+    offering fewer.
+    """
+
+    spoken: list[LanguageOption]
+    caption: list[LanguageOption]
+    #: False when no translation key is configured, so the client can say why
+    #: the non-English targets are unavailable instead of failing silently.
+    translation_available: bool

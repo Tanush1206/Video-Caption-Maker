@@ -52,6 +52,27 @@ class Video(Base):
     # Milliseconds, and nullable because probing can fail on a damaged file.
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # What is being spoken, and what the captions should come out in.
+    #
+    # Stored on the video rather than passed per request so that pressing
+    # "Redo" repeats the choice instead of silently reverting to auto-detect —
+    # re-running a transcription is almost always an attempt to improve the
+    # last one, not to start the argument over.
+    #
+    # `auto` asks Whisper to detect the spoken language, which is the default
+    # and, on anything sung, measurably the worst option available: on a
+    # Punjabi song auto-detect covered 42 of 90 seconds at an average logprob
+    # of -1.77, where naming a language covered 81-87s at -0.71. Hence the
+    # control existing at all.
+    spoken_language: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="auto", server_default="auto"
+    )
+    # `same` means "leave them in whatever was spoken". Any other value is a
+    # target the captions get translated into.
+    caption_language: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="same", server_default="same"
+    )
+
     status: Mapped[VideoStatus] = mapped_column(
         Enum(VideoStatus, name="video_status", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
