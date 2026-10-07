@@ -10,6 +10,16 @@ export interface Video {
   status: VideoStatus;
   error_message: string | null;
   has_thumbnail: boolean;
+  /**
+   * What was asked for last time this video was transcribed.
+   *
+   * `spoken_language` is "auto" or an ISO code — a hint to Whisper about what
+   * it is listening to. `caption_language` is "same" or an ISO code — what the
+   * captions should come out in. They are different questions: French captions
+   * on English audio is a translation, not a detection.
+   */
+  spoken_language: string;
+  caption_language: string;
   /** 0-100, meaningful only while status is "processing". */
   progress: number;
   /** "extracting" | "transcribing" | "embedding", or null when idle. */
@@ -34,3 +44,19 @@ export const ACCEPTED_VIDEO_TYPES = [
 ];
 
 export const ACCEPTED_EXTENSIONS = [".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"];
+
+export interface LanguageOption {
+  code: string;
+  label: string;
+}
+
+export interface LanguageOptions {
+  spoken: LanguageOption[];
+  caption: LanguageOption[];
+  /**
+   * English never needs this — Whisper translates into it directly, in the
+   * same pass that does the transcription. The other four go through a
+   * translation service, so without it they cannot be delivered.
+   */
+  translation_available: boolean;
+}

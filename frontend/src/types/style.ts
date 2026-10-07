@@ -32,7 +32,22 @@ export interface CaptionStyle {
   position: VerticalPosition;
   alignment: Alignment;
   margin_v: number;
+  /**
+   * Also the line-wrapping width in both renderers: ASS derives it from
+   * MarginL/MarginR whether or not the caption is placed by hand, so this
+   * still means something under free placement while `margin_v` does not.
+   */
   margin_h: number;
+  /**
+   * Free placement, as a fraction of the frame — set by dragging the caption.
+   *
+   * Null means the caption is anchored by `position`/`alignment` and the
+   * margins, which is the default and what the placement grid sets. The two
+   * modes are exclusive, and the overlay switches on this being null, so it
+   * must survive as null rather than being defaulted to a number.
+   */
+  pos_x: number | null;
+  pos_y: number | null;
   reference_height: number;
   /**
    * Resolved server-side from `font_key`. With 1301 catalogue families the
