@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 import { CaptionOverlay } from "@/components/captions/caption-overlay";
 import type { Playback } from "@/hooks/use-playback";
 import { streamKeys, streamUrl, useStreamTicket } from "@/hooks/use-stream";
+import type { FreePlacement } from "@/lib/caption-drag";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 import type { Video } from "@/types/video";
@@ -20,6 +21,8 @@ interface VideoPlayerProps {
   /** Undefined until the style loads; the overlay copes by drawing nothing. */
   style: CaptionStyle | undefined;
   font: Font | undefined;
+  /** Drag the caption to place it anywhere on the frame. */
+  onPlace?: (placement: FreePlacement) => void;
 }
 
 export function VideoPlayer({
@@ -28,6 +31,7 @@ export function VideoPlayer({
   activeCaption,
   style,
   font,
+  onPlace,
 }: VideoPlayerProps) {
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, isError } = useStreamTicket(video.id);
@@ -143,7 +147,16 @@ export function VideoPlayer({
           panel, as "Original". A hover-only icon here was a second, separate
           answer to the same question, invisible on a touch screen and easy to
           mistake for "download what I am looking at", captions included. */}
-      <CaptionOverlay caption={activeCaption} style={style} font={font} />
+      {/* The overlay's drag surface covers the frame, so the <video>'s own
+          onClick never fires while a style is loaded. Playback is handed to it
+          instead, and it forwards a press that turned out to be a click. */}
+      <CaptionOverlay
+        caption={activeCaption}
+        style={style}
+        font={font}
+        onPlace={onPlace}
+        onToggle={playback.toggle}
+      />
     </div>
   );
 }

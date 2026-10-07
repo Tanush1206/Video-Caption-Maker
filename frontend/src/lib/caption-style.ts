@@ -11,6 +11,7 @@
 
 import type { CSSProperties } from "react";
 
+import { ANCHOR_SHIFT } from "@/lib/caption-drag";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 
@@ -122,9 +123,65 @@ const HORIZONTAL: Record<CaptionStyle["alignment"], CSSProperties["justifyConten
   right: "flex-end",
 };
 
-/** Where the caption sits in the frame — the CSS side of ASS `Alignment`. */
+/** The hand-placed position, or null when the caption is anchored. */
+export function freePosition(style: CaptionStyle): { x: number; y: number } | null {
+  // `!= null` rather than `!== null`: a style response cached from before these
+  // fields existed has them undefined, not null, and that has to read as
+  // "anchored" instead of throwing a NaN into a transform.
+  if (style.pos_x == null || style.pos_y == null) return null;
+  return { x: style.pos_x, y: style.pos_y };
+}
+
+/**
+ * The CSS twin of `translate(-50%)` on the anchor — see ANCHOR_SHIFT.
+ *
+ * Expressed as a percentage of the caption's own width, which is what makes it
+ * agree with ASS: `\an4/5/6` anchor the text box at its left edge, its centre
+ * or its right edge, and a percentage translate is measured against the same
+ * box. Neither side needs to know how wide the text turned out to be.
+ */
+function anchorTransform(style: CaptionStyle): string {
+  return `translate(${-ANCHOR_SHIFT[style.alignment] * 100}%, -50%)`;
+}
+
+/**
+ * Where the caption sits in the frame.
+ *
+ * Two modes, because the format has two. An *anchored* caption is the CSS side
+ * of ASS `Alignment` plus margins — nine positions and a gap from the edge.
+ * A *hand-placed* one is the CSS side of `\an` plus `\pos`, which is a
+ * per-event override rather than a Style field and can go anywhere.
+ *
+ * Both return an absolutely positioned box, so the caller can keep one element
+ * for the caption and a separate, unpadded one for the frame it is measured
+ * against. That separation is not cosmetic: while the margins lived as padding
+ * on the *measured* element, the height feeding `scaleFor` was the frame minus
+ * the margins, and the scale it produced was then used to compute those very
+ * margins — a loop that settled at s = F / (R + 2m) and visibly shrank the
+ * caption the further it was pushed from an edge.
+ */
 export function captionBoxStyle(style: CaptionStyle, scale: number): CSSProperties {
+  const free = freePosition(style);
+
+  if (free) {
+    return {
+      position: "absolute",
+      left: `${free.x * 100}%`,
+      top: `${free.y * 100}%`,
+      transform: anchorTransform(style),
+      // The wrap width, and the one thing `\pos` does *not* take over: libass
+      // still breaks lines at PlayResX minus the horizontal margins. Verified
+      // by burning the same line with and without `\pos` at a 700px margin —
+      // six lines, 498px wide, both ways. `100%` resolves against the frame,
+      // because that is this element's containing block.
+      maxWidth: `calc(100% - ${2 * style.margin_h * scale}px)`,
+      textAlign: style.alignment,
+    };
+  }
+
   return {
+    position: "absolute",
+    inset: 0,
     display: "flex",
     alignItems: VERTICAL[style.position],
     justifyContent: HORIZONTAL[style.alignment],
@@ -136,4 +193,25 @@ export function captionBoxStyle(style: CaptionStyle, scale: number): CSSProperti
     paddingTop: `${style.margin_v * scale}px`,
     paddingBottom: `${style.margin_v * scale}px`,
   };
+}
+
+/**
+ * Move an already-rendered caption, without going through React.
+ *
+ * Used only while a drag is in flight. Every pointer event otherwise writes the
+ * style into the query cache, which re-renders the whole editor — the player,
+ * the style panel, the caption list — at pointer-event rate rather than at
+ * frame rate, and that is what made dragging feel like it was catching.
+ *
+ * Deliberately writes the same three properties `captionBoxStyle` sets in free
+ * mode, so the hand-off at the end of the drag is a no-op rather than a jump.
+ */
+export function applyFreePosition(
+  node: HTMLElement,
+  placement: { pos_x: number; pos_y: number },
+  style: CaptionStyle
+): void {
+  node.style.left = `${placement.pos_x * 100}%`;
+  node.style.top = `${placement.pos_y * 100}%`;
+  node.style.transform = anchorTransform(style);
 }
