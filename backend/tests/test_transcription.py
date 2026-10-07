@@ -609,11 +609,10 @@ def test_translation_will_not_return_a_misaligned_batch(monkeypatch):
     class Client:
         models = Models()
 
-    monkeypatch.setattr("app.services.rag.get_client", lambda: Client())
-    monkeypatch.setattr(translation.settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr("app.services.rag.get_client", lambda *a: Client())
     monkeypatch.setattr(translation, "RETRY_BACKOFF_SECONDS", 0)
 
-    assert translation.translate_texts(["one", "two", "three"], "fr") is None
+    assert translation.translate_with_gemini(["one", "two", "three"], "fr", "test-key") is None
 
 
 def test_translation_keeps_the_original_for_a_blank_line(monkeypatch):
@@ -630,9 +629,102 @@ def test_translation_keeps_the_original_for_a_blank_line(monkeypatch):
     class Client:
         models = Models()
 
-    monkeypatch.setattr("app.services.rag.get_client", lambda: Client())
-    monkeypatch.setattr(translation.settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr("app.services.rag.get_client", lambda *a: Client())
 
-    assert translation.translate_texts(["one", "two", "three"], "fr") == [
+    assert translation.translate_with_gemini(["one", "two", "three"], "fr", "test-key") == [
         "un", "two", "trois",
     ]
+
+
+def test_translation_is_local_without_a_key(monkeypatch):
+    """No key means M2M100 on this machine, with no notice — it is the default."""
+    from app.services import translation
+
+    seen = {}
+
+    def fake_local(texts, target, *, source, on_progress=None, on_download=None):
+        seen.update(source=source, target=target)
+        return [f"{target}:{t}" for t in texts]
+
+    monkeypatch.setattr(translation, "translate_locally", fake_local)
+
+    result = translation.translate_texts(["one", "two"], "fr", source="en")
+    assert result.texts == ["fr:one", "fr:two"]
+    assert result.engine == "local"
+    assert result.notice is None
+    assert seen == {"source": "en", "target": "fr"}
+
+
+def test_a_failing_gemini_falls_back_to_local_and_says_so(monkeypatch):
+    """No network, quota or a bad key must never cost the user their translation."""
+    from app.services import translation
+
+    class Models:
+        def generate_content(self, **kwargs):
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+    class Client:
+        models = Models()
+
+    monkeypatch.setattr("app.services.rag.get_client", lambda *a: Client())
+    monkeypatch.setattr(translation, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(
+        translation,
+        "translate_locally",
+        lambda texts, target, **kw: [t.upper() for t in texts],
+    )
+
+    result = translation.translate_texts(["one"], "de", source="en", api_key="bad-key")
+    assert result.texts == ["ONE"]
+    assert result.engine == "local"
+    assert result.notice == translation.GEMINI_FALLBACK_NOTICE
+
+
+def test_a_working_gemini_is_used_when_a_key_is_set(monkeypatch):
+    from app.services import translation
+
+    class Response:
+        text = '["eins"]'
+
+    class Models:
+        def generate_content(self, **kwargs):
+            return Response()
+
+    class Client:
+        models = Models()
+
+    monkeypatch.setattr("app.services.rag.get_client", lambda *a: Client())
+
+    def must_not_run(*a, **k):
+        raise AssertionError("local model used despite a working key")
+
+    monkeypatch.setattr(translation, "translate_locally", must_not_run)
+
+    result = translation.translate_texts(["one"], "de", source="en", api_key="key")
+    assert result.texts == ["eins"]
+    assert result.engine == "gemini"
+
+
+def test_a_broken_local_model_keeps_the_original_captions(monkeypatch):
+    """None, not an exception: the caller keeps the transcript and adds a notice."""
+    from app.services import translation
+
+    def broken(*a, **k):
+        raise RuntimeError("model.bin is corrupt")
+
+    monkeypatch.setattr(translation, "translate_locally", broken)
+    assert translation.translate_texts(["one"], "nl", source="en") is None
+
+
+def test_failed_jobs_get_a_sentence_not_a_traceback():
+    from app.services.model_store import ModelDownloadError
+    from app.workers.transcription import friendly_error
+
+    oom = friendly_error(RuntimeError("CUDA failed with error out of memory"))
+    assert "memory" in oom and "Settings" in oom
+    assert "disk is full" in friendly_error(OSError(28, "No space left on device"))
+    assert friendly_error(ModelDownloadError("Couldn't reach Hugging Face")) == (
+        "Couldn't reach Hugging Face"
+    )
+    generic = friendly_error(KeyError("segments"))
+    assert "segments" not in generic

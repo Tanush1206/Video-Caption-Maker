@@ -182,7 +182,7 @@ def test_no_retrieval_refuses_without_calling_the_model(monkeypatch):
 
 def test_model_refusal_is_reported_as_not_grounded(monkeypatch):
     """The second line: context existed, but it didn't answer the question."""
-    monkeypatch.setattr(rag, "get_client", lambda: _FakeClient(rag.NOT_FOUND))
+    monkeypatch.setattr(rag, "get_client", lambda *a: _FakeClient(rag.NOT_FOUND))
     monkeypatch.setattr(rag.settings, "gemini_api_key", "test-key")
 
     answer = rag.answer_question("what is the refund policy", [a_hit()])
@@ -194,7 +194,7 @@ def test_model_refusal_is_reported_as_not_grounded(monkeypatch):
 
 def test_a_grounded_answer_keeps_its_citations(monkeypatch):
     monkeypatch.setattr(
-        rag, "get_client", lambda: _FakeClient("It costs ten pounds a month [1].")
+        rag, "get_client", lambda *a: _FakeClient("It costs ten pounds a month [1].")
     )
     monkeypatch.setattr(rag.settings, "gemini_api_key", "test-key")
 

@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.signals import worker_ready
 
 from app.config import get_settings
 
@@ -33,3 +34,35 @@ celery_app.conf.update(
     # it deletes any existing captions before writing new ones.
     task_acks_late=True,
 )
+
+
+@worker_ready.connect
+def report_hardware(**_kwargs) -> None:
+    """
+    Tell the API what this machine can run.
+
+    Only the worker container has the GPU passed through, so it is the only
+    one that can answer. Written once at startup into app_settings, where the
+    Settings page reads it. Failure here must never stop the worker.
+    """
+    import asyncio
+    import json
+    import logging
+
+    from app.services import app_settings, hardware
+    from app.workers.db import worker_session
+
+    async def write() -> None:
+        hw = hardware.detect()
+        report = {
+            **hw.as_dict(),
+            "whisper_default": hardware.whisper_profile(hw).__dict__,
+            "translator": hardware.translator_profile(hw).__dict__,
+        }
+        async with worker_session() as session:
+            await app_settings.set_value(session, app_settings.WORKER_HARDWARE, json.dumps(report))
+
+    try:
+        asyncio.run(write())
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("Could not record worker hardware")
