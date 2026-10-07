@@ -24,7 +24,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ApiError } from "@/lib/api";
 import { registerSchema } from "@/lib/validation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/lib/config";
 
 /** How long the success state stays up before redirecting. Long enough to read. */
 const CELEBRATION_MS = 1600;

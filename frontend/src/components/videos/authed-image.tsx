@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth";
 import { refreshSession } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/lib/config";
 
 interface AuthedImageProps {
   path: string;
@@ -79,7 +79,8 @@ export function AuthedImage({ path, alt, className, fallback }: AuthedImageProps
 
   if (failed || !objectUrl) return <>{fallback ?? null}</>;
 
-  // eslint-disable-next-line @next/next/no-img-element -- blob: URLs cannot go
-  // through next/image, which needs a static or remote-configured source.
+  // blob: URLs cannot go through next/image, which needs a static or
+  // remote-configured source.
+  // eslint-disable-next-line @next/next/no-img-element
   return <img src={objectUrl} alt={alt} className={className} />;
 }

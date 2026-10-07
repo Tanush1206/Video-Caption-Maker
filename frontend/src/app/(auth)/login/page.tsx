@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ApiError } from "@/lib/api";
 import { fieldErrors, loginSchema } from "@/lib/validation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/lib/config";
 
 /**
  * Sign-in, on the same glass controls as registration.
