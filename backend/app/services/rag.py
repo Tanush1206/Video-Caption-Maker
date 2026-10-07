@@ -3,7 +3,8 @@ Answering questions from a video's own transcript.
 
 Retrieval-augmented generation: find the passages that might answer the
 question, hand *only those* to Gemini, and require the answer to come from
-them. The model supplies fluency; the transcript supplies facts.
+them. Optional on a local install: retrieval runs entirely on this machine,
+and only writing the answer needs a Gemini key from Settings. The model supplies fluency; the transcript supplies facts.
 
 The milestone's acceptance criterion is not "gives good answers" — it is that
 a question the video does not answer comes back as "not found" rather than an
@@ -35,7 +36,10 @@ NOT_FOUND = "I couldn't find an answer to that in this video."
 # needle out of a haystack — precision falls off as irrelevant passages pile up.
 CONTEXT_CHUNKS = 6
 
+GEMINI_TIMEOUT_MS = 60_000
+
 _client = None
+_client_key: str | None = None
 
 
 @dataclass
@@ -47,13 +51,27 @@ class Answer:
     grounded: bool
 
 
-def get_client():
-    """Lazily built, so a missing key only breaks asking, not the whole app."""
-    global _client
-    if _client is None:
-        from google import genai
+def get_client(api_key: str | None = None):
+    """
+    A Gemini client for this key, rebuilt when the key changes.
 
-        _client = genai.Client(api_key=settings.gemini_api_key)
+    The key can now be changed at runtime from Settings, so a client cached
+    for the life of the process would go on using the old one.
+    """
+    global _client, _client_key
+    key = api_key or settings.gemini_api_key
+    if _client is None or _client_key != key:
+        from google import genai
+        from google.genai import types
+
+        # A timeout, because the SDK has none by default: a stalled request on
+        # an overloaded model once held a transcription for six and a half
+        # minutes before anything noticed. Sixty seconds is far beyond a
+        # healthy batch, and a timeout falls back to the local model.
+        _client = genai.Client(
+            api_key=key, http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS)
+        )
+        _client_key = key
     return _client
 
 
@@ -102,7 +120,7 @@ def parse_citations(text: str, hit_count: int) -> list[int]:
     return seen
 
 
-def answer_question(question: str, hits: list[SearchHit]) -> Answer:
+def answer_question(question: str, hits: list[SearchHit], api_key: str | None = None) -> Answer:
     """
     Synthesize an answer from retrieved captions. Never raises.
 
@@ -113,10 +131,12 @@ def answer_question(question: str, hits: list[SearchHit]) -> Answer:
     if not hits:
         return Answer(text=NOT_FOUND, cited=[], grounded=False)
 
-    if not settings.gemini_api_key:
-        logger.warning("GEMINI_API_KEY is not set; returning retrieval only")
+    api_key = api_key or settings.gemini_api_key
+    if not api_key:
+        # The local default: search works fully offline, and writing an answer
+        # is an optional extra that needs a key.
         return Answer(
-            text="Search results are below, but answering needs a Gemini API key.",
+            text="Add a Gemini API key in Settings to get written answers. The matching moments are below.",
             cited=[],
             grounded=False,
         )
@@ -127,7 +147,7 @@ def answer_question(question: str, hits: list[SearchHit]) -> Answer:
     try:
         from google.genai import types
 
-        response = get_client().models.generate_content(
+        response = get_client(api_key).models.generate_content(
             model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(

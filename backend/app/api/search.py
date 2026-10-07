@@ -13,7 +13,7 @@ from app.schemas.search import (
     SearchResponse,
     SearchResult,
 )
-from app.services import rag, search
+from app.services import app_settings, rag, search
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,8 @@ async def ask(payload: AskRequest, user: CurrentUser, db: DbSession) -> AskRespo
     hits = await asyncio.to_thread(
         search.search_vectors, payload.question, video_ids, rag.CONTEXT_CHUNKS
     )
-    answer = await asyncio.to_thread(rag.answer_question, payload.question, hits)
+    api_key = await app_settings.gemini_key(db)
+    answer = await asyncio.to_thread(rag.answer_question, payload.question, hits, api_key)
     titles = await search.video_titles(db, [hit.video_id for hit in hits])
 
     # Citations are resolved from *our* retrieved hits, not from anything the

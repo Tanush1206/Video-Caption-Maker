@@ -41,7 +41,11 @@ dependencies = [
     "nvidia-cudnn-cu12>=9.0.0",
     "sentence-transformers>=3.0.0",
     "chromadb>=0.5.0",
+    # Optional: only used when a Gemini key is set in Settings.
     "google-genai>=0.1.0",
+    # Tokenizer for the local M2M100 translator (CTranslate2 comes with
+    # faster-whisper).
+    "sentencepiece>=0.2.0",
 
     # Fonts. Google ships its most popular families as variable fonts only, and
     # libass takes the default instance and fakes a bold while the browser
