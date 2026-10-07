@@ -43,7 +43,7 @@ export default function DashboardPage() {
               the app uses, so a change to it reaches here too. */}
           <h1 className="text-h1">Your videos</h1>
           <p className="mt-1 text-body-md text-muted-foreground">
-            Upload a video to transcribe, caption, and search it.
+            Upload a video, pick a language, export it with captions.
           </p>
         </div>
 
@@ -54,17 +54,17 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 space-y-5">
-        {/* The workbench: what the library currently holds, and how to add to
-            it. One panel, because they are one thought. */}
+        {/* The job this app exists for comes first: Upload → Language →
+            Export. Everything else on the page is about what is already here. */}
         <section className="glass-surface glass-rect p-4 sm:p-5">
-          <StatsStrip />
-          <div className="mt-4 border-t border-border/60 pt-4">
-            <VideoUpload />
-          </div>
+          <VideoUpload />
         </section>
 
         <section className="glass-surface glass-rect p-4 sm:p-5">
-          <VideoLibrary />
+          <StatsStrip />
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <VideoLibrary />
+          </div>
         </section>
       </div>
     </main>

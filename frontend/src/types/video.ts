@@ -22,8 +22,15 @@ export interface Video {
   caption_language: string;
   /** 0-100, meaningful only while status is "processing". */
   progress: number;
-  /** "extracting" | "transcribing" | "embedding", or null when idle. */
+  /**
+   * "downloading" | "extracting" | "transcribing" | "translating" |
+   * "embedding", or null when idle.
+   */
   stage: string | null;
+  /** A sentence about the current stage, e.g. "Downloading … 1.2 of 2.9 GB". */
+  stage_detail: string | null;
+  /** A non-fatal note on a finished job, e.g. a translation fallback. */
+  notice: string | null;
   created_at: string;
   updated_at: string;
 }
