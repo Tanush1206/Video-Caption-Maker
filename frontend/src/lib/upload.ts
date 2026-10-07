@@ -28,7 +28,10 @@ function parseError(xhr: XMLHttpRequest): string {
   } catch {
     // not JSON
   }
-  return xhr.status === 0 ? "Upload was interrupted" : `Upload failed (${xhr.status})`;
+  if (xhr.status === 0) return "The upload was interrupted. Check that the app is running and try again.";
+  return xhr.status >= 500
+    ? "The app's server couldn't take the upload. Try again in a moment."
+    : `Upload failed (${xhr.status})`;
 }
 
 function send(

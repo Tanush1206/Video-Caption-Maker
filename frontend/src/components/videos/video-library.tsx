@@ -36,7 +36,7 @@ function FirstRun() {
       </span>
       <p className="mt-4 text-h2">Nothing here yet</p>
       <p className="mx-auto mt-1.5 max-w-sm text-body-md text-muted-foreground">
-        Drop a video in the bar above. Here is what happens to it.
+        Drop a video in the panel above. Here is what happens to it.
       </p>
 
       <div className="mx-auto mt-10 grid max-w-3xl gap-6 text-left sm:grid-cols-3">
@@ -111,7 +111,7 @@ export function VideoLibrary() {
         className="flex gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-body-md text-destructive"
       >
         <AlertCircle className="mt-px size-4 shrink-0" />
-        <span>Couldn&apos;t load your videos: {(error as Error).message}</span>
+        <span>Couldn&apos;t load your videos. {(error as Error).message}</span>
       </div>
     );
   }

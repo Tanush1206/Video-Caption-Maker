@@ -1,5 +1,6 @@
 """Video upload, listing, and retrieval."""
 
+import errno
 import json
 import logging
 from pathlib import Path
@@ -121,6 +122,16 @@ async def _stream_to_disk(upload: UploadFile, destination: Path) -> int:
                         detail=f"File exceeds the {settings.max_upload_size_mb}MB limit",
                     )
                 out.write(chunk)
+    except OSError as exc:
+        destination.unlink(missing_ok=True)
+        if exc.errno == errno.ENOSPC:
+            # Said plainly: on a local install the fix is the user's to make,
+            # and a bare 500 sends them looking in the wrong place.
+            raise HTTPException(
+                status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
+                detail="The disk is full, so the video couldn't be saved. Free some space and try again.",
+            ) from exc
+        raise
     except Exception:
         # Never leave a partial file behind, whether the cap tripped or the
         # connection dropped mid-upload.

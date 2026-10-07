@@ -183,3 +183,29 @@ async def test_upload_rejects_an_unknown_language(client, auth_headers, sample_v
         data={"caption_language": "klingon"},
     )
     assert response.status_code == 422
+
+
+# ── Errors a user can act on ───────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_full_disk_is_reported_as_such(tmp_path, monkeypatch):
+    import errno
+    from pathlib import Path
+
+    from fastapi import HTTPException
+
+    from app.api import videos
+
+    class Upload:
+        async def read(self, _size):
+            return b"x"
+
+    def full(*_a, **_k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Path, "open", full)
+    with pytest.raises(HTTPException) as raised:
+        await videos._stream_to_disk(Upload(), tmp_path / "v.mp4")
+    assert raised.value.status_code == 507
+    assert "disk is full" in raised.value.detail

@@ -29,6 +29,14 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
 
 /** Pull a readable message out of FastAPI's {"detail": ...} envelope. */
 async function extractError(response: Response): Promise<string> {
+  // A 5xx says nothing useful to the person reading it ("Internal Server
+  // Error", or a proxy's "Bad Gateway" while the backend restarts). The
+  // details are in the server log; the screen gets a sentence.
+  if (response.status >= 500 && response.status !== 507) {
+    return response.status === 502 || response.status === 503 || response.status === 504
+      ? "The app's server isn't answering right now. It may be starting up; try again in a moment."
+      : "Something went wrong on the app's server. Try again; if it keeps happening, check `vcm logs`.";
+  }
   try {
     const data = await response.json();
     if (typeof data?.detail === "string") return data.detail;
@@ -82,16 +90,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const { body, headers, _retrying, ...rest } = options;
   const token = useAuthStore.getState().accessToken;
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    credentials: "include", // sends the httpOnly refresh cookie
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: "include", // sends the httpOnly refresh cookie
+    });
+  } catch {
+    // fetch rejects only when no response arrived at all: the server is down
+    // or still starting. "Failed to fetch" means nothing to anyone.
+    throw new ApiError(0, "Can't reach the app's server. Make sure it's running (vcm start).");
+  }
 
   // Access token expired: refresh once, then replay the original request.
   if (response.status === 401 && !_retrying && !path.startsWith("/api/auth/")) {
