@@ -7,6 +7,7 @@ import { useState } from "react";
 import { AuthedImage } from "@/components/videos/authed-image";
 import { Button } from "@/components/ui/button";
 import { useDeleteVideo, useRetranscribe } from "@/hooks/use-videos";
+import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { formatDuration, formatFileSize, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Video, VideoStatus } from "@/types/video";
@@ -143,7 +144,21 @@ export function VideoRow({ video, scaleMs }: { video: Video; scaleMs: number }) 
           {(video.status === "failed" || video.status === "pending") && (
             <button
               type="button"
-              onClick={() => retranscribe.mutate(video.id)}
+              // No language fields: this is the dashboard's "get it going"
+              // button, so the video keeps whatever it was already set to.
+              // Choosing a language belongs in the editor, beside the captions
+              // it changes.
+              //
+              // No navigation either — this row *is* the dashboard. It still
+              // asks to notify, because a job started here is just as long and
+              // just as worth walking away from as one started in the editor.
+              onClick={() => {
+                askToNotify();
+                retranscribe.mutate(
+                  { id: video.id },
+                  { onSuccess: () => watchTranscription(video.id) }
+                );
+              }}
               disabled={retranscribe.isPending}
               title={video.status === "failed" ? "Try again" : "Transcribe now"}
               aria-label={`Transcribe ${video.title}`}

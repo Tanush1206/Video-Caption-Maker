@@ -12,10 +12,12 @@ import { formatDurationLong, formatFileSize } from "@/lib/format";
  * visual weight the numbers do not have — none of them is something you act
  * on, they are context for the library underneath.
  *
- * So: one line, hairlines top and bottom, numbers in mono at a size you can
- * scan without stopping. No borders, no fills, no icons. The disk bar is the
- * one thing here with a shape, because it is the one figure that is a
- * proportion rather than a count.
+ * So: one line, numbers in mono at a size you can scan without stopping. The
+ * hairlines it used to draw for itself are gone — it sits inside a glass panel
+ * that already has edges, and a rule immediately inside a border reads as a
+ * seam. No boxes, no fills, no icons. The disk bar is the one thing here with a
+ * shape, because it is the one figure that is a proportion rather than a
+ * count.
  */
 function Figure({ value, label }: { value: string; label: string }) {
   return (
@@ -31,7 +33,7 @@ export function StatsStrip() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-y border-border py-4">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
         {Array.from({ length: 4 }, (_, i) => (
           <Skeleton key={i} className="h-6 w-28" />
         ))}
@@ -53,7 +55,7 @@ export function StatsStrip() {
     data.disk_total_bytes > 0 ? Math.round((diskUsed / data.disk_total_bytes) * 100) : 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border-y border-border py-4">
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
       <Figure value={String(data.videos)} label={data.videos === 1 ? "video" : "videos"} />
       <Figure value={formatDurationLong(data.duration_ms)} label="footage" />
       <Figure value={data.captions.toLocaleString()} label="captions" />

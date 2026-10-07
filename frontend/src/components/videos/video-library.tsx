@@ -30,7 +30,7 @@ const FILTERS: { label: string; value: VideoStatus | null }[] = [
  */
 function FirstRun() {
   return (
-    <div className="border-y border-border py-14 text-center">
+    <div className="py-14 text-center">
       <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Film className="size-5" />
       </span>
@@ -120,7 +120,7 @@ export function VideoLibrary() {
     return (
       <div className="space-y-4">
         {filters}
-        <div className="border-y border-border">
+        <div>
           {/* Shaped like the rows, so the layout doesn't jump when they land. */}
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="flex items-center gap-4 border-b border-border/60 py-3 last:border-b-0">
@@ -171,7 +171,7 @@ export function VideoLibrary() {
         status === null ? (
           <FirstRun />
         ) : (
-          <div className="border-y border-border py-14 text-center">
+          <div className="py-14 text-center">
             <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <SearchX className="size-5" />
             </span>
@@ -192,7 +192,6 @@ export function VideoLibrary() {
       ) : (
         <div
           className={cn(
-            "border-y border-border",
             // Dimmed while the next page is in flight, so the stale content on
             // screen doesn't read as the answer to what was just clicked.
             isPlaceholderData && "pointer-events-none opacity-50",

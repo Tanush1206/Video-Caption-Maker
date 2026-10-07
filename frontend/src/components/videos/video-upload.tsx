@@ -162,7 +162,10 @@ export function VideoUpload() {
             : "flex flex-col items-center justify-center p-8 text-center sm:p-10",
           dragging
             ? "border-primary bg-primary/5"
-            : "border-border bg-subtle hover:border-muted-foreground/40 hover:bg-muted/50"
+            : // Translucent, not `bg-subtle`. On glass an opaque fill punches a
+              // solid rectangle through the panel and the whole effect stops
+              // at its edges.
+              "border-border/70 bg-background/30 hover:border-primary/40 hover:bg-background/60"
         )}
       >
         <span
