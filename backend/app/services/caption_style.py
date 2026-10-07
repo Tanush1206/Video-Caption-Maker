@@ -151,7 +151,9 @@ _PRESET_BASELINE: dict = {
 PRESETS: dict[str, dict] = {
     "youtube": {
         **_PRESET_BASELINE,
-        "font_key": "sans",
+        # Humanist, quiet, and easy over a long stretch of dialogue — which is
+        # what a boxed subtitle at the bottom of a talking-head video is.
+        "font_key": "lato",
         "font_size": 48,
         "bold": False,
         "italic": False,
@@ -167,9 +169,15 @@ PRESETS: dict[str, dict] = {
     },
     "tiktok": {
         **_PRESET_BASELINE,
-        "font_key": "sans",
+        # A black display face is most of this look, and the one part a size or
+        # colour cannot approximate.
+        "font_key": "anton",
         "font_size": 64,
-        "bold": True,
+        # Not bold: Anton is already black, and it ships as a single weight, so
+        # both renderers would synthesise a fake bold on top of it. They would
+        # agree — that is why the @font-face declares 400 only — but agreeing
+        # on a smeared outline is not the same as looking right.
+        "bold": False,
         "italic": False,
         # The look is set in caps far more often than not, and it is the one
         # part of this style that a size or colour change cannot approximate.
@@ -188,7 +196,7 @@ PRESETS: dict[str, dict] = {
     },
     "minimal": {
         **_PRESET_BASELINE,
-        "font_key": "sans",
+        "font_key": "poppins",
         "font_size": 44,
         "bold": False,
         "italic": False,
@@ -324,6 +332,27 @@ _ASS_ALIGNMENT = {
 
 def to_ass_alignment(style: CaptionStyle) -> int:
     return _ASS_ALIGNMENT[(style.position, style.alignment)]
+
+
+# The middle row of the same nine, for a caption placed by hand.
+#
+# `\an` does two jobs at once: it says which point of the text box `\pos`
+# refers to, *and* how the lines are justified against each other. Only the
+# horizontal half is a free choice here — the vertical is pinned to the middle
+# so that `\pos`'s y is the vertical centre of the text, which is what the
+# browser's `translate(-50%)` gives it. Anchoring to a top or bottom edge
+# instead would put the two renderers half a caption apart on any line that
+# wrapped.
+_ASS_FREE_ALIGNMENT = {
+    Alignment.LEFT: 4,
+    Alignment.CENTER: 5,
+    Alignment.RIGHT: 6,
+}
+
+
+def to_ass_free_alignment(style: CaptionStyle) -> int:
+    """The `\\an` to pair with `\\pos` for a hand-placed caption."""
+    return _ASS_FREE_ALIGNMENT[style.alignment]
 
 
 def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:

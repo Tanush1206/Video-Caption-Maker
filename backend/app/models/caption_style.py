@@ -68,7 +68,15 @@ class CaptionStyle(Base):
     # A key from FONTS in services/caption_style.py, not a free-text family
     # name. libass silently substitutes a font it doesn't have, so an
     # unconstrained string is a preview that lies.
-    font_key: Mapped[str] = mapped_column(String(32), nullable=False, default="sans")
+    # Poppins, not "sans". The system face resolves to Arial in the browser
+    # and Liberation Sans in the burn — correct, metric-compatible, and the
+    # plainest thing on screen. A captioning tool should not open on the font
+    # you get when nobody chose one.
+    #
+    # Distinct from DEFAULT_FONT_KEY in services/caption_style.py, which is the
+    # *fallback* for a style naming a font that no longer exists. That stays a
+    # system face on purpose: a fallback should need nothing to be present.
+    font_key: Mapped[str] = mapped_column(String(32), nullable=False, default="poppins")
 
     font_size: Mapped[int] = mapped_column(Integer, nullable=False, default=54)
     bold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -134,8 +142,34 @@ class CaptionStyle(Base):
     )
 
     # Distance from the edge the captions sit against, in reference pixels.
+    #
+    # `margin_h` keeps a second job under free placement, below: ASS derives the
+    # line-wrapping width from MarginL/MarginR whether or not the caption is
+    # positioned by hand, so it stays meaningful in both modes.
     margin_v: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     margin_h: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+
+    # Free placement: where the caption sits as a fraction of the frame, 0..1.
+    #
+    # NULL means "anchored", and the pair above does the positioning — nine
+    # anchors and a gap from the edge, which is all an ASS *Style* line can say.
+    # That remains the default and every existing row keeps it.
+    #
+    # When both are set the burn-in switches to a per-event `\pos()` override
+    # instead. That is a different mechanism from the Style line, and it was
+    # avoided for exactly that reason until it was actually measured: burning
+    # the same text with and without `\pos` puts it in the same place to within
+    # a pixel, and — the part that decides it — MarginL/MarginR still govern
+    # where lines wrap under `\pos`. So the override buys arbitrary placement
+    # without costing the wrap width, and the preview can still describe
+    # everything the export will do.
+    #
+    # Fractions rather than reference pixels because this is the one geometry
+    # the user sets by pointing at the frame, and a fraction survives a video
+    # of any shape. Nullable rather than defaulted to the centre so that
+    # "never placed by hand" stays distinguishable from "placed at 0.5".
+    pos_x: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    pos_y: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -35,6 +35,12 @@ class CaptionStyleRead(BaseModel):
     margin_v: int
     margin_h: int
 
+    # Null unless the caption has been placed by hand — see the model. The
+    # client switches the preview between two positioning modes on this, so it
+    # has to come back as null rather than be smoothed into a number.
+    pos_x: float | None = None
+    pos_y: float | None = None
+
     # Echoed so the client never has to hardcode it to size the preview.
     reference_height: int = REFERENCE_HEIGHT
 
@@ -88,6 +94,17 @@ class CaptionStyleUpdate(BaseModel):
     alignment: Alignment | None = None
     margin_v: int | None = Field(default=None, ge=0, le=500)
     margin_h: int | None = Field(default=None, ge=0, le=500)
+
+    # Fractions of the frame. Clamped to the frame rather than left open: a
+    # caption at 1.4 is off the canvas, invisible in the preview *and* in the
+    # burn, which is the same failure the margin bounds exist to prevent.
+    #
+    # Note the route applies the patch with `exclude_unset`, not
+    # `exclude_none` — so an explicit null here really does clear the field and
+    # hand the caption back to its anchor. That is how the placement grid
+    # undoes a hand-drag, and it only works because of that distinction.
+    pos_x: float | None = Field(default=None, ge=0.0, le=1.0)
+    pos_y: float | None = Field(default=None, ge=0.0, le=1.0)
 
     @field_validator("font_key")
     @classmethod
