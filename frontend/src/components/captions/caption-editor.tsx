@@ -2,7 +2,7 @@
 
 import { FileText, Loader2, Plus, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CaptionRow } from "@/components/captions/caption-row";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -94,7 +94,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [updateCaption.isPending]);
 
-  const captions = data?.items ?? [];
+  const captions = useMemo(() => data?.items ?? [], [data]);
   const { activeCaptionId } = playback;
 
   /**

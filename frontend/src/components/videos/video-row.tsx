@@ -9,24 +9,19 @@ import { Button } from "@/components/ui/button";
 import { useDeleteVideo, useRetranscribe } from "@/hooks/use-videos";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { formatDuration, formatFileSize, formatRelativeTime } from "@/lib/format";
+import { STAGE_LABELS } from "@/lib/stages";
 import { cn } from "@/lib/utils";
 import type { Video, VideoStatus } from "@/types/video";
 
 const STATUS: Record<VideoStatus, { label: string; className: string }> = {
   pending: { label: "Queued", className: "text-muted-foreground" },
-  processing: { label: "Transcribing", className: "text-primary" },
+  processing: { label: "Processing", className: "text-primary" },
   completed: { label: "Ready", className: "text-success" },
   failed: { label: "Failed", className: "text-destructive" },
 };
 
 // The stage name the worker writes is an internal token; give it a label a
 // user can act on.
-const STAGE_LABELS: Record<string, string> = {
-  extracting: "Extracting audio",
-  transcribing: "Transcribing speech",
-  embedding: "Building search index",
-};
-
 /**
  * One video, as a row whose bar is its length.
  *

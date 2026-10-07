@@ -53,7 +53,7 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
   const silent = playback.isMuted || playback.volume === 0;
 
   return (
-    <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2">
+    <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2 sm:grid-cols-[1fr_auto_1fr]">
       {/* Three explicit columns rather than a flex row: the transport stays
           optically centred no matter how wide the timecode or the speed
           buttons get, which a flex row with ml-auto cannot guarantee. */}
@@ -99,7 +99,9 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
         </button>
       </div>
 
-      <div className="flex items-center justify-end gap-2">
+      {/* Its own row on a phone: time, transport and speed do not fit one
+          375px line, and wrapping is better than a sideways-scrolling page. */}
+      <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end">
         {/* The <video> is rendered without native controls, so this is the only
             way to reach volume at all — and a muted player has to be obvious,
             not a subtly different icon. */}

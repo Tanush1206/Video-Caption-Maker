@@ -18,6 +18,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CaptionEditor } from "@/components/captions/caption-editor";
 import { ExportPanel } from "@/components/exports/export-panel";
+import { VideoStatus } from "@/components/flow/video-status";
 import { PlayerControls } from "@/components/player/player-controls";
 import { Timeline } from "@/components/player/timeline";
 import { VideoPlayer } from "@/components/player/video-player";
@@ -227,6 +228,20 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
         </span>
       </div>
 
+      {/* Step 3 of the flow, or where the video is on the way to it. */}
+      <VideoStatus
+        video={video}
+        captionCount={captions.length}
+        onEdit={() =>
+          document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }
+      />
+
+      <h2 id="workspace" className="mb-3 flex scroll-mt-20 items-baseline gap-2 text-h2">
+        Edit captions and style
+        <span className="text-body-sm font-normal text-muted-foreground">optional</span>
+      </h2>
+
       {/*
         Three arrangements, and the middle one is why this uses explicit grid
         placement rather than source order plus `order-*`.
@@ -246,7 +261,10 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
       */}
       <div
         className={cn(
-          "grid items-start gap-4",
+          // minmax(0,1fr) at the base too: an implicit track sizes to its
+          // widest child's max-content, and the player's control row is wider
+          // than a phone, so the whole page scrolled sideways.
+          "grid grid-cols-[minmax(0,1fr)] items-start gap-4",
           "lg:grid-cols-[minmax(0,1fr)_380px]",
           "2xl:grid-cols-[340px_minmax(0,1fr)_380px]"
         )}
