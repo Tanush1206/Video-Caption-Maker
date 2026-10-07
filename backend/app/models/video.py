@@ -97,6 +97,11 @@ class Video(Base):
     # Which stage is running ("extracting", "transcribing", "embedding"), so
     # the UI can say something more useful than a bare percentage.
     stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Words for the current stage ("Downloading Whisper large-v3, 1.2 of
+    # 3.1 GB"), and a note on a finished job that is not a failure ("Gemini
+    # was unreachable, translated locally instead").
+    stage_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notice: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     owner = relationship("User", back_populates="videos")
     # uselist=False: one style per video, so this reads as an object, not a
