@@ -165,8 +165,8 @@
     /* Stitch's cyan, likewise darkened. Used for the gradient pair. */
     --accent: 190 82% 38%;
 
-    --success: 142 66% 34%;
-    --warning: 32 92% 42%;
+    --success: 142 70% 28%; /* 28%, not 34%: AA 4.5:1 for small text on white */
+    --warning: 32 92% 33%; /* 33%, not 42%: it is used for small text, which needs 4.5:1 */
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
 
