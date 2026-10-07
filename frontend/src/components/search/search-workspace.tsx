@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { inputClasses } from "@/components/ui/field";
 import { useAsk, useSemanticSearch } from "@/hooks/use-search";
+import { useSystem } from "@/hooks/use-system";
 import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SearchResult } from "@/types/search";
@@ -70,7 +71,11 @@ function ResultRow({ result, showVideo }: { result: SearchResult; showVideo: boo
 }
 
 export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspaceProps) {
-  const [mode, setMode] = useState<Mode>("search");
+  const { data: system } = useSystem();
+  const canAsk = Boolean(system?.gemini_configured);
+  const [chosenMode, setMode] = useState<Mode>("search");
+  // A key removed in Settings mid-session drops back to plain search.
+  const mode: Mode = canAsk ? chosenMode : "search";
   const [query, setQuery] = useState("");
 
   const search = useSemanticSearch(videoId);
@@ -94,9 +99,21 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
 
   return (
     <>
-      <h1 className="text-2xl font-semibold">{heading}</h1>
+      <h1 className="text-h1">{heading}</h1>
       <p className="mb-6 mt-1.5 text-sm text-muted-foreground">{subheading}</p>
 
+      {/* Asking needs Gemini to write the answer; finding passages runs
+          entirely on this machine. Without a key there is only one mode, so
+          there is no toggle — just a pointer to where the other one lives. */}
+      {!canAsk ? (
+        <p className="mb-3 text-body-sm text-muted-foreground">
+          Search finds the moments that match what you mean, not just the words.{" "}
+          <Link href="/settings" className="text-primary underline-offset-4 hover:underline">
+            Add a Gemini key
+          </Link>{" "}
+          to also ask questions and get written answers.
+        </p>
+      ) : (
       <div className="mb-3 inline-flex rounded-lg bg-muted p-1">
         {(["search", "ask"] as const).map((option) => (
           <button
@@ -120,6 +137,7 @@ export function SearchWorkspace({ videoId, heading, subheading }: SearchWorkspac
           </button>
         ))}
       </div>
+      )}
 
       <form onSubmit={submit} className="flex gap-2">
         <div className="relative min-w-0 flex-1">
