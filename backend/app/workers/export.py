@@ -13,6 +13,7 @@ worse than a second file on disk.
 import asyncio
 import logging
 import tempfile
+from concurrent.futures import Future
 from pathlib import Path
 
 from sqlalchemy import select
@@ -37,6 +38,12 @@ async def _set_progress(export_id: int, percent: int) -> None:
     async with worker_session() as session:
         export = await session.get(Export, export_id)
         if export is None:
+            return
+        # Never walk a finished export backwards. The caller drains these
+        # before writing the final status, so this should not trigger — it is
+        # here because the cost of being wrong is an export stuck on
+        # "rendering" with its download disabled, and the check is one compare.
+        if export.status in (ExportStatus.COMPLETED, ExportStatus.FAILED):
             return
         export.status = ExportStatus.PROCESSING
         export.progress = max(0, min(percent, 100))
@@ -81,6 +88,7 @@ async def _run(export_id: int) -> dict:
         source = storage.resolve(video.storage_path)
         absolute, relative = export_service.build_export_path(video, export.format)
         duration_ms = video.duration_ms
+        requested_height = export.height
 
     if not source.exists():
         await _mark_failed(export_id, "The source video file is missing")
@@ -98,7 +106,17 @@ async def _run(export_id: int) -> dict:
     if dimensions is None:
         await _mark_failed(export_id, "Could not read the video's dimensions")
         return {"export_id": export_id, "error": "probe failed"}
-    width, height = dimensions
+    source_width, source_height = dimensions
+
+    # The *output* size, not the source's — and this is the whole reason a
+    # resolution option is worth having. The scale filter runs before libass, so
+    # the captions are drawn at the size below; telling libass the source's size
+    # instead would make it draw them for a 144p canvas and then let FFmpeg
+    # stretch the result, which is the blurry text the option exists to fix.
+    width, height = rendering.target_dimensions(
+        source_width, source_height, requested_height
+    )
+    resize = (width, height) if (width, height) != (source_width, source_height) else None
 
     document = subtitles.to_ass(captions, style, width, height)
 
@@ -110,10 +128,26 @@ async def _run(export_id: int) -> dict:
 
         loop = asyncio.get_running_loop()
 
+        # Every progress write, so they can be waited on before the final one.
+        #
+        # Without this the task has a lost-update race it loses often enough to
+        # matter: a progress write scheduled just before FFmpeg exits reads the
+        # row, the completion block then writes COMPLETED, and the progress
+        # write commits PROCESSING on top of it. The export is finished, the
+        # file is on disk, and the UI polls a row that says "rendering" forever
+        # with the download button disabled.
+        #
+        # Draining is enough because no new callbacks can arrive once
+        # `burn_captions` has returned — FFmpeg has exited and the pipe is
+        # closed, so this list is complete and finite by then.
+        progress_writes: list[Future] = []
+
         def report(percent: int) -> None:
             # The FFmpeg callback runs on a worker thread; hopping back to the
             # loop is what makes it safe to touch the database from here.
-            asyncio.run_coroutine_threadsafe(_set_progress(export_id, percent), loop)
+            progress_writes.append(
+                asyncio.run_coroutine_threadsafe(_set_progress(export_id, percent), loop)
+            )
 
         try:
             await asyncio.to_thread(
@@ -122,11 +156,21 @@ async def _run(export_id: int) -> dict:
                 subtitle_file,
                 absolute,
                 duration_ms=duration_ms,
+                target=resize,
                 on_progress=report,
             )
         except Exception as exc:  # noqa: BLE001
             await _mark_failed(export_id, str(exc))
             raise
+        finally:
+            # In `finally` so a failed render drains them too — otherwise a
+            # late progress write lands on top of FAILED and hides the error
+            # message the user needs to see.
+            if progress_writes:
+                await asyncio.gather(
+                    *(asyncio.wrap_future(write) for write in progress_writes),
+                    return_exceptions=True,
+                )
 
     async with worker_session() as session:
         export = await session.get(Export, export_id)

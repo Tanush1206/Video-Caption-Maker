@@ -56,9 +56,20 @@ def build_export_path(video: Video, export_format: ExportFormat) -> tuple[Path, 
 
 
 async def create_export(
-    db: AsyncSession, video: Video, export_format: ExportFormat
+    db: AsyncSession,
+    video: Video,
+    export_format: ExportFormat,
+    *,
+    height: int | None = None,
 ) -> Export:
-    export = Export(video_id=video.id, format=export_format, status=ExportStatus.PENDING)
+    export = Export(
+        video_id=video.id,
+        format=export_format,
+        status=ExportStatus.PENDING,
+        # None means "the source's own size", which is what every export before
+        # this option existed meant, and still the default.
+        height=height,
+    )
     db.add(export)
     await db.commit()
     await db.refresh(export)

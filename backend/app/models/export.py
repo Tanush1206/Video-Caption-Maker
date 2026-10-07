@@ -81,6 +81,17 @@ class Export(Base):
     storage_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
+    # The output frame height for a burn, in pixels. Null means "the source's
+    # own size", which is what every export before this column meant and still
+    # the default.
+    #
+    # Stored rather than derived from the file so the list can say "1080p"
+    # without probing every row, and so two renders of the same video at
+    # different sizes are visibly different things rather than one mysterious
+    # duplicate. Only the height: the width follows from the source's aspect
+    # ratio, and storing both would allow them to disagree.
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
