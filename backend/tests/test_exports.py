@@ -251,6 +251,36 @@ async def test_download_round_trip(client, auth_headers, exportable):
     assert "the quick brown" in body
 
 
+def test_the_burn_is_not_named_after_the_source_video():
+    """
+    The two downloads must not land in a folder under the same name.
+
+    A burn shares the source's extension, so naming it after the video gave
+    "clip.mp4" for both the original and the captioned copy. The browser saves
+    the second as "clip (1).mp4" without saying so, and opening the obvious one
+    shows a video with no captions - the export was correct, it just was not
+    the file that got opened.
+    """
+    from app.api.exports import download_filename
+    from app.models.export import ExportFormat
+
+    assert download_filename("clip", ExportFormat.MP4) == "clip-captions.mp4"
+
+
+def test_sidecars_keep_the_video_name_exactly():
+    """
+    The opposite rule, and it is load-bearing: `clip.srt` beside `clip.mp4` is
+    how every player finds a subtitle track on its own. A suffix here would be
+    tidier and would break that.
+    """
+    from app.api.exports import download_filename
+    from app.models.export import ExportFormat
+
+    assert download_filename("clip", ExportFormat.SRT) == "clip.srt"
+    assert download_filename("clip", ExportFormat.VTT) == "clip.vtt"
+    assert download_filename("clip", ExportFormat.JSON) == "clip.json"
+
+
 @pytest.mark.asyncio
 async def test_download_rejects_a_token_for_another_export(
     client, auth_headers, exportable
@@ -523,3 +553,189 @@ async def test_render_fails_loudly_when_the_source_is_gone(
     response = await client.get(f"/api/exports/{created['id']}", headers=auth_headers)
     assert response.json()["status"] == ExportStatus.FAILED.value
     assert "missing" in response.json()["error_message"]
+
+
+# ── Output resolution ────────────────────────────────────────────────────
+
+
+def test_target_dimensions_keeps_the_aspect_and_stays_even():
+    """
+    The width follows the source's shape rather than being asked for, so an
+    export can never come out stretched, and both sides are even because
+    yuv420p subsamples chroma by two and encoders reject odd sizes outright.
+    """
+    from app.services import rendering
+
+    assert rendering.target_dimensions(256, 144, 1080) == (1920, 1080)
+    assert rendering.target_dimensions(1920, 1080, 720) == (1280, 720)
+    # Portrait, and a height whose exact width lands on an odd number.
+    width, height = rendering.target_dimensions(1080, 1920, 721)
+    assert width % 2 == 0 and height % 2 == 0
+
+
+def test_no_requested_height_means_the_source_size():
+    """The default, and the only choice that cannot soften the picture."""
+    from app.services import rendering
+
+    assert rendering.target_dimensions(640, 360, None) == (640, 360)
+
+
+def test_requested_height_is_capped():
+    """User input reaching an encoder; 100000 is a file nobody can play."""
+    from app.services import rendering
+
+    _, height = rendering.target_dimensions(1920, 1080, 99999)
+    assert height == rendering.MAX_OUTPUT_HEIGHT
+
+
+def test_available_heights_include_the_source_and_upscales():
+    """
+    Upscaling is offered on purpose. It adds no picture detail, but captions
+    are drawn after the scale, so a 144p source rendered at 1080p turns an
+    illegible 6px caption into a 45px one.
+    """
+    from app.services import rendering
+
+    heights = rendering.available_heights(144)
+    assert 144 in heights, "the source's own size must always be offered"
+    assert 1080 in heights
+    assert heights == sorted(heights)
+    assert all(h <= rendering.MAX_OUTPUT_HEIGHT for h in heights)
+
+
+def test_the_scale_runs_before_the_subtitles_filter():
+    """
+    The ordering *is* the feature.
+
+    libass draws glyphs at whatever size the frames are when it runs. Scale
+    first and the captions are rendered at the output size, sharp; scale second
+    and they are drawn tiny and then stretched with the picture, which is
+    indistinguishable from not offering the option at all.
+    """
+    from pathlib import Path
+
+    from app.services import rendering
+
+    chain = rendering._filter_chain(Path("/tmp/x.ass"), (1920, 1080))
+
+    assert chain.index("scale=1920:1080") < chain.index("subtitles=")
+
+
+def test_no_scale_filter_when_rendering_at_the_source_size():
+    """An identity scale would resample the picture for nothing."""
+    from pathlib import Path
+
+    from app.services import rendering
+
+    assert "scale=" not in rendering._filter_chain(Path("/tmp/x.ass"), None)
+
+
+@pytest.mark.asyncio
+async def test_requested_height_is_stored_on_the_burn(
+    client, auth_headers, exportable
+):
+    created = (
+        await client.post(
+            f"/api/videos/{exportable}/exports",
+            headers=auth_headers,
+            json={"format": "mp4", "height": 720},
+        )
+    ).json()
+
+    assert created["height"] == 720
+
+
+@pytest.mark.asyncio
+async def test_a_height_on_a_sidecar_is_ignored_not_rejected(
+    client, auth_headers, exportable
+):
+    """
+    A text file has no frame size. The panel has one resolution control for the
+    whole section, so it should not have to remember which formats it applies
+    to - dropping the value is friendlier than a 422 the user cannot act on.
+    """
+    created = (
+        await client.post(
+            f"/api/videos/{exportable}/exports",
+            headers=auth_headers,
+            json={"format": "srt", "height": 720},
+        )
+    ).json()
+
+    assert created["height"] is None
+    assert created["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_an_absurd_height_is_rejected(client, auth_headers, exportable):
+    response = await client.post(
+        f"/api/videos/{exportable}/exports",
+        headers=auth_headers,
+        json={"format": "mp4", "height": 99999},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_options_report_the_ladder_and_the_encoder(
+    client, auth_headers, exportable
+):
+    response = await client.get(
+        f"/api/videos/{exportable}/exports/options", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["resolutions"], "the picker would be empty"
+    # Whatever the source is, exactly one offer is its own size.
+    assert sum(1 for r in body["resolutions"] if r["native"]) <= 1
+    for resolution in body["resolutions"]:
+        assert resolution["label"] == f"{resolution['height']}p"
+        if body["source_height"]:
+            assert resolution["upscaled"] == (resolution["height"] > body["source_height"])
+
+
+def test_the_default_height_rescues_an_unreadable_caption():
+    """
+    The default is not the source's own size, and that is the point.
+
+    Caption sizes are stored against a 1080p canvas and scaled by
+    height/1080, so a 256x144 source renders a 48px caption at 6px. Defaulting
+    to the source would mean the obvious button produces a file whose captions
+    cannot be read - which is the one thing a captioning tool must not do.
+    """
+    from app.services import rendering
+
+    default = rendering.recommended_height(144, font_size=48, reference_height=1080)
+
+    assert default > 144, "a 6px caption is not an acceptable default"
+    assert 48 * default / 1080 >= rendering.MIN_CAPTION_PX
+
+
+def test_a_big_enough_source_keeps_its_own_size():
+    """The common case, and it must not be resampled for no reason."""
+    from app.services import rendering
+
+    assert rendering.recommended_height(1080, font_size=48, reference_height=1080) == 1080
+    assert rendering.recommended_height(2160, font_size=48, reference_height=1080) == 2160
+
+
+def test_the_default_never_downscales():
+    """
+    Upscaling to rescue legibility is a fair trade; throwing away detail the
+    source actually has is not, and must never happen without being asked.
+    """
+    from app.services import rendering
+
+    for source in (360, 480, 720, 1080, 1440, 2160):
+        assert rendering.recommended_height(source, 48, 1080) >= source
+
+
+def test_a_larger_caption_needs_less_upscaling():
+    """The recommendation follows the style, not just the source."""
+    from app.services import rendering
+
+    assert rendering.recommended_height(144, font_size=90, reference_height=1080) <= (
+        rendering.recommended_height(144, font_size=48, reference_height=1080)
+    )
