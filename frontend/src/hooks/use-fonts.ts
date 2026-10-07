@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { api } from "@/lib/api";
+import { API_URL } from "@/lib/config";
 import type { FontLibraryEntry, FontSearchResult } from "@/types/style";
 
 export const fontKeys = {
@@ -12,7 +13,7 @@ export const fontKeys = {
 
 /** The URL the browser loads a face from — the same file the worker burns with. */
 export function fontFileUrl(key: string, weight: "regular" | "bold" = "regular") {
-  return `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/fonts/${key}/${weight}.ttf`;
+  return `${API_URL}/api/fonts/${key}/${weight}.ttf`;
 }
 
 /**

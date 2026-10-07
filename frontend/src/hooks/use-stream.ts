@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { startDownload } from "@/lib/download";
 import type { StreamTicket, Waveform } from "@/types/stream";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/lib/config";
 
 export const streamKeys = {
   ticket: (videoId: number) => ["videos", videoId, "stream-ticket"] as const,

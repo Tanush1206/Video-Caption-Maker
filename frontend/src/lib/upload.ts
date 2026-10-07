@@ -10,7 +10,7 @@ import { refreshSession } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import type { Video } from "@/types/video";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/lib/config";
 
 export interface UploadHandle {
   promise: Promise<Video>;
@@ -34,7 +34,8 @@ function parseError(xhr: XMLHttpRequest): string {
 function send(
   file: File,
   token: string | null,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number) => void,
+  captionLanguage?: string
 ): { xhr: XMLHttpRequest; promise: Promise<Video> } {
   const xhr = new XMLHttpRequest();
 
@@ -69,6 +70,9 @@ function send(
     xhr.onabort = () => reject(new Error("Upload cancelled"));
 
     const form = new FormData();
+    // Before the file, so the server has the choice in hand when the bytes
+    // arrive; the one transcription that follows produces those captions.
+    if (captionLanguage) form.append("caption_language", captionLanguage);
     form.append("file", file);
     xhr.send(form);
   });
@@ -78,12 +82,13 @@ function send(
 
 export function uploadVideo(
   file: File,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number) => void,
+  captionLanguage?: string
 ): UploadHandle {
   let active: XMLHttpRequest | null = null;
 
   const run = async (): Promise<Video> => {
-    const first = send(file, useAuthStore.getState().accessToken, onProgress);
+    const first = send(file, useAuthStore.getState().accessToken, onProgress, captionLanguage);
     active = first.xhr;
 
     try {
@@ -97,7 +102,7 @@ export function uploadVideo(
       if (!token) throw error;
 
       onProgress(0);
-      const retry = send(file, token, onProgress);
+      const retry = send(file, token, onProgress, captionLanguage);
       active = retry.xhr;
       return await retry.promise;
     }
