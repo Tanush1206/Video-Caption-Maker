@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { fontFileUrl, useFontSearch } from "@/hooks/use-fonts";
 import { cn } from "@/lib/utils";
+import { visibleRange } from "@/lib/windowing";
 import type { CatalogueMeta, Font, FontLibraryEntry } from "@/types/style";
 
 interface FontPickerProps {
@@ -36,9 +37,6 @@ interface FontPickerProps {
 const ROW_H = 34;
 const HEADER_H = 26;
 
-/** Rows rendered beyond the viewport, so a fast scroll does not show gaps. */
-const OVERSCAN = 6;
-
 type Item =
   | { kind: "header"; id: string; label: string }
   | { kind: "builtin"; id: string; font: Font }
@@ -47,18 +45,6 @@ type Item =
 
 const heightOf = (item: Item) =>
   item.kind === "header" || item.kind === "note" ? HEADER_H : ROW_H;
-
-/** The largest index whose top is at or above `y`. */
-function indexAt(tops: number[], y: number): number {
-  let lo = 0;
-  let hi = tops.length - 2;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (tops[mid] <= y) lo = mid;
-    else hi = mid - 1;
-  }
-  return Math.max(0, lo);
-}
 
 export function FontPicker({ builtins, value, onChange }: FontPickerProps) {
   const [open, setOpen] = useState(false);
@@ -147,22 +133,36 @@ export function FontPicker({ builtins, value, onChange }: FontPickerProps) {
 
   const total = tops[items.length] ?? 0;
 
-  // A new query is a new list; leaving the scroll where it was would open on
-  // the middle of results the user has not seen the top of.
+  /**
+   * Back to the top, and re-measure.
+   *
+   * `open` is in here and not only `needle`, which is the bug this had. The
+   * scroll container is inside the `{open && …}` branch, so closing the picker
+   * destroys the DOM node while `scrollTop` — ordinary component state — keeps
+   * whatever it last held. Reopening then paired a fresh element sitting at 0
+   * with a state that said 4000, so every row was positioned below the visible
+   * window: an empty list under a scrollbar that looked entirely correct.
+   *
+   * A new query needs the same reset for the ordinary reason — opening on the
+   * middle of results nobody has seen the top of is disorienting.
+   */
   useLayoutEffect(() => {
-    if (scroller.current) scroller.current.scrollTop = 0;
+    if (!open) return;
+    const node = scroller.current;
+    if (!node) return;
+    node.scrollTop = 0;
     setScrollTop(0);
-  }, [needle]);
+    setViewport(node.clientHeight);
+  }, [open, needle]);
 
+  // Separately from the reset: the viewport is capped by max-height, so it is
+  // shorter than that whenever the list is short, and the list changes length
+  // as results arrive.
   useLayoutEffect(() => {
     if (open && scroller.current) setViewport(scroller.current.clientHeight);
   }, [open, total]);
 
-  const first = indexAt(tops, scrollTop);
-  let last = first;
-  while (last < items.length - 1 && tops[last + 1] < scrollTop + viewport) last++;
-  const start = Math.max(0, first - OVERSCAN);
-  const end = Math.min(items.length, last + 1 + OVERSCAN);
+  const { start, end } = visibleRange(tops, scrollTop, viewport, items.length);
 
   const selectedBuiltin = builtins.find((f) => f.key === value);
   const selectedLabel =

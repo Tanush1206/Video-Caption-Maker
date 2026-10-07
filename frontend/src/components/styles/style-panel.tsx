@@ -9,7 +9,6 @@ import {
   useCaptionStyle,
   useResetStyle,
   useStyleOptions,
-  useUpdateCaptionStyle,
 } from "@/hooks/use-caption-style";
 import { cn } from "@/lib/utils";
 import type { Alignment, CaptionStyle, VerticalPosition } from "@/types/style";
@@ -161,52 +160,135 @@ function Swatch({
   );
 }
 
-function Segmented<T extends string>({
-  label,
-  options,
-  value,
+/**
+ * The nine places a caption can sit, as a picture of the frame.
+ *
+ * This was two segmented controls reading "top / middle / bottom" and "left /
+ * center / right" — six words to express one point in a rectangle, and you had
+ * to build the combination in your head before you could click it.
+ *
+ * Nine cells is what the underlying format actually offers. ASS positions text
+ * with an alignment anchor plus margins, so these are not a convenience over
+ * free coordinates; they *are* the coordinate system, and a control shaped
+ * like the thing it sets beats two lists of adverbs.
+ *
+ * The dot inside each cell sits where the caption would sit, so the control is
+ * a small map rather than a grid of identical squares.
+ */
+function AnchorGrid({
+  position,
+  alignment,
+  placed,
+  aspect,
   onChange,
 }: {
-  label: string;
-  options: readonly T[];
-  value: T;
-  onChange: (value: T) => void;
+  position: VerticalPosition;
+  alignment: Alignment;
+  /** Whether the caption has been dragged, and so is not on an anchor at all. */
+  placed: boolean;
+  /** The video's real shape. A portrait clip must not get a 16:9 map. */
+  aspect: number;
+  onChange: (next: Partial<CaptionStyle>) => void;
 }) {
   return (
-    <Field label={label}>
-      <div className="flex rounded-md border border-border p-0.5">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            aria-pressed={value === option}
-            className={cn(
-              "flex-1 rounded px-2 py-1 text-xs capitalize transition",
-              value === option
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {option}
-          </button>
-        ))}
+    <Field label="Placement">
+      <div
+        role="radiogroup"
+        aria-label="Caption placement"
+        // The aspect comes from the loaded video rather than being assumed,
+        // because the whole idea is that this is a picture of the frame. A
+        // 16:9 control over a vertical video would put the dots somewhere the
+        // caption will not be.
+        style={{ aspectRatio: aspect }}
+        className="mx-auto grid w-full max-w-full grid-cols-3 grid-rows-3 gap-0.5 rounded-md border border-border bg-background/40 p-0.5"
+      >
+        {POSITIONS.map((row) =>
+          ALIGNMENTS.map((column) => {
+            // Nothing is selected once the caption has been dragged: it is at
+            // some x/y that is almost certainly not any of these nine, and
+            // lighting one up would claim otherwise.
+            const selected = !placed && position === row && alignment === column;
+            return (
+              <button
+                key={`${row}-${column}`}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={`${row} ${column}`}
+                title={`${row} ${column}`}
+                // Nulls, not omissions. Choosing an anchor is also how you undo
+                // a hand-drag, and clearing the free position is the only thing
+                // that puts the caption back under this control — the PATCH is
+                // applied with `exclude_unset`, so an explicit null really does
+                // clear the column while leaving it out would change nothing.
+                onClick={() =>
+                  onChange({ position: row, alignment: column, pos_x: null, pos_y: null })
+                }
+                className={cn(
+                  "flex rounded-sm transition-colors",
+                  // The dot goes where the caption goes. items-*/justify-* are
+                  // the same two axes the anchor itself names, so the cell is
+                  // laid out by the value it sets.
+                  row === "top" ? "items-start" : row === "middle" ? "items-center" : "items-end",
+                  column === "left"
+                    ? "justify-start"
+                    : column === "center"
+                      ? "justify-center"
+                      : "justify-end",
+                  "p-1",
+                  selected ? "bg-primary/15" : "hover:bg-muted"
+                )}
+              >
+                <span
+                  className={cn(
+                    "h-0.5 rounded-full transition-all",
+                    selected ? "w-4 bg-primary" : "w-2.5 bg-muted-foreground/40"
+                  )}
+                />
+              </button>
+            );
+          })
+        )}
       </div>
     </Field>
   );
 }
 
-export function StylePanel({ videoId }: { videoId: number }) {
+/**
+ * `update` is passed in rather than created here, and that is not tidiness.
+ *
+ * The hook holds a debounce timer, a `pending` patch and a sequence counter
+ * for discarding superseded replies — all in refs, all per instance. Two
+ * instances means two independent `latest` counters, so a reply from one
+ * cannot be recognised as stale by the other: drag the caption on the video,
+ * move a slider before the drag saves, and the slider's reply lands carrying a
+ * server copy from before the drag and quietly reverts it.
+ *
+ * The video and this panel are siblings, so the one instance lives on the page
+ * above both. Same failure the hook was fixed for once already, arriving by a
+ * different door.
+ */
+export function StylePanel({
+  videoId,
+  update,
+  isSaving,
+  aspect = 16 / 9,
+}: {
+  videoId: number;
+  update: (patch: Partial<CaptionStyle>) => void;
+  isSaving: boolean;
+  /** The video's aspect ratio, so the placement map matches the frame. */
+  aspect?: number;
+}) {
   const { data: style, isLoading } = useCaptionStyle(videoId);
   const { data: options } = useStyleOptions();
 
-  const { update, isSaving } = useUpdateCaptionStyle(videoId);
   const applyPreset = useApplyPreset(videoId);
   const resetStyle = useResetStyle(videoId);
 
   if (isLoading || !style) {
     return (
-      <div className="space-y-2 rounded-lg border border-border bg-card p-3">
+      <div className="space-y-2">
         {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className="h-8 animate-pulse rounded bg-muted" />
         ))}
@@ -217,11 +299,12 @@ export function StylePanel({ videoId }: { videoId: number }) {
   const set = (patch: Partial<CaptionStyle>) => update(patch);
 
   return (
-    <section className="rounded-lg border border-border bg-card p-3">
-      <header className="mb-3 flex items-center justify-between">
-        <h2 className="label-caps">
-          Caption style
-        </h2>
+    // No border or fill of its own: this sits inside the rail's glass pane,
+    // and a card inside a pane is a box in a box. It has no heading either —
+    // the rail tab above it is the heading, and printing "Caption style" under
+    // a tab reading "Style" is the same word twice in two type sizes.
+    <section>
+      <header className="mb-3 flex items-center justify-end">
         <div className="flex items-center gap-2">
           {isSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
           <button
@@ -359,32 +442,39 @@ export function StylePanel({ videoId }: { videoId: number }) {
         </Group>
 
         <Group title="Placement">
-          <Segmented
-            label="Position"
-            options={POSITIONS}
-            value={style.position}
-            onChange={(position) => set({ position })}
-          />
-          <Segmented
-            label="Alignment"
-            options={ALIGNMENTS}
-            value={style.alignment}
-            onChange={(alignment) => set({ alignment })}
+          <AnchorGrid
+            position={style.position}
+            alignment={style.alignment}
+            placed={style.pos_x != null && style.pos_y != null}
+            aspect={aspect}
+            onChange={set}
           />
 
+          {/* Only while the caption is on an anchor. A hand-placed caption sits
+              at an explicit y, so there is no edge for this to be a gap from —
+              and libass ignores MarginV outright once `\pos` is in play. A
+              slider that moves nothing is worse than no slider. */}
+          {style.pos_y == null && (
+            <Slider
+              label="Edge margin"
+              value={style.margin_v}
+              min={0}
+              // 500, matching the column bound. It was 300, so a margin set by
+              // dragging the caption could exceed what this track could show
+              // and the thumb sat pinned at the end while the number climbed.
+              max={500}
+              suffix="px"
+              onChange={(margin_v) => set({ margin_v })}
+            />
+          )}
+          {/* This one survives free placement, and is the reason `margin_h` is
+              not simply ignored alongside `margin_v`: ASS takes the line-wrap
+              width from MarginL/MarginR in both modes. */}
           <Slider
-            label="Edge margin"
-            value={style.margin_v}
-            min={0}
-            max={300}
-            suffix="px"
-            onChange={(margin_v) => set({ margin_v })}
-          />
-          <Slider
-            label="Side margin"
+            label={style.pos_x == null ? "Side margin" : "Side margin — line width"}
             value={style.margin_h}
             min={0}
-            max={300}
+            max={500}
             suffix="px"
             onChange={(margin_h) => set({ margin_h })}
           />

@@ -11,18 +11,19 @@ import {
   Video,
 } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useCreateExport,
   useDeleteExport,
   useDownloadExport,
+  useExportOptions,
   useExports,
 } from "@/hooks/use-exports";
 import { useDownloadOriginal } from "@/hooks/use-stream";
 import { formatFileSize, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ExportFormat, VideoExport } from "@/types/export";
+import { useState } from "react";
 
 /**
  * Everything you can get out of a video, in one list.
@@ -69,6 +70,7 @@ function StatusLine({ item }: { item: VideoExport }) {
 
   return (
     <span className="text-xs text-muted-foreground">
+      {item.height ? `${item.height}p · ` : ""}
       {item.size_bytes ? formatFileSize(item.size_bytes) : "—"} ·{" "}
       {formatRelativeTime(item.created_at)}
     </span>
@@ -78,15 +80,46 @@ function StatusLine({ item }: { item: VideoExport }) {
 export function ExportPanel({
   videoId,
   hasCaptions,
+  defaultName,
 }: {
   videoId: number;
   hasCaptions: boolean;
+  /** The video's title, as the starting point for the saved filename. */
+  defaultName: string;
 }) {
   const { data, isLoading } = useExports(videoId);
+  const { data: options } = useExportOptions(videoId);
   const createExport = useCreateExport(videoId);
   const deleteExport = useDeleteExport(videoId);
   const download = useDownloadExport();
   const downloadOriginal = useDownloadOriginal(videoId);
+
+  /**
+   * The height to burn at. Null means "whatever the server recommends", which
+   * is not the source's own size — see `recommended_height`. A 144p source
+   * renders its captions at 6px, so defaulting to the source would make the
+   * obvious button produce a file whose captions cannot be read.
+   */
+  const [height, setHeight] = useState<number | null>(null);
+
+  /**
+   * What the saved file will be called.
+   *
+   * Empty means "use the server's name", which is the source filename plus a
+   * "-captions" suffix on a burn. Held here rather than saved anywhere: this
+   * names a *download*, not the video, and someone exporting one clip under a
+   * different name has not asked to rename the thing in their library.
+   *
+   * The extension is never shown or typed. It is decided by the format button
+   * that gets pressed, so offering it here would only let someone type one
+   * that contradicts the button.
+   */
+  const [name, setName] = useState("");
+  const savedAs = name.trim();
+  const resolutions = options?.resolutions ?? [];
+  const recommended = options?.recommended_height ?? null;
+  const chosen = height ?? recommended ?? options?.source_height ?? null;
+  const chosenOption = resolutions.find((r) => r.height === chosen);
 
   const items = data?.items ?? [];
   // One burn at a time is enough; a second would queue behind it and produce a
@@ -98,15 +131,14 @@ export function ExportPanel({
   const failed = createExport.error ?? downloadOriginal.error;
 
   return (
-    <Card className="p-3">
-      <header className="mb-3 flex items-center justify-between">
-        <h2 className="label-caps">
-          Export
-        </h2>
-        {(createExport.isPending || downloadOriginal.isPending) && (
+    // No dividing border any more: this is a tab of its own rather than the
+    // lower half of the rail, so there is nothing above it to be divided from.
+    <section>
+      {(createExport.isPending || downloadOriginal.isPending) && (
+        <div className="mb-3 flex justify-end">
           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-        )}
-      </header>
+        </div>
+      )}
 
       {/* Says what is unavailable, not that nothing is. This used to read
           "Nothing to export until this video has captions", which was wrong the
@@ -117,6 +149,80 @@ export function ExportPanel({
           Captions aren&apos;t ready yet. You can still download the original.
         </p>
       )}
+
+      {/* Only shown once the server has said what it can do. It applies to the
+          MP4 tile alone, so it sits directly above the grid rather than inside
+          it — a tile that changed shape when selected would be worse. */}
+      {resolutions.length > 0 && (
+        <div className="mb-2 rounded-md border border-border/70 bg-background/30 px-2.5 py-2">
+          <label
+            htmlFor="export-resolution"
+            className="flex items-center justify-between gap-2"
+          >
+            <span className="text-[11px] font-semibold">MP4 resolution</span>
+            <select
+              id="export-resolution"
+              value={chosen ?? ""}
+              onChange={(event) => setHeight(Number(event.target.value))}
+              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] tabular-nums"
+            >
+              {resolutions.map((resolution) => (
+                <option key={resolution.height} value={resolution.height}>
+                  {resolution.label}
+                  {resolution.height === recommended
+                    ? " · recommended"
+                    : resolution.native
+                      ? " · source"
+                      : resolution.upscaled
+                        ? " · upscaled"
+                        : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* Said plainly, because "1080p" on a 144p source promises something
+              it cannot deliver. Upscaling buys sharp captions and nothing else
+              — the picture has no extra detail to recover — and that is worth
+              having when the alternative is a 6px caption, but only if the
+              trade is stated rather than implied. */}
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            {chosenOption?.upscaled
+              ? `Upscaled from ${options?.source_height}p — captions are drawn sharp at ${chosenOption.label}, the picture gains no detail. At ${options?.source_height}p they would render too small to read.`
+              : chosenOption?.native
+                ? "The source's own size — nothing is resampled."
+                : `Rendered at ${chosenOption?.label ?? ""}.`}
+            {options?.hardware_encoder ? " GPU encoding." : ""}
+          </p>
+        </div>
+      )}
+
+      {/* Directly above the format buttons, because it applies to whichever
+          one gets pressed — including the download buttons further down the
+          list of finished exports. Below the resolution picker, since that
+          only concerns the MP4 and this concerns everything. */}
+      <div className="mb-2 rounded-md border border-border/70 bg-background/30 px-2.5 py-2">
+        <label htmlFor="export-name" className="flex items-center gap-2">
+          <span className="shrink-0 text-[11px] font-semibold">Save as</span>
+          <input
+            id="export-name"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={defaultName}
+            spellCheck={false}
+            // maxLength matches the server's cap, so the field cannot accept
+            // something the download will then silently shorten.
+            maxLength={120}
+            className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
+          />
+        </label>
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+          {savedAs
+            ? `Downloads as "${savedAs}", with the extension for the format you pick.`
+            : "Leave blank to use the video's own filename."}
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-1.5">
         {FORMATS.map(({ key, label, hint, icon: Icon }) => {
@@ -131,7 +237,14 @@ export function ExportPanel({
               type="button"
               disabled={disabled}
               onClick={() =>
-                original ? downloadOriginal.mutate() : createExport.mutate(key)
+                original
+                  ? downloadOriginal.mutate(savedAs || undefined)
+                  : createExport.mutate({
+                      format: key,
+                      // Only a burn has a frame size; the server drops it for
+                      // the sidecars anyway, but not sending it is clearer.
+                      height: key === "mp4" && chosen ? chosen : undefined,
+                    })
               }
               title={
                 original
@@ -141,9 +254,9 @@ export function ExportPanel({
                     : hint
               }
               className={cn(
-                "group flex items-center gap-2.5 rounded-md border border-border bg-subtle px-2.5 py-2 text-left transition-colors",
-                "hover:border-primary/50 hover:bg-primary/5",
-                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-subtle",
+                "group flex items-center gap-2.5 rounded-md border border-border/70 bg-background/30 px-2.5 py-2 text-left transition-colors",
+                "hover:border-primary/50 hover:bg-primary/10",
+                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border/70 disabled:hover:bg-background/30",
                 // Five tiles in a two-column grid. The odd one out is the last,
                 // and it is the transcript format that matters least, so JSON
                 // takes the full width rather than leaving a hole.
@@ -190,7 +303,7 @@ export function ExportPanel({
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-2 rounded-md border border-border/60 bg-subtle px-2.5 py-2"
+            className="flex items-center gap-2 rounded-md border border-border/60 bg-background/30 px-2.5 py-2"
           >
             <span className="w-9 shrink-0 rounded bg-muted py-0.5 text-center font-mono text-[10px] font-semibold uppercase text-muted-foreground">
               {item.format}
@@ -210,7 +323,7 @@ export function ExportPanel({
 
             <button
               type="button"
-              onClick={() => download.mutate(item.id)}
+              onClick={() => download.mutate({ exportId: item.id, name: savedAs || undefined })}
               disabled={item.status !== "completed" || download.isPending}
               title="Download"
               aria-label={`Download ${item.format}`}
@@ -230,6 +343,6 @@ export function ExportPanel({
           </div>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
