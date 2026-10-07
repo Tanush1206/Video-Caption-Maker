@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { LOCAL_MODE } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -53,19 +54,22 @@ export function DashboardHeader() {
         </Link>
       ))}
 
-      <div className="mt-1 border-t border-border pt-1">
-        <p className="truncate px-3 py-2 text-xs text-muted-foreground">
-          {user?.full_name || user?.email}
-        </p>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-        >
-          <LogOut className="size-4" />
-          Sign out
-        </button>
-      </div>
+      {/* Nobody to sign out as on a local install. */}
+      {!LOCAL_MODE && (
+        <div className="mt-1 border-t border-border pt-1">
+          <p className="truncate px-3 py-2 text-xs text-muted-foreground">
+            {user?.full_name || user?.email}
+          </p>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="size-4" />
+            Sign out
+          </button>
+        </div>
+      )}
     </nav>
   ) : null;
 
@@ -93,9 +97,11 @@ export function DashboardHeader() {
 
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
-        <div className="hidden md:block">
-          <UserMenu />
-        </div>
+        {!LOCAL_MODE && (
+          <div className="hidden md:block">
+            <UserMenu />
+          </div>
+        )}
 
         <Button
           variant="ghost"

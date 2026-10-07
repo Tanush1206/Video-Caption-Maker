@@ -46,7 +46,9 @@ export function useAuth() {
    * so after a refresh the httpOnly cookie is the only thing left to go on.
    */
   const bootstrap = useCallback(async () => {
-    const token = await refreshSession();
+    // A network failure (the server not up yet) settles like a refused
+    // session, so the layout can say so instead of spinning forever.
+    const token = await refreshSession().catch(() => null);
     if (!token) setInitialized(true);
   }, [setInitialized]);
 
