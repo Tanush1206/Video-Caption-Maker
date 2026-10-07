@@ -9,6 +9,7 @@ This module is imported by the Celery worker, not the API. Keeping the import
 out of the API process is why the API starts instantly.
 """
 
+import gc
 import logging
 import subprocess
 from collections.abc import Callable, Iterator
@@ -16,13 +17,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import get_settings
+from app.services import model_store
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 PROBE_TIMEOUT_SECONDS = 30
 
+# The files faster-whisper itself fetches for a CTranslate2 Whisper model.
+WHISPER_FILES = [
+    "config.json",
+    "preprocessor_config.json",
+    "model.bin",
+    "tokenizer.json",
+    "vocabulary.*",
+]
+
 _model = None
+_model_key: tuple[str, str, str] | None = None
+# Set when the GPU was asked for and could not be used, so the job can say
+# why it ran slowly instead of leaving the user to guess.
+fallback_note: str | None = None
 
 
 @dataclass
@@ -35,24 +50,78 @@ class Segment:
     confidence: float | None
 
 
-def get_model():
-    """Lazily load and cache the Whisper model for this process."""
-    global _model
-    if _model is None:
-        from faster_whisper import WhisperModel
+def _repo_for(model: str) -> str:
+    if "/" in model:
+        return model
+    from faster_whisper.utils import _MODELS
 
-        logger.info(
-            "Loading Whisper '%s' on %s (%s)",
-            settings.whisper_model_size,
-            settings.whisper_device,
-            settings.whisper_compute_type,
-        )
-        _model = WhisperModel(
-            settings.whisper_model_size,
-            device=settings.whisper_device,
-            compute_type=settings.whisper_compute_type,
-        )
+    repo = _MODELS.get(model)
+    if repo is None:
+        raise ValueError(f"Unknown Whisper model {model!r}")
+    return repo
+
+
+def load_model(profile, on_download: model_store.Progress | None = None):
+    """
+    Load the Whisper model a profile names, reusing the cached one if it matches.
+
+    Unloads the translator first: the two are never resident together, so a
+    machine sized for one of them at a time can run both stages.
+    """
+    global _model, _model_key, fallback_note
+
+    key = (profile.model, profile.device, profile.compute_type)
+    if _model is not None and _model_key == key:
+        return _model
+
+    unload_model()
+    from app.services import translation
+
+    translation.unload()
+
+    from faster_whisper import WhisperModel
+
+    path = model_store.ensure(
+        _repo_for(profile.model), allow_patterns=WHISPER_FILES, on_progress=on_download
+    )
+    logger.info(
+        "Loading Whisper '%s' on %s (%s)", profile.model, profile.device, profile.compute_type
+    )
+    fallback_note = None
+    try:
+        _model = WhisperModel(path, device=profile.device, compute_type=profile.compute_type)
+    except (RuntimeError, ValueError) as exc:
+        if profile.device != "cuda":
+            raise
+        # A driver too old for the image's CUDA, a card CTranslate2 has no
+        # kernels for, or VRAM taken by something else: all of them leave the
+        # CPU perfectly able to do the job, just slower.
+        logger.warning("Whisper could not use the GPU (%s); falling back to CPU", exc)
+        fallback_note = "The GPU couldn't be used, so this ran on the CPU."
+        _model = WhisperModel(path, device="cpu", compute_type="int8")
+        key = (profile.model, "cpu", "int8")
+    _model_key = key
     return _model
+
+
+def get_model():
+    """The loaded Whisper model, loading the hardware default if none is."""
+    if _model is None:
+        from app.services import hardware
+
+        load_model(hardware.whisper_profile(hardware.detect()))
+    return _model
+
+
+def unload_model() -> None:
+    """Drop the model so its RAM/VRAM is free for the next stage."""
+    global _model, _model_key
+    if _model is None:
+        return
+    _model = None
+    _model_key = None
+    gc.collect()
+    logger.info("Unloaded Whisper")
 
 
 def has_audio_stream(path: Path) -> bool:

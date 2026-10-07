@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     chromadb_url: str = "http://chromadb:8000"
 
     # ── Auth ─────────────────────────────────────────────
+    # "local": a single-user install. One user is created on first use, and
+    # every request acts as them — no login screen, no passwords. "accounts"
+    # keeps the multi-user registration, JWT and Google sign-in flow intact
+    # for a hosted deployment.
+    auth_mode: str = "local"
     jwt_secret_key: str = "dev-only-insecure-secret-change-me"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
@@ -87,9 +92,13 @@ class Settings(BaseSettings):
     # This is also the answer to "can we train it more": no amount of
     # fine-tuning available here would close a gap the next size up closes for
     # free, on a model nobody has to label data for.
-    whisper_model_size: str = "large-v3"
-    whisper_device: str = "cuda"
-    whisper_compute_type: str = "float16"
+    #
+    # All three default to "auto": the worker picks from what the machine
+    # actually has (see services/hardware.py). large-v3 is still what a GPU
+    # gets; setting any of these pins it regardless of the hardware.
+    whisper_model_size: str = "auto"
+    whisper_device: str = "auto"
+    whisper_compute_type: str = "auto"
     # Off, and that is not the obvious choice — VAD was switched on precisely
     # because Whisper hallucinates text over music and silence.
     #
@@ -122,6 +131,14 @@ class Settings(BaseSettings):
     # None lets Whisper detect the language per file.
     whisper_language: str | None = None
 
+    # ── Translation ──────────────────────────────────────
+    # Local M2M100 (CTranslate2 int8) unless a Gemini key is set. "auto"
+    # picks 1.2B with >= 12GB RAM and 418M below that; or name one outright.
+    translation_model: str = "auto"
+    # Where downloaded model weights live — the shared volume, so the worker
+    # and a restarted container both find them.
+    model_cache_dir: str = "/root/.cache/huggingface"
+
     # ── Embeddings / vector search ───────────────────────
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_collection: str = "captions"
@@ -143,6 +160,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def is_local_mode(self) -> bool:
+        return self.auth_mode.lower() == "local"
 
     @property
     def is_production(self) -> bool:
