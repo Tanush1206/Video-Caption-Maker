@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
  * while the video and the caption list fought over the middle. 1800px still
  * caps it on an ultrawide, where a truly full-bleed video would be silly.
  */
-const SHELL = "mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6";
+const SHELL = "mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6"; // = WIDE_CONTAINER + padding
 
 /**
  * How tall a side column may be: the viewport, less the header and this page's
@@ -92,7 +92,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   // Split in two so the workspace can call hooks unconditionally: a bad id has
   // to be rejected before any query is allowed to fire.
   if (Number.isNaN(videoId)) {
-    return <p className="p-8 text-sm text-muted-foreground">Invalid video id.</p>;
+    return <p className="p-8 text-sm text-muted-foreground">This link doesn&apos;t point to a video.</p>;
   }
 
   return <EditorWorkspace videoId={videoId} />;
@@ -207,7 +207,7 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
       </Link>
 
       <div className="mb-5 mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="min-w-0 truncate text-xl font-semibold sm:text-2xl">{video.title}</h1>
+        <h1 className="min-w-0 truncate text-h1">{video.title}</h1>
 
         {video.status === "completed" ? (
           <Link

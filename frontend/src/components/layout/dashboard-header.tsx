@@ -74,7 +74,7 @@ export function DashboardHeader() {
   ) : null;
 
   return (
-    <PageHeader sticky below={mobileNav}>
+    <PageHeader sticky below={mobileNav} wide={pathname.startsWith("/editor")}>
       <Brand href="/dashboard" />
 
       <nav className="hidden items-center gap-0.5 md:flex">

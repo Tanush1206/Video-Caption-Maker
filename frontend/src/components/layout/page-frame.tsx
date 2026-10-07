@@ -16,14 +16,20 @@ import { cn } from "@/lib/utils";
 /** One container. Every full-width page uses this and nothing else. */
 export const CONTAINER = "mx-auto w-full max-w-6xl px-4 sm:px-6";
 
+/** The editor's frame: wider, because it is a workspace rather than a page. */
+export const WIDE_CONTAINER = "mx-auto w-full max-w-[1800px] px-4 sm:px-6";
+
 export function PageHeader({
   sticky = false,
   className,
   children,
   below,
+  wide = false,
 }: {
   /** Sticky, bordered and blurred — for the signed-in app, which scrolls. */
   sticky?: boolean;
+  /** Match the editor's wider frame, so the logo lines up with its content. */
+  wide?: boolean;
   className?: string;
   children: React.ReactNode;
   /** Rendered full-width under the bar. The mobile nav drawer lives here. */
@@ -46,7 +52,7 @@ export function PageHeader({
         className
       )}
     >
-      <div className={cn(CONTAINER, "flex h-header items-center gap-4")}>{children}</div>
+      <div className={cn(wide ? WIDE_CONTAINER : CONTAINER, "flex h-header items-center gap-4")}>{children}</div>
       {below}
     </header>
   );
