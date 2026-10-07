@@ -8,9 +8,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { InstallSettings } from "@/components/settings/install-settings";
 import { useDeleteAccount, useChangePassword, useUpdateProfile } from "@/hooks/use-account";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth";
+import { LOCAL_MODE } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 function Section({
@@ -277,13 +279,19 @@ export default function SettingsPage() {
         Back to your videos
       </Link>
 
-      <h1 className="mb-6 text-2xl font-semibold">Account settings</h1>
+      <h1 className="mb-6 text-h1">{LOCAL_MODE ? "Settings" : "Account settings"}</h1>
 
-      <div className="space-y-4">
-        <ProfileSection />
-        <PasswordSection />
-        <DangerSection />
-      </div>
+      {/* A local install has no account to manage; it has the machine instead.
+          A hosted one keeps the account pages and leaves the install alone. */}
+      {LOCAL_MODE ? (
+        <InstallSettings />
+      ) : (
+        <div className="space-y-4">
+          <ProfileSection />
+          <PasswordSection />
+          <DangerSection />
+        </div>
+      )}
     </main>
   );
 }
