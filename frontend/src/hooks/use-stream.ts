@@ -41,8 +41,12 @@ export function streamUrl(videoId: number, token: string): string {
  * different origin from the app, so the server has to say `Content-Disposition:
  * attachment` itself — hence the flag rather than a client-side hint.
  */
-function downloadUrl(videoId: number, token: string): string {
-  return `${streamUrl(videoId, token)}&download=1`;
+function downloadUrl(videoId: number, token: string, name?: string): string {
+  const base = `${streamUrl(videoId, token)}&download=1`;
+  // Same reason the flag is a query parameter: the name has to reach the
+  // server, because the server is what writes Content-Disposition. It is
+  // sanitised there — this end must not assume anything typed here is safe.
+  return name ? `${base}&name=${encodeURIComponent(name)}` : base;
 }
 
 /**
@@ -60,11 +64,11 @@ function downloadUrl(videoId: number, token: string): string {
  */
 export function useDownloadOriginal(videoId: number) {
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (name?: string) => {
       const ticket = await api.post<StreamTicket>(
         `/api/videos/${videoId}/stream-token`
       );
-      return downloadUrl(videoId, ticket.token);
+      return downloadUrl(videoId, ticket.token, name);
     },
     onSuccess: startDownload,
   });

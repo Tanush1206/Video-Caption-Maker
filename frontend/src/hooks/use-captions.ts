@@ -78,9 +78,9 @@ export const NO_EMPHASIS: Pick<
 };
 
 /** Split, merge and delete change ids and ordering, so just refetch. */
-function useStructuralMutation<TArgs>(
+function useStructuralMutation<TArgs, TResult>(
   videoId: number,
-  fn: (args: TArgs) => Promise<unknown>
+  fn: (args: TArgs) => Promise<TResult>
 ) {
   const queryClient = useQueryClient();
 
@@ -109,5 +109,21 @@ export function useMergeCaption(videoId: number) {
 export function useDeleteCaption(videoId: number) {
   return useStructuralMutation(videoId, (id: number) =>
     api.delete<void>(`/api/captions/${id}`)
+  );
+}
+
+/**
+ * Add a caption by hand.
+ *
+ * A structural mutation like split and merge, not an optimistic one: the
+ * server decides the `sequence` by where the caption lands on the clock, and
+ * every row after it shifts. Guessing that locally and reconciling afterwards
+ * would be a second implementation of the ordering rule, kept in step by hope.
+ */
+export function useCreateCaption(videoId: number) {
+  return useStructuralMutation(
+    videoId,
+    (body: { start_ms: number; end_ms: number; text: string }) =>
+      api.post<Caption>(`/api/videos/${videoId}/captions`, body)
   );
 }
