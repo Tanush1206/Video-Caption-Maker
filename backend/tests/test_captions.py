@@ -370,3 +370,152 @@ async def test_out_of_range_emphasis_is_rejected(
             f"/api/captions/{caption_ids[0]}", headers=auth_headers, json=payload
         )
         assert response.status_code == 422, f"{payload} was accepted"
+
+
+# ── Adding a caption by hand ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_hand_written_caption_is_placed_by_time(
+    client, auth_headers, video_with_captions
+):
+    """
+    Inserted where it belongs on the clock, not appended.
+
+    `sequence` is the ordering the editor, the ASS document and the SRT sidecar
+    all read, and every one of them assumes it runs the same direction as time.
+    Appending a caption that starts at 1s to the end would leave the list out
+    of order and the subtitle files invalid.
+    """
+    video_id, _ = video_with_captions
+
+    # The seeded captions run 0-2s, 2-4s, 4-6s. This lands in the middle.
+    response = await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=auth_headers,
+        json={"start_ms": 2500, "end_ms": 3500, "text": "written by hand"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["sequence"] == 2
+
+    ordered = await sequences(video_id)
+    assert [seq for seq, _ in ordered] == [0, 1, 2, 3], "sequence must stay gapless"
+    assert ordered[2][1] == "written by hand"
+
+
+@pytest.mark.asyncio
+async def test_a_hand_written_caption_before_everything_takes_sequence_zero(
+    client, auth_headers, sample_video_bytes
+):
+    video_id = await make_video(client, auth_headers, sample_video_bytes)
+
+    await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=auth_headers,
+        json={"start_ms": 5000, "end_ms": 6000, "text": "later"},
+    )
+    response = await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=auth_headers,
+        json={"start_ms": 1000, "end_ms": 2000, "text": "first"},
+    )
+
+    assert response.json()["sequence"] == 0
+    assert [text for _, text in await sequences(video_id)] == ["first", "later"]
+
+
+@pytest.mark.asyncio
+async def test_a_caption_starting_at_the_same_moment_goes_after(
+    client, auth_headers, video_with_captions
+):
+    """
+    A tie is resolved in favour of what is already there.
+
+    Not arbitrary: the alternative is that adding a caption silently renumbers
+    an existing one that starts at the same instant, so the row the user was
+    looking at moves under them.
+    """
+    video_id, _ = video_with_captions  # seeded at 0-2s, 2-4s, 4-6s
+
+    response = await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=auth_headers,
+        json={"start_ms": 0, "end_ms": 500, "text": "also at zero"},
+    )
+
+    assert response.json()["sequence"] == 1
+    assert [seq for seq, _ in await sequences(video_id)] == [0, 1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_a_hand_written_caption_carries_no_confidence(
+    client, auth_headers, video_with_captions
+):
+    """
+    Confidence means "how sure the model was", and a person typing a line is
+    not a model being unsure. The editor flags low-confidence captions, and a
+    hand-written one must not be flagged as suspect.
+    """
+    video_id, _ = video_with_captions
+
+    response = await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=auth_headers,
+        json={"start_ms": 9000, "end_ms": 10000, "text": "mine"},
+    )
+
+    assert response.json()["confidence"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_caption_can_be_added_to_a_video_with_none(
+    client, auth_headers, sample_video_bytes
+):
+    """
+    The whole point of writing one yourself is to fill a gap the model left,
+    and "it found nothing at all" is the extreme case of that, not a reason to
+    refuse.
+    """
+    video_id = await make_video(client, auth_headers, sample_video_bytes)
+
+    response = await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=auth_headers,
+        json={"start_ms": 0, "end_ms": 1000, "text": "only one"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["sequence"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_hand_written_caption_needs_words_and_sane_timing(
+    client, auth_headers, video_with_captions
+):
+    video_id, _ = video_with_captions
+
+    for bad in (
+        {"start_ms": 1000, "end_ms": 500, "text": "backwards"},
+        {"start_ms": 1000, "end_ms": 2000, "text": ""},
+        {"start_ms": -1, "end_ms": 2000, "text": "negative"},
+    ):
+        response = await client.post(
+            f"/api/videos/{video_id}/captions", headers=auth_headers, json=bad
+        )
+        assert response.status_code == 422, bad
+
+
+@pytest.mark.asyncio
+async def test_another_user_cannot_add_captions_to_your_video(
+    client, auth_headers, second_user_headers, video_with_captions
+):
+    video_id, _ = video_with_captions
+
+    response = await client.post(
+        f"/api/videos/{video_id}/captions",
+        headers=second_user_headers,
+        json={"start_ms": 0, "end_ms": 1000, "text": "not yours"},
+    )
+
+    assert response.status_code == 404

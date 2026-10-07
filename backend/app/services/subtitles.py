@@ -16,6 +16,7 @@ from app.models.caption import Caption
 from app.models.caption_style import CaptionStyle
 from app.services.caption_style import (
     scale_for,
+    to_ass_free_alignment,
     to_ass_inline_colour,
     to_ass_style_block,
 )
@@ -134,7 +135,7 @@ def escape_ass_text(text: str) -> str:
     )
 
 
-def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> str:
+def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> list[str]:
     """
     Inline override tags for a caption that carries emphasis.
 
@@ -150,7 +151,33 @@ def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> str:
     if caption.override_scale is not None:
         tags.append(f"\\fs{round(style.font_size * caption.override_scale * scale)}")
 
-    return "{" + "".join(tags) + "}" if tags else ""
+    return tags
+
+
+def _placement_tags(style: CaptionStyle, width: int, height: int) -> list[str]:
+    """
+    Inline override tags for a caption the user placed by hand.
+
+    Empty for an anchored style, which is the default and every existing row:
+    the Style line's own Alignment and margins already say where the text goes,
+    and adding `\\pos` would only restate it less clearly.
+
+    When `pos_x`/`pos_y` are set they are fractions of the frame, so they are
+    multiplied by the real video size here — the same size that becomes
+    PlayResX/Y, which is the canvas libass measures `\\pos` against.
+
+    What this does *not* touch is the wrap width. MarginL/MarginR keep working
+    under `\\pos` (verified by burning the same line both ways: 700px margins
+    wrapped six lines wide either way), so the Style line is still the one
+    place line breaking is decided and the preview only has to mirror it once.
+    """
+    if style.pos_x is None or style.pos_y is None:
+        return []
+
+    return [
+        f"\\an{to_ass_free_alignment(style)}",
+        f"\\pos({round(style.pos_x * width)},{round(style.pos_y * height)})",
+    ]
 
 
 def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height: int) -> str:
@@ -174,7 +201,12 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
         # and the SRT/VTT sidecars keep their original case, because this is how
         # the captions are *drawn on the video*, not what they say.
         body = caption.text.upper() if style.uppercase else caption.text
-        text = _emphasis_tags(caption, style, scale) + escape_ass_text(body)
+        # One override block rather than two adjacent ones. Both are legal ASS,
+        # but placement and emphasis are independent and either can be empty,
+        # so building the list first is the version with no empty `{}` in it.
+        tags = _placement_tags(style, width, height) + _emphasis_tags(caption, style, scale)
+        prefix = "{" + "".join(tags) + "}" if tags else ""
+        text = prefix + escape_ass_text(body)
         events.append(
             f"Dialogue: 0,{ass_time(caption.start_ms)},{ass_time(caption.end_ms)},"
             f"Default,,0,0,0,,{text}"

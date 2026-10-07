@@ -181,3 +181,50 @@ async def delete_caption(db: AsyncSession, caption: Caption) -> None:
     await db.flush()
     await _shift_sequences_from(db, video_id, sequence + 1, -1)
     await db.commit()
+
+
+async def create_caption(
+    db: AsyncSession, video_id: int, *, start_ms: int, end_ms: int, text: str
+) -> Caption:
+    """
+    Insert a caption the user wrote by hand.
+
+    Placed by *time*, not appended. `sequence` is the ordering the editor, the
+    ASS document and the SRT sidecar all read, and every one of them assumes it
+    runs in the same direction as the clock — appending a caption that starts
+    at 10s to the end of a transcript would leave the list out of order and the
+    subtitle files invalid.
+
+    So the sequence is however many captions already start before this one, and
+    everything from there down shifts by one. The same `_shift_sequences_from`
+    a split uses, for the same reason: one UPDATE rather than a round-trip per
+    row, on transcripts that reach into the thousands.
+
+    `confidence` is deliberately left null. It means "how sure the model was",
+    and a human typing a line is not a model being unsure — the editor shows
+    low-confidence captions differently, and a hand-written one should not be
+    flagged as suspect.
+    """
+    before = await db.execute(
+        select(Caption.sequence)
+        .where(Caption.video_id == video_id, Caption.start_ms <= start_ms)
+        .order_by(Caption.sequence.desc())
+        .limit(1)
+    )
+    previous = before.scalar_one_or_none()
+    sequence = 0 if previous is None else previous + 1
+
+    await _shift_sequences_from(db, video_id, sequence, 1)
+
+    caption = Caption(
+        video_id=video_id,
+        sequence=sequence,
+        start_ms=start_ms,
+        end_ms=end_ms,
+        text=text,
+        confidence=None,
+    )
+    db.add(caption)
+    await db.commit()
+    await db.refresh(caption)
+    return caption

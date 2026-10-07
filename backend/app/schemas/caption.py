@@ -19,6 +19,26 @@ class CaptionRead(BaseModel):
     override_scale: float | None = None
 
 
+class CaptionCreate(BaseModel):
+    """
+    A caption the user wrote themselves.
+
+    Unlike CaptionUpdate every field is required: there is no stored row to
+    fall back on, so a caption with no times or no words is not a partial edit,
+    it is an incomplete caption.
+    """
+
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(ge=0)
+    text: str = Field(min_length=1, max_length=5000)
+
+    @model_validator(mode="after")
+    def check_timing(self) -> "CaptionCreate":
+        if self.start_ms >= self.end_ms:
+            raise ValueError("start_ms must be less than end_ms")
+        return self
+
+
 class CaptionList(BaseModel):
     items: list[CaptionRead]
     total: int
