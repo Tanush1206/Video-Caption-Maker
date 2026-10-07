@@ -1,0 +1,17 @@
+# Build context is the repository root (see backend/Dockerfile).
+# Allow-list: only what the backend image needs gets sent to the builder,
+# so .env, certs, storage and data can never end up in a layer.
+*
+!backend/pyproject.toml
+!backend/constraints.txt
+!backend/alembic.ini
+!backend/alembic
+!backend/app
+!backend/docker-entrypoint.sh
+!backend/tests
+!backend/pytest.ini
+!frontend/public/fonts
+**/__pycache__
+**/*.pyc
+**/certs
+**/.env

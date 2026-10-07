@@ -1,57 +1,90 @@
-# NOTE: For Milestone 4 (GPU transcription), we'll switch the base image to
-# nvidia/cuda:12.x-cudnn-runtime-ubuntu22.04 so faster-whisper can use CUDA/cuDNN.
-# python:3.11-slim is fine for Milestones 1-3 (no GPU workload yet).
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.7
+#
+# The API and the worker share this image; compose picks the command.
+#
+#   VARIANT=cpu   runs anywhere. ~2 GB.
+#   VARIANT=cuda  adds the CUDA 12 cuBLAS/cuDNN that CTranslate2 loads, pinned
+#                 to the versions verified on an RTX 5080 (Blackwell, sm_120).
+#                 The NVIDIA driver itself comes from the host.
+#
+# Built from the repository root, because the caption fonts live in
+# frontend/public/fonts: the browser preview and libass have to read the very
+# same files, so both images carry a copy of one directory.
+#
+# Targets: `runtime` (what ships) and `dev` (adds the test tools; used by
+# docker-compose.yml with the source bind-mounted over /app).
 
-# FFmpeg is required for mp4 -> mp3 extraction (Milestone 4)
+ARG PYTHON_IMAGE=python:3.11.15-slim-trixie
+
+# ── deps: a virtualenv with exactly the pinned stack ─────────────────────────
+FROM ${PYTHON_IMAGE} AS deps
+ARG VARIANT=cpu
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+
+WORKDIR /build
+COPY backend/pyproject.toml backend/constraints.txt ./
+# Only the package metadata is needed to resolve dependencies; an empty
+# package keeps this layer from depending on the source.
+RUN mkdir app && touch app/__init__.py \
+    # torch arrives with sentence-transformers. The CPU wheel, in both
+    # variants: it only embeds short captions for search, and the CUDA wheel
+    # is 5 GB of libraries nothing else here uses.
+    && pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+        -c constraints.txt . \
+    && if [ "$VARIANT" = "cuda" ]; then \
+        pip install nvidia-cublas-cu12==12.9.2.10 nvidia-cudnn-cu12==9.24.0.43; \
+    fi \
+    && pip uninstall -y videocaptionmaker-backend
+
+# ── runtime ──────────────────────────────────────────────────────────────────
+FROM ${PYTHON_IMAGE} AS runtime
+ARG VARIANT=cpu
+ARG VERSION=dev
+LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Caption-Maker" \
+      org.opencontainers.image.title="VideoCaptionMaker backend (${VARIANT})" \
+      org.opencontainers.image.version="${VERSION}"
+
+# FFmpeg for audio extraction and burning captions in; Liberation for the
+# Arial/Times/Courier metric-compatible faces; fontconfig so libass finds the
+# vendored and downloaded fonts by family name.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    build-essential \
-    curl \
-    ca-certificates \
+        ffmpeg fonts-liberation fontconfig ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Optional extra CA certificates, for machines where antivirus or a corporate
-# proxy inspects TLS and re-signs it with a private root the container doesn't
-# trust (pip then fails with CERTIFICATE_VERIFY_FAILED). The bracket glob makes
-# this a no-op when backend/certs/ is absent, which is the normal case —
-# the directory is gitignored because such certs are machine-specific.
-COPY cert[s]/ /usr/local/share/ca-certificates/
-RUN update-ca-certificates
+COPY --from=deps /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    VCM_VARIANT=${VARIANT} \
+    VCM_VERSION=${VERSION} \
+    # CTranslate2 loads libcublas/libcudnn by soname and does not look inside
+    # pip's nvidia/* package directories on its own. Harmless in the CPU image.
+    LD_LIBRARY_PATH=/opt/venv/lib/python3.11/site-packages/nvidia/cublas/lib:/opt/venv/lib/python3.11/site-packages/nvidia/cudnn/lib \
+    # Model weights live on a volume (see compose); this is its mount point.
+    HF_HOME=/root/.cache/huggingface \
+    # Logged once per download otherwise, and there is no token to set.
+    HF_HUB_DISABLE_IMPLICIT_TOKEN=1 \
+    TOKENIZERS_PARALLELISM=false
 
-# pip ships its own certifi bundle and ignores the system store, so point it
-# at the system bundle explicitly.
-ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
-    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+COPY frontend/public/fonts/ /usr/share/fonts/truetype/vcm/
+RUN fc-cache -f
 
 WORKDIR /app
-
-# Install dependencies first for better layer caching
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e ".[dev]"
-
-# CTranslate2 loads libcublas/libcudnn by soname at runtime and does not look
-# inside pip's nvidia/* package directories on its own.
-ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib
-
-# Fonts for burning captions in (Milestone 7/8). Liberation is metric-compatible
-# with Arial, Times New Roman and Courier New, which is what makes the browser
-# preview trustworthy: the editor previews in Arial, libass renders in Liberation
-# Sans, and because the glyph advance widths are identical the line breaks land
-# in the same places. A visually-similar-but-different font would not do that.
-#
-# Deliberately placed after the pip install rather than beside the other apt
-# packages: adding a font must not invalidate the layer that builds torch.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    fonts-liberation \
-    fontconfig \
-    && rm -rf /var/lib/apt/lists/* \
-    && fc-cache -f
-
-COPY . .
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
+COPY backend/app ./app
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /app/storage
 
 EXPOSE 8000
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["api"]
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ── dev: the runtime plus test tools; source is bind-mounted over /app ───────
+FROM runtime AS dev
+COPY backend/pyproject.toml backend/constraints.txt /tmp/build/
+RUN pip install -c /tmp/build/constraints.txt "pytest>=8.2.0" "pytest-asyncio>=0.23.0" "ruff>=0.5.0"
+COPY backend/tests ./tests
+COPY backend/pytest.ini ./

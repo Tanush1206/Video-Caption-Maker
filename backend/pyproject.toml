@@ -32,13 +32,6 @@ dependencies = [
 
     # AI / ML — installed but not all wired up until their respective milestones
     "faster-whisper>=1.0.0",
-    # faster-whisper's CTranslate2 backend is built against CUDA 12, while
-    # torch installs CUDA 13 wheels. The two runtimes coexist (different
-    # sonames); without these, transcription fails at inference with
-    # "Library libcublas.so.12 is not found or cannot be loaded".
-    # 12.8+ is required for Blackwell (sm_120) support.
-    "nvidia-cublas-cu12>=12.8.0",
-    "nvidia-cudnn-cu12>=9.0.0",
     "sentence-transformers>=3.0.0",
     "chromadb>=0.5.0",
     # Optional: only used when a Gemini key is set in Settings.
@@ -59,6 +52,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Only the CUDA image installs these (backend/Dockerfile, VARIANT=cuda), at the
+# exact versions verified on an RTX 5080. In the default dependencies they put
+# 2.2 GB of GPU libraries into the CPU image too.
+cuda = [
+    # faster-whisper's CTranslate2 backend is built against CUDA 12, while
+    # torch installs CUDA 13 wheels. The two runtimes coexist (different
+    # sonames); without these, transcription fails at inference with
+    # "Library libcublas.so.12 is not found or cannot be loaded".
+    # 12.8+ is required for Blackwell (sm_120) support.
+    "nvidia-cublas-cu12==12.9.2.10",
+    "nvidia-cudnn-cu12==9.24.0.43",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
