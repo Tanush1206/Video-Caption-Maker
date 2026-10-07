@@ -10,10 +10,22 @@ from fastapi.responses import FileResponse
 from app.config import get_settings
 from app.dependencies import CurrentUser, DbSession
 from app.models.video import VideoStatus
-from app.schemas.caption import CaptionList, CaptionRead
-from app.schemas.video import StreamTicket, VideoList, VideoRead, VideoUpdate, Waveform
+from app.schemas.caption import CaptionCreate, CaptionList, CaptionRead
+from app.schemas.video import (
+    LanguageOption,
+    LanguageOptions,
+    StreamTicket,
+    TranscribeRequest,
+    VideoList,
+    VideoRead,
+    VideoUpdate,
+    Waveform,
+)
+from app.services import caption as caption_service
+from app.services import languages
 from app.services import media, storage
 from app.services import video as video_service
+from app.utils.filenames import safe_stem
 from app.utils.security import (
     TokenError,
     create_stream_token,
@@ -41,6 +53,8 @@ def _to_read(video) -> VideoRead:
         status=video.status,
         error_message=video.error_message,
         has_thumbnail=bool(video.thumbnail_path),
+        spoken_language=video.spoken_language,
+        caption_language=video.caption_language,
         progress=video.progress,
         stage=video.stage,
         created_at=video.created_at,
@@ -64,6 +78,23 @@ def _enqueue_transcription(video_id: int) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.error("Could not enqueue transcription for video %s: %s", video_id, exc)
         return False
+
+
+def _queue_reindex(video_id: int, caption_ids: list[int]) -> None:
+    """
+    Re-embed after a caption is added by hand.
+
+    Same rule as every other caption edit: search matches on embeddings of the
+    text, so a caption that is never embedded is one search cannot find. Queued
+    and swallowed on failure — the caption is saved and useful either way, and
+    slightly stale search is not worth failing the write over.
+    """
+    try:
+        from app.workers.transcription import reindex_captions
+
+        reindex_captions.delay(video_id, caption_ids)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Could not queue reindex for video %s: %s", video_id, exc)
 
 
 async def _stream_to_disk(upload: UploadFile, destination: Path) -> int:
@@ -194,6 +225,32 @@ async def _require_owned(db, video_id: int, user_id: int):
     return video
 
 
+@router.get("/languages", response_model=LanguageOptions)
+async def language_options(user: CurrentUser) -> LanguageOptions:
+    """
+    The languages captions can be produced in.
+
+    Served rather than hardcoded in the client so the two lists cannot drift,
+    and so `translation_available` is the truth about this installation rather
+    than an assumption. Declared before `/{video_id}` routes because FastAPI
+    matches in definition order and "languages" would otherwise be read as a
+    video id.
+    """
+    return LanguageOptions(
+        spoken=[
+            LanguageOption(code=code, label=languages.label(code))
+            for code in (languages.AUTO, *languages.LANGUAGES)
+        ],
+        caption=[
+            LanguageOption(code=code, label=languages.label(code))
+            for code in (languages.SAME, *languages.LANGUAGES)
+        ],
+        # English needs no key — Whisper translates into it directly. The other
+        # four go through Gemini, so without a key they cannot be delivered.
+        translation_available=bool(settings.gemini_api_key),
+    )
+
+
 @router.get("/{video_id}", response_model=VideoRead)
 async def get_video(video_id: int, user: CurrentUser, db: DbSession) -> VideoRead:
     return _to_read(await _require_owned(db, video_id, user.id))
@@ -214,14 +271,34 @@ async def delete_video(video_id: int, user: CurrentUser, db: DbSession) -> None:
 
 
 @router.post("/{video_id}/transcribe", response_model=VideoRead)
-async def retranscribe(video_id: int, user: CurrentUser, db: DbSession) -> VideoRead:
+async def retranscribe(
+    video_id: int,
+    user: CurrentUser,
+    db: DbSession,
+    payload: TranscribeRequest | None = None,
+) -> VideoRead:
     """
     Queue (or re-queue) transcription.
 
     Safe to call on a completed video: the task clears existing captions and
     vectors before writing new ones.
+
+    The language choice is stored on the video rather than carried with the
+    job, so pressing this again repeats it. Re-running a transcription is
+    almost always an attempt to improve the last one, and silently reverting to
+    auto-detect would undo the setting that made it better.
     """
     video = await _require_owned(db, video_id, user.id)
+
+    if payload is not None and (
+        payload.spoken_language is not None or payload.caption_language is not None
+    ):
+        video = await video_service.set_languages(
+            db,
+            video,
+            spoken=payload.spoken_language,
+            caption=payload.caption_language,
+        )
 
     if video.status == VideoStatus.PROCESSING:
         raise HTTPException(
@@ -248,6 +325,41 @@ async def list_captions(video_id: int, user: CurrentUser, db: DbSession) -> Capt
         items=[CaptionRead.model_validate(caption) for caption in captions],
         total=len(captions),
     )
+
+
+@router.post(
+    "/{video_id}/captions",
+    response_model=CaptionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_caption(
+    video_id: int, payload: CaptionCreate, user: CurrentUser, db: DbSession
+) -> CaptionRead:
+    """
+    Add a caption by hand.
+
+    Deliberately not gated on the video having been transcribed. Whisper misses
+    things — a line under music, a speaker it could not separate — and the
+    whole point of writing one yourself is to fill a gap the model left. A
+    video with no captions at all is the extreme case of that, not a reason to
+    refuse.
+    """
+    await _require_owned(db, video_id, user.id)
+
+    caption = await caption_service.create_caption(
+        db,
+        video_id,
+        start_ms=payload.start_ms,
+        end_ms=payload.end_ms,
+        text=payload.text,
+    )
+
+    # Same reason every other caption edit reindexes: search runs on embeddings
+    # of the text, so a caption that is never embedded is a caption search
+    # cannot find.
+    _queue_reindex(video_id, [caption.id])
+
+    return CaptionRead.model_validate(caption)
 
 
 @router.get("/{video_id}/thumbnail")
@@ -297,6 +409,10 @@ async def stream_video(
     download: bool = Query(
         default=False, description="Send as an attachment rather than for playback"
     ),
+    name: str | None = Query(
+        default=None,
+        description="What to call the saved file. Ignored unless download=1.",
+    ),
 ) -> FileResponse:
     """
     Serve the video file itself, byte for byte as it was uploaded.
@@ -343,10 +459,17 @@ async def stream_video(
     # extension — and a file with no extension is one Windows won't open and
     # some players mis-handle. `inline` rather than `attachment` so a media
     # element still plays it; `download=1` flips that for an explicit save.
+    # A chosen name only applies to a save. During playback the filename is
+    # what the browser would offer under "Save video as…", and quietly renaming
+    # someone's file because they once typed a name into the export panel is
+    # not what that menu item promises.
+    suffix = Path(video.original_filename).suffix
+    chosen = safe_stem(name, extension=suffix.lstrip(".")) if (download and name) else ""
+
     return FileResponse(
         path,
         media_type=video.content_type,
-        filename=video.original_filename,
+        filename=f"{chosen}{suffix}" if chosen else video.original_filename,
         content_disposition_type="attachment" if download else "inline",
     )
 

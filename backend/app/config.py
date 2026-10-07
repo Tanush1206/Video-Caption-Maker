@@ -71,11 +71,54 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-flash-latest"
 
     # ── Whisper ──────────────────────────────────────────
-    whisper_model_size: str = "medium"
+    # large-v3, not medium, and the gap is not subtle. On a Hindi track with
+    # music under the vocal, transcribing the same file:
+    #
+    #                segments  covered  avg logprob  script-mixed  stray latin
+    #     medium        29       86s      -0.760          5            33
+    #     large-v3      47      128s      -0.151          0             0
+    #
+    # `medium` missed the first 46 seconds outright and injected literal
+    # Spanish and Russian words into Devanagari — "palabra", "aquela",
+    # "Solomon" — which is what a model does when it is guessing. large-v3
+    # costs 17% more time (90s -> 106s on a 3-minute file) and about 1.6GB more
+    # VRAM, against 12GB free on the card this was measured on.
+    #
+    # This is also the answer to "can we train it more": no amount of
+    # fine-tuning available here would close a gap the next size up closes for
+    # free, on a model nobody has to label data for.
+    whisper_model_size: str = "large-v3"
     whisper_device: str = "cuda"
     whisper_compute_type: str = "float16"
-    # Whisper hallucinates text over music and silence; VAD trims those first.
-    whisper_vad_filter: bool = True
+    # Off, and that is not the obvious choice — VAD was switched on precisely
+    # because Whisper hallucinates text over music and silence.
+    #
+    # The problem is that Silero VAD answers "is this confidently speech?", and
+    # gets sung vocals wrong. Measured on two spans of one music video, at
+    # -10dB, plainly audible throughout:
+    #
+    #               VAD default   VAD tuned to 0.1   VAD off
+    #   0:60-3:00     7.8s/120        67.4s/120      86.0s/120
+    #   3:20-5:00      2.0s/100        2.0s/100      70.0s/100
+    #
+    # No threshold fixes both spans — the second is barely better at 0.1 than
+    # at the default. So VAD comes out, and the hallucination it was guarding
+    # against is caught afterwards instead, by measuring the waveform with
+    # `silencedetect` and dropping captions that land in actual silence. That
+    # asks "is there any sound here at all", which has an unambiguous answer,
+    # rather than "is this speech", which does not.
+    whisper_vad_filter: bool = False
+    # 0.1, not Silero's 0.5. The default asks "is this confidently speech?",
+    # which discards sung vocals and anything with music under it: on a real
+    # music video it kept 7.8 seconds out of 120 and the video came out with a
+    # single caption. This keeps 67.4s of the same span and still hallucinates
+    # nothing over silence.
+    whisper_vad_threshold: float = 0.1
+    # Padding around each chunk, so a quiet first syllable survives.
+    whisper_vad_speech_pad_ms: int = 400
+    # How much quiet ends a chunk; longer than the default so a breath between
+    # lines does not split one sentence in half.
+    whisper_vad_min_silence_ms: int = 1000
     # None lets Whisper detect the language per file.
     whisper_language: str | None = None
 

@@ -152,3 +152,27 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
     from app.services.embeddings import delete_video_vectors
 
     delete_video_vectors(video_id)
+
+
+async def set_languages(
+    db: AsyncSession, video: Video, *, spoken: str | None, caption: str | None
+) -> Video:
+    """
+    Record what to transcribe into, before the job is queued.
+
+    Stored on the video rather than passed with the job so that re-running a
+    transcription repeats the choice. Someone pressing "transcribe again" is
+    almost always trying to improve the last attempt, and quietly reverting to
+    auto-detect would throw away the setting that made it better.
+
+    Each field is only written when supplied, so changing one does not reset
+    the other.
+    """
+    if spoken is not None:
+        video.spoken_language = spoken
+    if caption is not None:
+        video.caption_language = caption
+
+    await db.commit()
+    await db.refresh(video)
+    return video

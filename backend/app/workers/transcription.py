@@ -20,7 +20,7 @@ from sqlalchemy import delete, select
 
 from app.models.caption import Caption
 from app.models.video import Video, VideoStatus
-from app.services import embeddings, storage, transcription
+from app.services import embeddings, languages, storage, transcription, translation
 from app.workers.celery_app import celery_app
 from app.workers.db import worker_session
 
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 STAGE_EXTRACTING = "extracting"
 STAGE_TRANSCRIBING = "transcribing"
+STAGE_TRANSLATING = "translating"
 STAGE_EMBEDDING = "embedding"
 
 
@@ -72,6 +73,8 @@ async def _run(video_id: int) -> dict:
             logger.info("Video %s was deleted before transcription started", video_id)
             return {"video_id": video_id, "skipped": "video deleted"}
         source_relative = video.storage_path
+        spoken = video.spoken_language or languages.AUTO
+        wanted = video.caption_language or languages.SAME
 
     source = storage.resolve(source_relative)
     if not source.exists():
@@ -103,14 +106,76 @@ async def _run(video_id: int) -> dict:
                 _set_progress(video_id, STAGE_TRANSCRIBING, percent), loop
             )
 
+        # Detect first, in its own pass, because the task below has to be
+        # chosen before transcribing and it depends on what is being spoken:
+        # asking for English captions on English audio should transcribe, not
+        # take Whisper's translate path to arrive where it already was.
+        #
+        # One encoder pass over thirty seconds, against minutes for the
+        # transcription it precedes.
+        if spoken == languages.AUTO:
+            hint, confidence = await asyncio.to_thread(
+                transcription.detect_language, audio_path
+            )
+            logger.info("Video %s: heard %s (%.2f)", video_id, hint, confidence)
+        else:
+            hint = spoken
+
         segments, language = await asyncio.to_thread(
-            transcription.transcribe, audio_path, on_progress=report
+            transcription.transcribe,
+            audio_path,
+            language=hint,
+            # "translate" is Whisper's English-only path, taken in this same
+            # pass when English is what was asked for. Anything else is
+            # translated after the fact, below. Decided on the hint rather than
+            # the raw setting, so "auto" on English audio does not take the
+            # translate path to reach English.
+            task=languages.whisper_task(hint, wanted),
+            on_progress=report,
         )
         logger.info("Video %s: %d segments (%s)", video_id, len(segments), language)
 
     finally:
         # The WAV is a large intermediate; drop it however this ends.
         audio_path.unlink(missing_ok=True)
+
+    # ── 2b. Translate, if the target isn't what was spoken ──────────────
+    #
+    # English never reaches here: Whisper produced it directly above, in the
+    # same pass, because `task="translate"` is English-only. This is the path
+    # for the other four languages.
+    #
+    # Skipped when Whisper already reported the target language — asking a
+    # model to translate Hindi into Hindi is a round trip that can only make
+    # the text worse.
+    if segments and wanted not in (languages.SAME, "en") and language != wanted:
+        await _set_progress(video_id, STAGE_TRANSLATING, 0)
+        translated = await asyncio.to_thread(
+            translation.translate_texts, [segment.text for segment in segments], wanted
+        )
+        if translated is None:
+            # Deliberately not fatal. The captions exist, they are correctly
+            # timed, and they are in the language that was actually spoken —
+            # which is worse than what was asked for and far better than
+            # failing the whole transcription and leaving the video with none.
+            logger.error(
+                "Video %s: could not translate captions to %s; keeping %s",
+                video_id, wanted, language,
+            )
+        else:
+            # Timings are untouched on purpose: a translated line has a
+            # different length, and re-timing it would be guesswork against
+            # audio nothing here has listened to.
+            segments = [
+                transcription.Segment(
+                    start_ms=segment.start_ms,
+                    end_ms=segment.end_ms,
+                    text=text,
+                    confidence=segment.confidence,
+                )
+                for segment, text in zip(segments, translated)
+            ]
+            logger.info("Video %s: translated %d captions to %s", video_id, len(segments), wanted)
 
     # ── 3. Persist captions ─────────────────────────────────────────────
     async with worker_session() as session:

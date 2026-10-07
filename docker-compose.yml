@@ -68,6 +68,14 @@ services:
       # has no business in the repository, and the cache is derived data that
       # can be thrown away and refetched.
       - font_cache:/usr/share/fonts/truetype/vcm-cache
+      # Whisper's weights, on a volume so they survive the container.
+      #
+      # They were living in the container's writable layer, so every `compose
+      # up` that recreated a service threw away 4.4GB and downloaded it again —
+      # and `large-v3` is 3GB of that on its own. Nothing about model weights is
+      # per-container; they are the same bytes for the life of the image, and
+      # sharing one volume means the two services never hold two copies.
+      - model_cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,6 +94,16 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vcm}:${POSTGRES_PASSWORD:-vcm_dev_password}@postgres:5432/${POSTGRES_DB:-vcm}
       REDIS_URL: redis://redis:6379/0
       CHROMADB_URL: http://chromadb:8000
+      # `video` is the one that matters here, and it is not implied.
+      #
+      # `capabilities: [gpu]` below gets the container `compute` and `utility`,
+      # which is enough for nvidia-smi to print the card and for faster-whisper
+      # to use CUDA — so the GPU looks fully available. It is not:
+      # libnvidia-encode.so.1 lives behind the `video` capability, and without
+      # it every NVENC encoder is listed by ffmpeg and fails the moment it is
+      # opened ("Cannot load libnvidia-encode.so.1", followed by a misleading
+      # complaint about the driver being too old).
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
     volumes:
       - ./backend:/app
       - media_storage:/app/storage
@@ -99,6 +117,14 @@ services:
       # has no business in the repository, and the cache is derived data that
       # can be thrown away and refetched.
       - font_cache:/usr/share/fonts/truetype/vcm-cache
+      # Whisper's weights, on a volume so they survive the container.
+      #
+      # They were living in the container's writable layer, so every `compose
+      # up` that recreated a service threw away 4.4GB and downloaded it again —
+      # and `large-v3` is 3GB of that on its own. Nothing about model weights is
+      # per-container; they are the same bytes for the life of the image, and
+      # sharing one volume means the two services never hold two copies.
+      - model_cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,7 +133,22 @@ services:
     # --pool=solo: one task at a time. Whisper loads a multi-GB model onto the
     # GPU, so concurrent workers would each want their own copy and exhaust
     # VRAM. Transcription is GPU-bound anyway; parallelism buys nothing here.
-    command: celery -A app.workers.celery_app worker --loglevel=info --pool=solo
+    #
+    # Wrapped in watchfiles because Celery has no --reload of its own, and the
+    # failure that causes is silent and expensive: the worker goes on running
+    # whatever code it imported at boot, so edits appear to have no effect at
+    # all. That is exactly what happened to the language selector — the choice
+    # was stored correctly and the worker transcribing it had never heard of
+    # the field. `task_acks_late` makes a restart mid-task safe: the job is
+    # redelivered rather than lost.
+    #
+    # Watching app/ rather than /app: the latter holds storage/, so every
+    # upload would bounce the worker and drop the multi-GB model off the GPU.
+    # watchfiles ships with uvicorn[standard], so this adds no dependency.
+    command: >
+      watchfiles --filter python
+      "celery -A app.workers.celery_app worker --loglevel=info --pool=solo"
+      /app/app
     # GPU passthrough for faster-whisper. Docker Desktop's WSL2 backend
     # provides this through the Windows NVIDIA driver — no separate
     # nvidia-container-toolkit install is needed on this setup.
@@ -142,6 +183,7 @@ services:
     command: npm run dev
 
 volumes:
+  model_cache:
   postgres_data:
   redis_data:
   chroma_data:
