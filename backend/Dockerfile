@@ -66,6 +66,11 @@ ENV PATH=/opt/venv/bin:$PATH \
     HF_HOME=/root/.cache/huggingface \
     # Logged once per download otherwise, and there is no token to set.
     HF_HUB_DISABLE_IMPLICIT_TOKEN=1 \
+    # Plain HTTP downloads, not the xet backend. xet assembles a file in memory
+    # and writes it at the end, so a 1.2 GB model showed "0.0 of 1.2 GB" for
+    # its whole download; HTTP writes as it goes (progress the user can watch)
+    # and resumes from the partial file after a dropped connection.
+    HF_HUB_DISABLE_XET=1 \
     TOKENIZERS_PARALLELISM=false
 
 COPY frontend/public/fonts/ /usr/share/fonts/truetype/vcm/

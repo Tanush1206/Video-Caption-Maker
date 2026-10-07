@@ -16,8 +16,8 @@ import { Captions, Search, Wand2 } from "lucide-react";
 export const FEATURES = [
   {
     icon: Wand2,
-    title: "Transcribed on your own GPU",
-    body: "Whisper runs locally. Your video never leaves the machine, and there is no per-minute bill.",
+    title: "Transcribed on your own computer",
+    body: "Whisper runs locally, on your GPU or CPU. Your video never leaves the machine, and there is no per-minute bill.",
   },
   {
     icon: Captions,
