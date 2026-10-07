@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import auth, caption_styles, captions, exports, fonts, search, stats, videos
+from app.api import auth, caption_styles, captions, exports, fonts, search, stats, system, videos
 
 api_router = APIRouter(prefix="/api")
 
@@ -23,3 +23,4 @@ api_router.include_router(exports.router)
 api_router.include_router(fonts.router)
 api_router.include_router(search.router)
 api_router.include_router(stats.router)
+api_router.include_router(system.router)

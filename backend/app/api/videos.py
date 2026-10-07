@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.config import get_settings
@@ -57,6 +57,8 @@ def _to_read(video) -> VideoRead:
         caption_language=video.caption_language,
         progress=video.progress,
         stage=video.stage,
+        stage_detail=video.stage_detail,
+        notice=video.notice,
         created_at=video.created_at,
         updated_at=video.updated_at,
     )
@@ -133,7 +135,16 @@ async def upload_video(
     user: CurrentUser,
     db: DbSession,
     file: UploadFile = File(...),
+    # Chosen before the upload starts, so the one transcription that follows
+    # produces the captions that were asked for rather than a default to be
+    # redone. Optional: an old client that omits it gets "same as spoken".
+    caption_language: str = Form(default=languages.SAME),
 ) -> VideoRead:
+    if not languages.is_caption_language(caption_language):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unsupported caption language: {caption_language}",
+        )
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="No filename provided"
@@ -174,6 +185,10 @@ async def upload_video(
         size_bytes=size,
         content_type=file.content_type,
     )
+    if caption_language != languages.SAME:
+        video = await video_service.set_languages(
+            db, video, spoken=None, caption=caption_language
+        )
 
     # Probing also confirms the bytes really are video, whatever the client
     # claimed. Failures are non-fatal: the upload is kept, just without

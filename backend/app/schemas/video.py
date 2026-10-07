@@ -37,6 +37,10 @@ class VideoRead(BaseModel):
     # Meaningful only while status is "processing".
     progress: int
     stage: str | None
+    # A sentence about the current stage, e.g. a model download's size.
+    stage_detail: str | None = None
+    # A non-fatal note on a finished job, e.g. a translation fallback.
+    notice: str | None = None
     created_at: datetime
     updated_at: datetime
 
