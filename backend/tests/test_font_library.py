@@ -64,6 +64,46 @@ def test_the_popular_variable_only_families_are_available():
         assert font.has_bold
 
 
+def test_metric_sidecars_stay_out_of_the_font_directory(tmp_path, monkeypatch):
+    """
+    libass opens every file in the directory it is given as `fontsdir`.
+
+    A .json beside the .ttf therefore printed "Error opening memory font
+    roboto-regular.json" on every burn — one line per cached family, growing
+    with the cache, and precisely the sort of noise a real error disappears
+    into. The sidecars live one level down, which libass does not descend into.
+    """
+    monkeypatch.setattr(font_library, "get_settings", lambda: type("S", (), {"font_cache_dir": str(tmp_path)}))
+
+    ttf = font_library.cached_path("somefont", "regular")
+    sidecar = font_library.metrics_path("somefont", "regular")
+
+    assert ttf.parent == tmp_path
+    assert sidecar.parent == tmp_path / font_library.METRICS_DIR
+    assert not list(tmp_path.glob("*.json"))
+
+
+def test_a_sidecar_written_beside_the_fonts_is_moved_out(tmp_path, monkeypatch):
+    """
+    An earlier version wrote them into the font directory, so an existing cache
+    has some. They are moved rather than deleted: the win span was measured at
+    download time and nothing will re-download a file already cached, so
+    deleting one loses a number that cannot be recomputed.
+    """
+    monkeypatch.setattr(font_library, "get_settings", lambda: type("S", (), {"font_cache_dir": str(tmp_path)}))
+    monkeypatch.setattr(font_library, "_migrated", False)
+
+    legacy = tmp_path / "oldfont-regular.json"
+    tmp_path.mkdir(exist_ok=True)
+    legacy.write_text('{"win_span": 1.5}', encoding="utf-8")
+
+    font_library.cache_dir()
+
+    assert not legacy.exists()
+    moved = tmp_path / font_library.METRICS_DIR / "oldfont-regular.json"
+    assert moved.exists() and "1.5" in moved.read_text(encoding="utf-8")
+
+
 def test_static_families_are_left_alone():
     """A family Google ships static must not be routed through the instancer."""
     pacifico = font_library.get("pacifico")

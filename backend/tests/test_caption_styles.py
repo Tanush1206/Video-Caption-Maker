@@ -2,6 +2,7 @@ import pytest
 
 from app.models.caption_style import Alignment, CaptionStyle, VerticalPosition
 from app.services import caption_style as style_service
+from app.services import subtitles
 from tests.conftest import a_style
 
 
@@ -200,7 +201,9 @@ def test_defaults_come_from_the_columns_not_an_unsaved_instance():
     assert CaptionStyle(video_id=1).font_key is None
 
     defaults = style_service.default_style_fields()
-    assert defaults["font_key"] == "sans"
+    # Pinned deliberately, so changing what a new style opens on has to be a
+    # decision someone makes rather than one that slips through.
+    assert defaults["font_key"] == "poppins"
     assert defaults["text_color"] == "#FFFFFF"
     assert "id" not in defaults and "video_id" not in defaults
 
@@ -285,7 +288,7 @@ async def test_style_is_created_on_first_read(client, auth_headers, sample_video
 
     assert response.status_code == 200
     body = response.json()
-    assert body["font_key"] == "sans"
+    assert body["font_key"] == "poppins"
     assert body["text_color"] == "#FFFFFF"
     assert body["reference_height"] == 1080
 
@@ -382,3 +385,139 @@ async def test_deleting_the_video_removes_its_style(
     await client.delete(f"/api/videos/{video_id}", headers=auth_headers)
 
     assert await style_service.get_style(db_session, video_id) is None
+
+
+# ── Free placement ───────────────────────────────────────────────────────
+#
+# Dragging the caption stores an x/y fraction instead of an anchor, and the
+# burn expresses it with a per-event `\pos()` override rather than the Style
+# line. These pin the two halves of that: that the override is only emitted
+# when it was asked for, and that it says what the preview is drawing.
+
+
+def _a_caption(**overrides):
+    from app.models.caption import Caption
+
+    fields = dict(
+        start_ms=0, end_ms=5000, text="Placed by hand",
+        override_color=None, override_bold=None, override_scale=None,
+    )
+    return Caption(**{**fields, **overrides})
+
+
+def _dialogue(doc: str) -> str:
+    return next(line for line in doc.splitlines() if line.startswith("Dialogue:"))
+
+
+@pytest.mark.parametrize(
+    ("alignment", "expected"),
+    [(Alignment.LEFT, 4), (Alignment.CENTER, 5), (Alignment.RIGHT, 6)],
+)
+def test_free_alignment_stays_on_the_middle_row(alignment, expected):
+    r"""
+    `\an` sets both the meaning of `\pos` and how wrapped lines justify.
+
+    The horizontal half has to follow the caption's alignment or a wrapped line
+    would justify differently in the two renderers. The vertical half is pinned
+    to the middle so that `pos_y` means "the vertical centre of the text" on
+    both sides — which is what CSS `translate(-50%)` gives it.
+    """
+    style = a_style(alignment=alignment)
+    assert style_service.to_ass_free_alignment(style) == expected
+
+
+def test_an_anchored_caption_carries_no_position_override():
+    """The default, and every style that existed before this feature."""
+    doc = subtitles.to_ass([_a_caption()], a_style(), 1920, 1080)
+
+    assert r"\pos" not in _dialogue(doc)
+    assert r"\an" not in _dialogue(doc)
+
+
+def test_a_hand_placed_caption_is_positioned_per_event():
+    r"""
+    The fractions are multiplied by the real frame, because that is what
+    becomes PlayResX/Y — the canvas libass measures `\pos` against.
+    """
+    style = a_style(pos_x=0.25, pos_y=0.30, alignment=Alignment.CENTER)
+    doc = subtitles.to_ass([_a_caption()], style, 1920, 1080)
+
+    assert r"{\an5\pos(480,324)}" in _dialogue(doc)
+
+
+def test_placement_and_emphasis_share_one_override_block():
+    """Two adjacent blocks are legal ASS, but an empty `{}` is not worth risking."""
+    style = a_style(pos_x=0.5, pos_y=0.5, alignment=Alignment.CENTER)
+    doc = subtitles.to_ass([_a_caption(override_bold=True)], style, 1920, 1080)
+    line = _dialogue(doc)
+
+    assert r"{\an5\pos(960,540)\b1}" in line
+    assert "}{" not in line
+
+
+def test_free_placement_keeps_the_horizontal_margins():
+    r"""
+    `\pos` takes over the position and nothing else.
+
+    libass still breaks lines at PlayResX minus MarginL/MarginR under `\pos` —
+    burning the same line both ways at a 700px margin gives six lines, 498px
+    wide, either way. So `margin_h` stays meaningful and the Style line remains
+    the single place line breaking is decided.
+    """
+    style = a_style(pos_x=0.5, pos_y=0.5, margin_h=120)
+
+    assert style_service.to_ass_style(style, 1080)["MarginL"] == 120
+    assert style_service.to_ass_style(style, 1080)["MarginR"] == 120
+
+
+@pytest.mark.asyncio
+async def test_placement_round_trips_and_can_be_cleared(
+    client, auth_headers, sample_video_bytes
+):
+    """
+    Clearing is the placement grid putting a dragged caption back on an anchor.
+
+    It only works because the route applies the patch with `exclude_unset`
+    rather than `exclude_none`: an explicit null has to reach the column, where
+    an omitted field must not.
+    """
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    await client.get(f"/api/videos/{video_id}/style", headers=auth_headers)
+
+    placed = await client.patch(
+        f"/api/videos/{video_id}/style",
+        headers=auth_headers,
+        json={"pos_x": 0.37, "pos_y": 0.62},
+    )
+    assert placed.status_code == 200
+    assert placed.json()["pos_x"] == pytest.approx(0.37)
+    assert placed.json()["pos_y"] == pytest.approx(0.62)
+
+    # An unrelated patch must not disturb the placement.
+    kept = await client.patch(
+        f"/api/videos/{video_id}/style", headers=auth_headers, json={"font_size": 72}
+    )
+    assert kept.json()["pos_x"] == pytest.approx(0.37)
+
+    cleared = await client.patch(
+        f"/api/videos/{video_id}/style",
+        headers=auth_headers,
+        json={"pos_x": None, "pos_y": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["pos_x"] is None
+    assert cleared.json()["pos_y"] is None
+
+
+@pytest.mark.asyncio
+async def test_placement_outside_the_frame_is_rejected(
+    client, auth_headers, sample_video_bytes
+):
+    """A caption at 1.4 is off the canvas — invisible in the preview and the burn."""
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+
+    for bad in [{"pos_x": 1.4}, {"pos_y": -0.2}]:
+        response = await client.patch(
+            f"/api/videos/{video_id}/style", headers=auth_headers, json=bad
+        )
+        assert response.status_code == 422

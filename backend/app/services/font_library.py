@@ -162,9 +162,34 @@ def search(query: str, *, category: str | None = None, limit: int = 60) -> list[
 # ── The cache on disk ────────────────────────────────────────────────────
 
 
+#: Metric sidecars go in a subdirectory, not beside the fonts.
+#:
+#: libass is handed this directory as `fontsdir` and opens *every* file in it,
+#: so a .json sitting next to the .ttf produced "Error opening memory font
+#: roboto-regular.json" on every single burn — one line per cached family,
+#: which would grow to hundreds and is exactly the kind of noise a real error
+#: hides in. libass reads the directory without recursing, so a subdirectory is
+#: invisible to it.
+METRICS_DIR = "metrics"
+
+_migrated = False
+
+
 def cache_dir() -> Path:
     path = Path(get_settings().font_cache_dir)
     path.mkdir(parents=True, exist_ok=True)
+    (path / METRICS_DIR).mkdir(exist_ok=True)
+
+    # One-time tidy-up of sidecars written by an earlier version straight into
+    # the font directory. Moved rather than deleted: the win span in them was
+    # measured at download time and is not recoverable from a file already
+    # cached, since nothing will fetch it again.
+    global _migrated
+    if not _migrated:
+        _migrated = True
+        for stale in path.glob("*.json"):
+            stale.replace(path / METRICS_DIR / stale.name)
+
     return path
 
 
@@ -177,6 +202,20 @@ def cached_path(key: str, weight: str) -> Path:
     can walk out of this directory.
     """
     return cache_dir() / f"{key}-{weight}.ttf"
+
+
+def metrics_path(key: str, weight: str) -> Path:
+    """
+    The sidecar holding what was measured about a face when it was fetched.
+
+    Makes its own directory rather than relying on cache_dir() having done it.
+    They are not always the same call — anything that overrides where the cache
+    lives gets the subdirectory for free this way, which is how the first
+    version of this broke.
+    """
+    directory = cache_dir() / METRICS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / f"{key}-{weight}.json"
 
 
 def _validate(data: bytes) -> float:
@@ -320,8 +359,9 @@ def ensure(key: str, weight: str = "regular") -> Path:
         temporary.write_bytes(data)
         temporary.replace(path)
 
-        # Cached next to the font rather than recomputed on every render.
-        path.with_suffix(".json").write_text(
+        # Cached rather than recomputed on every render — but in the metrics
+        # subdirectory, because libass opens everything in the font directory.
+        metrics_path(key, weight).write_text(
             json.dumps({"win_span": span, "bytes": len(data)}), encoding="utf-8"
         )
         log.info("cached %s (%d KB, win span %.4f)", path.name, len(data) // 1024, span)
@@ -331,7 +371,7 @@ def ensure(key: str, weight: str = "regular") -> Path:
 
 def win_span(key: str, weight: str = "regular") -> float | None:
     """The cached vertical span, or None if the face has not been fetched."""
-    sidecar = cached_path(key, weight).with_suffix(".json")
+    sidecar = metrics_path(key, weight)
     if not sidecar.exists():
         return None
     try:
