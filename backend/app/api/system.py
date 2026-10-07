@@ -26,7 +26,8 @@ async def _info(db) -> SystemInfo:
     settings = get_settings()
     report = await app_settings.worker_hardware(db)
     choice = await app_settings.whisper_override(db) or hardware.AUTO
-    key = await app_settings.gemini_key(db)
+    stored = await app_settings.get_value(db, app_settings.GEMINI_API_KEY)
+    key = stored or settings.gemini_api_key
 
     hw = whisper = translator = None
     if report:
@@ -47,6 +48,7 @@ async def _info(db) -> SystemInfo:
         translation_engine="gemini" if key else "local",
         translator_model=translator,
         gemini_configured=bool(key),
+        gemini_source="settings" if stored else ("env" if key else None),
     )
 
 

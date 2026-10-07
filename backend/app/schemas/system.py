@@ -35,6 +35,8 @@ class SystemInfo(BaseModel):
     translator_model: str | None
     # Whether a key is set. The key itself is never sent back out.
     gemini_configured: bool
+    # "settings" (removable from the UI), "env", or None.
+    gemini_source: str | None = None
 
 
 class SystemSettingsUpdate(BaseModel):
