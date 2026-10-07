@@ -1,3 +1,10 @@
+import os
+
+# The suite exercises the full account flow (registration, JWT, refresh), so it
+# runs in accounts mode. Local mode has its own tests that switch it on.
+# Set before anything imports the cached settings.
+os.environ["AUTH_MODE"] = "accounts"
+
 import shutil
 import subprocess
 import uuid

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -52,6 +53,32 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+# The one account on a local install. Not a real address: nothing is ever sent
+# to it, and `.localdomain` passes email validation where `.local` does not.
+LOCAL_USER_EMAIL = "local-user@localhost.localdomain"
+
+
+async def get_or_create_local_user(db: AsyncSession) -> User:
+    """
+    The single user a local install acts as, created on first use.
+
+    No password and no Google id, so it cannot be signed into — there is
+    nothing to sign into. Two first requests racing each other both try to
+    insert; the loser hits the unique email and reads the winner's row.
+    """
+    user = await get_user_by_email(db, LOCAL_USER_EMAIL)
+    if user is not None:
+        return user
+    try:
+        return await create_user(db, email=LOCAL_USER_EMAIL, full_name="You")
+    except IntegrityError:
+        await db.rollback()
+        user = await get_user_by_email(db, LOCAL_USER_EMAIL)
+        if user is None:
+            raise
+        return user
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:

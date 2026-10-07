@@ -170,6 +170,11 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(request: Request, response: Response, db: DbSession) -> TokenResponse:
     """Exchange the refresh cookie for a fresh access token."""
+    # A local install has no sign-in, so the session every page load asks for
+    # is simply handed out. The frontend's bootstrap is the same either way.
+    if settings.is_local_mode:
+        return _token_response(await auth_service.get_or_create_local_user(db), response)
+
     token = request.cookies.get(settings.refresh_cookie_name)
     if not token:
         raise HTTPException(

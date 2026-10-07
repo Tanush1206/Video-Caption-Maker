@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.database import get_db
 from app.models.user import User
-from app.services.auth import get_user_by_id
+from app.services.auth import get_or_create_local_user, get_user_by_id
 from app.utils.security import TokenError, decode_token
 
 # auto_error=False so a missing header produces our own 401 with a
@@ -32,7 +32,14 @@ async def get_current_user(
 
     The DB lookup on every request is deliberate: it means deactivating an
     account takes effect immediately rather than whenever the token expires.
+
+    On a local install there is one user and no login: every request is
+    theirs, whatever it carries. The token machinery below is untouched, so a
+    hosted deployment (AUTH_MODE=accounts) behaves exactly as before.
     """
+    if get_settings().is_local_mode:
+        return await get_or_create_local_user(db)
+
     if credentials is None:
         raise _CREDENTIALS_EXCEPTION
 
