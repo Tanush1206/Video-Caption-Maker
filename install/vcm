@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# vcm — run VideoCaptionMaker.
+#
+#   vcm start       start the app and open it in the browser
+#   vcm stop        stop it (your videos stay)
+#   vcm restart     stop, then start
+#   vcm status      what is running, and whether it is healthy
+#   vcm logs [svc]  follow the logs (all services, or e.g. `vcm logs worker`)
+#   vcm update      download the newest version and restart into it
+#   vcm open        open the app in the browser
+#   vcm uninstall   remove the app; asks before deleting your videos
+set -euo pipefail
+
+VCM_HOME="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+REPO_URL="https://github.com/Tanush1206/Video-Caption-Maker"
+BASE_URL="${VCM_BASE_URL:-$REPO_URL/releases/latest/download}"
+PROJECT=vcm
+cd "$VCM_HOME"
+
+env_value() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- || true; }
+PORT="$(env_value VCM_PORT)"; PORT="${PORT:-3000}"
+URL="http://localhost:$PORT"
+
+compose() {
+    local files=(-f docker-compose.prod.yml)
+    [ "$(env_value VCM_VARIANT)" = "cuda" ] && files+=(-f docker-compose.gpu.yml)
+    docker compose -p "$PROJECT" --env-file .env "${files[@]}" "$@"
+}
+
+need_docker() {
+    docker info >/dev/null 2>&1 || {
+        echo "Docker isn't running. Start Docker (Docker Desktop, or: sudo systemctl start docker) and try again." >&2
+        exit 1
+    }
+}
+
+open_browser() {
+    if [ "$(uname -s)" = "Darwin" ]; then open "$URL" >/dev/null 2>&1 || true
+    elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 || true
+    else echo "Open $URL in your browser."; fi
+}
+
+wait_ready() {
+    printf 'Waiting for the app'
+    for _ in $(seq 1 120); do
+        if curl -fsS "$URL/api/health" >/dev/null 2>&1; then echo " — ready at $URL"; return 0; fi
+        printf '.'; sleep 3
+    done
+    echo; echo "Not answering yet. Check: vcm status / vcm logs" >&2; return 1
+}
+
+confirm() {  # reads from the terminal even when stdin is a pipe
+    local answer
+    printf '%s ' "$1" > /dev/tty
+    read -r answer < /dev/tty || answer=""
+    [ "$answer" = "$2" ]
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+    start)    need_docker; compose up -d; wait_ready && open_browser ;;
+    up)       need_docker; compose up -d ;;
+    pull)     need_docker; compose pull ;;
+    stop)     need_docker; compose stop; echo "Stopped. Your videos are kept; 'vcm start' brings it back." ;;
+    restart)  need_docker; compose stop; compose up -d; wait_ready ;;
+    status)   need_docker; compose ps ;;
+    logs)     need_docker; compose logs -f --tail 200 "$@" ;;
+    open)     open_browser ;;
+    update)
+        need_docker
+        echo "Fetching the latest version…"
+        for file in docker-compose.prod.yml docker-compose.gpu.yml vcm; do
+            curl -fsSL --retry 3 "$BASE_URL/$file" -o "$file.tmp" && mv "$file.tmp" "$file" \
+                || { rm -f "$file.tmp"; echo "Couldn't download $file; nothing was changed." >&2; exit 1; }
+        done
+        chmod +x vcm
+        compose pull
+        compose up -d --remove-orphans
+        wait_ready
+        docker image prune -f >/dev/null 2>&1 || true
+        echo "Updated."
+        ;;
+    uninstall)
+        need_docker
+        echo "This removes VideoCaptionMaker from this computer."
+        compose down --remove-orphans
+        deleted=0
+        if confirm "Also delete ALL your videos, captions and downloaded models? This cannot be undone. Type DELETE to confirm, or press Enter to keep them:" "DELETE"; then
+            compose down -v
+            deleted=1
+            echo "Deleted your data."
+        else
+            echo "Kept your data (Docker volumes named vcm_*). Reinstalling picks it up again."
+        fi
+        compose down --rmi all >/dev/null 2>&1 || true
+        rm -f "$HOME/.local/bin/vcm"
+        cd /
+        if [ "$deleted" = 1 ]; then
+            rm -rf "$VCM_HOME"
+        else
+            # .env holds the database password the kept data is locked with.
+            echo "Kept $VCM_HOME too: it holds the password for your kept data."
+        fi
+        echo "Uninstalled."
+        ;;
+    help|-h|--help|*)
+        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+        ;;
+esac
