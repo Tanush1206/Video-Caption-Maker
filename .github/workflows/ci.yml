@@ -1,0 +1,42 @@
+# Fast checks on every push and pull request. The backend suite needs
+# Postgres, Redis, ChromaDB and FFmpeg; it runs in the dev compose stack
+# (see README → Development) rather than here.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ""
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax and lint
+        run: |
+          bash -n install/install.sh install/vcm
+          shellcheck -S warning install/install.sh install/vcm
+      - name: Compose files are valid
+        run: |
+          POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
+          POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml config -q

@@ -1,0 +1,112 @@
+# Builds the images, pushes them to GHCR, and publishes the install scripts
+# as release assets.
+#
+# Trigger: push a tag like v1.0.0. Produces
+#   ghcr.io/tanush1206/video-caption-maker-backend:{1.0.0,latest}-{cpu,cuda}
+#   ghcr.io/tanush1206/video-caption-maker-frontend:{1.0.0,latest}
+# and a GitHub Release whose assets are what the one-line installers fetch:
+#   .../releases/latest/download/install.sh  (and install.ps1, vcm, compose files)
+#
+# GHCR packages start out private. After the first run, make each package
+# public (Package settings → Change visibility) or installs will fail to pull.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/tanush1206
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            variant: cpu
+            context: .
+            file: backend/Dockerfile
+            suffix: -cpu
+          - name: backend
+            variant: cuda
+            context: .
+            file: backend/Dockerfile
+            suffix: -cuda
+          - name: frontend
+            variant: ""
+            context: frontend
+            file: frontend/Dockerfile
+            suffix: ""
+    steps:
+      # The CUDA image carries ~3 GB of cuBLAS/cuDNN on top of the CPU stack,
+      # and its build layers do not fit in a stock runner's ~14 GB of free
+      # disk. Removing preinstalled SDKs nobody here uses frees ~30 GB.
+      - name: Free disk space
+        if: matrix.variant == 'cuda'
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/boost /usr/local/.ghcup /usr/share/swift
+          sudo docker image prune --all --force
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=edge" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: runtime
+          push: true
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:${{ steps.version.outputs.version }}${{ matrix.suffix }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/video-caption-maker-{1}:latest{2}', env.REGISTRY, matrix.name, matrix.suffix) || '' }}
+          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}${{ matrix.suffix }}
+
+  release:
+    needs: images
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect assets
+        run: |
+          mkdir dist
+          cp install/install.sh install/install.ps1 install/vcm install/vcm.ps1 install/vcm.cmd \
+             docker-compose.prod.yml docker-compose.gpu.yml dist/
+          chmod +x dist/install.sh dist/vcm
+          (cd dist && sha256sum * > SHA256SUMS)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
