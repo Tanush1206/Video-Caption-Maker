@@ -1,3 +1,9 @@
+# Development stack: source bind-mounted, hot reload, ports on 127.0.0.1.
+# The installed app uses docker-compose.prod.yml instead.
+#
+#   docker compose up                                   # CPU
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up   # NVIDIA GPU
+#
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vcm_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-vcm}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +28,7 @@ services:
     container_name: vcm_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -32,18 +38,23 @@ services:
       retries: 10
 
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.0.0
     container_name: vcm_chromadb
     restart: unless-stopped
     ports:
-      - "8100:8000"
+      - "127.0.0.1:8100:8000"
     volumes:
-      - chroma_data:/chroma/chroma
+      # /data, not /chroma/chroma: Chroma 1.x persists to /data, and the old
+      # path left every vector in the container layer, lost on recreate.
+      - chroma_data:/data
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
+      target: dev
+      args:
+        VARIANT: ${VCM_VARIANT:-cuda}
     container_name: vcm_backend
     restart: unless-stopped
     env_file: .env
@@ -54,7 +65,7 @@ services:
       # Same inotify limitation as the frontend — uvicorn --reload needs polling.
       WATCHFILES_FORCE_POLLING: "true"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
       - media_storage:/app/storage
@@ -81,12 +92,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
+      target: dev
+      args:
+        VARIANT: ${VCM_VARIANT:-cuda}
     container_name: vcm_worker
     restart: unless-stopped
     env_file: .env
@@ -94,6 +108,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vcm}:${POSTGRES_PASSWORD:-vcm_dev_password}@postgres:5432/${POSTGRES_DB:-vcm}
       REDIS_URL: redis://redis:6379/0
       CHROMADB_URL: http://chromadb:8000
+      # GPU access lives in docker-compose.gpu.yml (layer it on to use one).
       # `video` is the one that matters here, and it is not implied.
       #
       # `capabilities: [gpu]` below gets the container `compute` and `utility`,
@@ -149,21 +164,12 @@ services:
       watchfiles --filter python
       "celery -A app.workers.celery_app worker --loglevel=info --pool=solo"
       /app/app
-    # GPU passthrough for faster-whisper. Docker Desktop's WSL2 backend
-    # provides this through the Windows NVIDIA driver — no separate
-    # nvidia-container-toolkit install is needed on this setup.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
     container_name: vcm_frontend
     restart: unless-stopped
     env_file: .env
@@ -173,7 +179,7 @@ services:
       # so the dev-server file watcher must poll to see host edits.
       WATCHPACK_POLLING: "true"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules

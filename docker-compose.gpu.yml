@@ -1,0 +1,25 @@
+# NVIDIA GPU for the worker. Layer it over either compose file:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml up -d
+#   docker compose -f docker-compose.yml      -f docker-compose.gpu.yml up -d   # development
+#
+# Needs an NVIDIA driver on the host and, on Linux, the NVIDIA Container
+# Toolkit. Docker Desktop on Windows (WSL2) provides GPU passthrough itself.
+# The installer adds this file only when it finds a working GPU, and sets
+# VCM_VARIANT=cuda so the CUDA build of the image is pulled.
+
+services:
+  worker:
+    environment:
+      # `video` is the one that matters for rendering, and it is not implied.
+      # `capabilities: [gpu]` gives compute and utility, enough for CUDA and
+      # nvidia-smi, but libnvidia-encode lives behind `video`; without it every
+      # NVENC encoder is listed by ffmpeg and fails the moment it is opened.
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

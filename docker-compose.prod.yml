@@ -1,0 +1,130 @@
+# VideoCaptionMaker — the installed app.
+#
+# Started by the install script with a generated .env next to it. By hand:
+#
+#   docker compose -f docker-compose.prod.yml up -d                     # CPU
+#   docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml up -d   # NVIDIA GPU
+#
+# Only the web UI is published, and only on 127.0.0.1: nothing here is
+# reachable from the network. Everything else talks over the compose network.
+
+name: vcm
+
+x-backend: &backend
+  image: ${VCM_REGISTRY:-ghcr.io/tanush1206}/video-caption-maker-backend:${VCM_VERSION:-latest}-${VCM_VARIANT:-cpu}
+  restart: unless-stopped
+  environment: &backend-env
+    ENVIRONMENT: production
+    AUTH_MODE: local
+    DATABASE_URL: postgresql+asyncpg://vcm:${POSTGRES_PASSWORD:?run the installer to generate .env}@postgres:5432/vcm
+    REDIS_URL: redis://redis:6379/0
+    CHROMADB_URL: http://chromadb:8000
+    JWT_SECRET_KEY: ${JWT_SECRET_KEY:?run the installer to generate .env}
+    # Optional: pins the speech model regardless of hardware. Settings in the
+    # app is the easier place to change it.
+    WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-auto}
+    MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-4096}
+  volumes:
+    - media:/app/storage
+    - models:/root/.cache/huggingface
+    - fonts:/usr/share/fonts/truetype/vcm-cache
+    # Optional extra CA certificates for TLS-inspecting networks: put *.crt
+    # files in the certs/ folder next to this file. Empty is fine.
+    - ./certs:/usr/local/share/ca-certificates/extra:ro
+  depends_on: &backend-deps
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    chromadb:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vcm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run the installer to generate .env}
+      POSTGRES_DB: vcm
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vcm -d vcm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4.10-alpine
+    restart: unless-stopped
+    # A queue and a cache; nothing in it is worth persisting across restarts.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  chromadb:
+    image: chromadb/chroma:1.0.0
+    restart: unless-stopped
+    volumes:
+      - vectors:/data
+    healthcheck:
+      # The image has bash but no curl or wget.
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8000 && printf 'GET /api/v2/heartbeat HTTP/1.0\r\n\r\n' >&3 && grep -q nanosecond <&3
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    <<: *backend
+    command: ["api"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+
+  worker:
+    <<: *backend
+    command: ["worker"]
+    depends_on:
+      <<: *backend-deps
+      # The API runs the migrations; the worker must not start writing first.
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]
+      interval: 30s
+      timeout: 20s
+      start_period: 60s
+      retries: 5
+
+  frontend:
+    image: ${VCM_REGISTRY:-ghcr.io/tanush1206}/video-caption-maker-frontend:${VCM_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${VCM_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 10
+
+volumes:
+  db:
+  vectors:
+  media:
+  models:
+  fonts:

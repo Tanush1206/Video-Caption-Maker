@@ -1,0 +1,5 @@
+# Shell scripts run inside Linux containers and via curl | bash: they must
+# keep LF endings even when checked out on Windows.
+*.sh text eol=lf
+# PowerShell is happiest with CRLF.
+*.ps1 text eol=crlf
