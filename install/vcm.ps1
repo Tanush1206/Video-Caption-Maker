@@ -75,11 +75,31 @@ try {
         'update'  {
             Assert-Docker
             Write-Host 'Fetching the latest version...'
-            foreach ($file in @('docker-compose.prod.yml', 'docker-compose.gpu.yml', 'vcm.ps1', 'vcm.cmd')) {
-                $target = Join-Path $VcmHome $file
-                Invoke-WebRequest -ErrorAction Stop -UseBasicParsing -Uri "$BaseUrl/$file" -OutFile "$target.tmp"
-                Move-Item -ErrorAction Stop -Force "$target.tmp" $target
+            # All downloaded and checked against SHA256SUMS before any is replaced.
+            $files = @('docker-compose.prod.yml', 'docker-compose.gpu.yml', 'vcm.ps1', 'vcm.cmd')
+            $temps = ($files + @('SHA256SUMS')) | ForEach-Object { Join-Path $VcmHome "$_.tmp" }
+            try {
+                foreach ($file in $files + @('SHA256SUMS')) {
+                    Invoke-WebRequest -ErrorAction Stop -UseBasicParsing -Uri "$BaseUrl/$file" -OutFile (Join-Path $VcmHome "$file.tmp")
+                }
+                $sums = @{}
+                foreach ($line in [IO.File]::ReadAllLines((Join-Path $VcmHome 'SHA256SUMS.tmp'))) {
+                    if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+)$') { $sums[$Matches[2]] = $Matches[1].ToLower() }
+                }
+                foreach ($file in $files) {
+                    $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $VcmHome "$file.tmp")).Hash.ToLower()
+                    if (-not $sums.ContainsKey($file) -or $sums[$file] -ne $actual) {
+                        throw "$file didn't match the release's SHA256SUMS; nothing was changed."
+                    }
+                }
+            } catch {
+                $temps | ForEach-Object { Remove-Item -ErrorAction SilentlyContinue $_ }
+                throw
             }
+            foreach ($file in $files) {
+                Move-Item -ErrorAction Stop -Force (Join-Path $VcmHome "$file.tmp") (Join-Path $VcmHome $file)
+            }
+            Remove-Item -ErrorAction SilentlyContinue (Join-Path $VcmHome 'SHA256SUMS.tmp')
             Invoke-Compose @('pull')
             Invoke-Compose @('up', '-d', '--remove-orphans')
             Wait-Ready | Out-Null
@@ -89,14 +109,16 @@ try {
         'uninstall' {
             Assert-Docker
             Write-Host 'This removes VideoCaptionMaker from this computer.'
-            Invoke-Compose @('down', '--remove-orphans')
+            # Asked before anything stops: `down -v` only removes the anonymous
+            # volumes (redis /data) of containers it is removing in the same call.
             $answer = Read-Host 'Also delete ALL your videos, captions and downloaded models? This cannot be undone. Type DELETE to confirm, or press Enter to keep them'
             $deleted = $false
             if ($answer -ceq 'DELETE') {
-                Invoke-Compose @('down', '-v')
+                Invoke-Compose @('down', '--remove-orphans', '-v')
                 $deleted = $true
                 Write-Host 'Deleted your data.'
             } else {
+                Invoke-Compose @('down', '--remove-orphans')
                 Write-Host "Kept your data (Docker volumes named ${Project}_*). Reinstalling picks it up again."
             }
             # Only this app's own images. postgres, redis and chroma are shared

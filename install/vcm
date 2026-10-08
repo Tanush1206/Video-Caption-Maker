@@ -69,10 +69,21 @@ case "$cmd" in
     update)
         need_docker
         echo "Fetching the latest version…"
-        for file in docker-compose.prod.yml docker-compose.gpu.yml vcm; do
-            curl -fsSL --retry 3 "$BASE_URL/$file" -o "$file.tmp" && mv "$file.tmp" "$file" \
-                || { rm -f "$file.tmp"; echo "Couldn't download $file; nothing was changed." >&2; exit 1; }
+        update_files="docker-compose.prod.yml docker-compose.gpu.yml vcm"
+        # All downloaded and checked against SHA256SUMS before any is replaced.
+        for file in $update_files SHA256SUMS; do
+            curl -fsSL --retry 3 "$BASE_URL/$file" -o "$file.tmp" \
+                || { rm -f ./*.tmp; echo "Couldn't download $file; nothing was changed." >&2; exit 1; }
         done
+        for file in $update_files; do
+            expected="$(awk -v f="$file" '$2 == f || $2 == "*"f { print $1 }' SHA256SUMS.tmp)"
+            if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$file.tmp" | cut -d' ' -f1)"
+            else actual="$(shasum -a 256 "$file.tmp" | cut -d' ' -f1)"; fi
+            [ -n "$expected" ] && [ "$actual" = "$expected" ] \
+                || { rm -f ./*.tmp; echo "$file didn't match the release's SHA256SUMS; nothing was changed." >&2; exit 1; }
+        done
+        for file in $update_files; do mv "$file.tmp" "$file"; done
+        rm -f SHA256SUMS.tmp
         chmod +x vcm
         compose pull
         compose up -d --remove-orphans
@@ -83,13 +94,15 @@ case "$cmd" in
     uninstall)
         need_docker
         echo "This removes VideoCaptionMaker from this computer."
-        compose down --remove-orphans
         deleted=0
+        # Asked before anything stops: `down -v` only removes the anonymous
+        # volumes (redis /data) of containers it is removing in the same call.
         if confirm "Also delete ALL your videos, captions and downloaded models? This cannot be undone. Type DELETE to confirm, or press Enter to keep them:" "DELETE"; then
-            compose down -v
+            compose down --remove-orphans -v
             deleted=1
             echo "Deleted your data."
         else
+            compose down --remove-orphans
             echo "Kept your data (Docker volumes named vcm_*). Reinstalling picks it up again."
         fi
         # Only this app's own images. postgres, redis and chroma are shared base
