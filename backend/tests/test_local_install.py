@@ -209,3 +209,24 @@ async def test_a_full_disk_is_reported_as_such(tmp_path, monkeypatch):
         await videos._stream_to_disk(Upload(), tmp_path / "v.mp4")
     assert raised.value.status_code == 507
     assert "disk is full" in raised.value.detail
+
+
+def test_tls_interception_gets_its_own_instructions(monkeypatch):
+    """A Norton/proxy certificate failure is not 'check your internet connection'."""
+    import ssl
+
+    from app.services import model_store
+
+    monkeypatch.setattr(model_store, "cached_path", lambda *a: None)
+
+    class Api:
+        def model_info(self, *a, **k):
+            try:
+                raise ssl.SSLCertVerificationError("certificate verify failed: unable to get local issuer")
+            except ssl.SSLError as inner:
+                raise ConnectionError("ConnectError") from inner
+
+    monkeypatch.setattr("huggingface_hub.HfApi", Api)
+    with pytest.raises(model_store.ModelDownloadError) as raised:
+        model_store.ensure("org/model", allow_patterns=["model.bin"])
+    assert "certs folder" in str(raised.value)

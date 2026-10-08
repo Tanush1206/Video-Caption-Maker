@@ -29,6 +29,24 @@ class ModelDownloadError(RuntimeError):
     """A model could not be fetched. The message is safe to show the user."""
 
 
+CERTIFICATE_HELP = (
+    "Couldn't download the model: a security program or proxy on this network is "
+    "intercepting HTTPS. Put its root certificate (.crt) in the certs folder of the "
+    "install and run 'vcm restart' (see Troubleshooting in the README)."
+)
+
+
+def _is_certificate_error(exc: BaseException) -> bool:
+    """True if anywhere in the chain is a TLS verification failure."""
+    seen = 0
+    while exc is not None and seen < 10:
+        if "certificate_verify_failed" in str(exc).lower() or "certificate verify failed" in str(exc).lower():
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return False
+
+
 def _cache_root() -> Path:
     from huggingface_hub import constants
 
@@ -92,6 +110,8 @@ def ensure(
             if any(fnmatch.fnmatch(sibling.rfilename, p) for p in allow_patterns)
         )
     except Exception as exc:  # noqa: BLE001
+        if _is_certificate_error(exc):
+            raise ModelDownloadError(CERTIFICATE_HELP) from exc
         raise ModelDownloadError(
             "Couldn't reach Hugging Face to download the model. Check the internet "
             "connection — models are downloaded once, on first use."
@@ -122,6 +142,8 @@ def ensure(
     error = result.get("error")
     if error is not None:
         message = str(error).lower()
+        if _is_certificate_error(error):  # type: ignore[arg-type]
+            raise ModelDownloadError(CERTIFICATE_HELP) from error  # type: ignore[misc]
         if "no space" in message or "errno 28" in message:
             raise ModelDownloadError(
                 "The disk is full, so the model couldn't be downloaded. Free some space "
