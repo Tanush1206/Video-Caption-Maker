@@ -144,6 +144,19 @@ times faster, with lower accuracy.
 **Anything else.** Run `vcm logs`, and `vcm status` to see which part isn't
 healthy.
 
+## Known limitations
+
+- **macOS is untested.** The installer and images are built to work with
+  Docker Desktop for Mac (Apple Silicon runs the amd64 images under
+  emulation, which is slow), but nobody has run them there yet. On a Mac
+  everything runs on the CPU; NVIDIA GPUs are Windows and Linux only.
+- **Caption languages:** English, Hindi, French, German and Dutch. "Same as
+  spoken" works for any language Whisper recognises.
+- **Local translation** (M2M100) translates each caption line on its own, so
+  idioms and fragments read more literally than with Gemini.
+- **Chinese, Japanese and Korean** captions burned into video need a CJK font
+  chosen in the style panel; the built-in fallback font doesn't cover CJK.
+
 ## Uninstall
 
 `vcm uninstall` stops and removes the app. It deletes your videos, captions
@@ -165,7 +178,14 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 
 - Frontend (Next.js 14): `frontend/`. Backend (FastAPI, Celery): `backend/`.
 - Production images: `backend/Dockerfile` (`VARIANT=cpu|cuda`, built from the
-  repo root) and `frontend/Dockerfile`. Both use the `runtime` target.
+  repo root) and `frontend/Dockerfile`. Both use the `runtime` target:
+  ```bash
+  docker build -f backend/Dockerfile --target runtime --build-arg VARIANT=cpu -t vcm-backend:cpu .
+  docker build --target runtime -t vcm-frontend frontend
+  ```
+  Behind TLS-inspecting antivirus or a proxy, add
+  `--secret id=extra_ca,src=path/to/root.crt`. The certificate is used only
+  during that build step and never stored in an image layer.
 - Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which
   pushes the images to GHCR and attaches the installers to a GitHub Release.
 - `AUTH_MODE=accounts` (backend) with `NEXT_PUBLIC_AUTH_MODE=accounts`

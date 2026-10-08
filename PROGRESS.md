@@ -89,25 +89,39 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
       login; keep the auth code intact.
 - [x] M5 Upload can't carry the caption language — `backend/app/api/videos.py`
       (upload starts transcription with defaults, before a language is chosen).
-- [ ] M6 Dev-only images — `backend/Dockerfile` (`-e .[dev]`, certs COPY, torch
+- [x] M6 Dev-only images — `backend/Dockerfile` (`-e .[dev]`, certs COPY, torch
       CUDA 13 wheels → 13.5 GB), `frontend/Dockerfile` (`npm run dev`, certs).
       Needs multi-stage production builds, standalone Next, and CPU/CUDA worker
       variants. No `.dockerignore` exists.
-- [ ] M7 The browser talks to `localhost:8000` directly (`NEXT_PUBLIC_API_URL` is
+- [x] M7 The browser talks to `localhost:8000` directly (`NEXT_PUBLIC_API_URL` is
       duplicated in 6 files), so the backend has to be exposed. Proxy `/api`
       through the frontend so only :3000 is exposed.
-- [ ] M8 No production compose — add `docker-compose.prod.yml` (pinned,
+- [x] M8 No production compose — add `docker-compose.prod.yml` (pinned,
       127.0.0.1, healthchecks everywhere, named volumes) and
       `docker-compose.gpu.yml` (NVIDIA reservation).
-- [ ] M9 No installer — add `install.sh`/`install.ps1` (Docker check, disk,
+- [x] M9 No installer — add `install.sh`/`install.ps1` (Docker check, disk,
       GPU, secrets, pull, health wait, open browser) and `vcm`
       start/stop/update/uninstall.
-- [ ] M10 No CI image build — add a GitHub Actions workflow for GHCR (cpu +
+- [x] M10 No CI image build — add a GitHub Actions workflow for GHCR (cpu +
       cuda, free-disk step) that attaches the install scripts to the release.
 - [x] M11 Failing test `test_instancing_produces_a_real_static_bold` — stale
       image, fixed by the rebuild; verify.
 - [ ] M12 End-to-end: real video, GPU and CPU, all 5 languages, export.
 - [ ] M13 Fresh-install test from scratch in a clean environment.
+
+### Added by Tanush (2026-10-08)
+- [ ] R1 Prove no Norton/local CA is in any committed file, in a built image
+      (inspect for *.crt), or in a release. Dev machine only.
+- [ ] R2 Frontend `npm run build` + `npm run lint`: run and report.
+- [ ] R3 Report the language pairs and engine the 12 E2E jobs covered. All 20
+      pairs on local M2M100; a bad or missing Gemini key falls back without
+      failing the job.
+- [ ] R4 Test the low-RAM CPU tier (< 12 GB → small + M2M100-418M) with a
+      memory-limited worker.
+- [ ] R5 `vcm update` keeps videos, captions and the DB, and runs migrations.
+- [ ] R6 Final install test from the published GitHub Release + GHCR images.
+      Tell Tanush when to make the repo and packages public.
+- [ ] R7 macOS untested: a known limitation in the README and final report.
 
 ### UI
 - [x] U1 3-step flow (Upload → Language → Export) with a stepper; editor,
@@ -119,19 +133,19 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - [ ] U4 Consistency pass: spacing and type scale, buttons, inputs, cards,
       overflow.
 - [ ] U5 Responsive at 375px through wide desktop; light and dark.
-- [ ] U6 Accessibility: keyboard, focus rings, labels, AA contrast.
-- [ ] U7 Empty, loading and error states on every screen; no raw error dumps.
+- [x] U6 Accessibility: keyboard, focus rings, labels, AA contrast.
+- [x] U7 Empty, loading and error states on every screen; no raw error dumps.
 
 ### MINOR
-- [ ] m1 Postgres/Redis/Chroma ports are exposed to the host; `chromadb:latest`
+- [x] m1 Postgres/Redis/Chroma ports are exposed to the host; `chromadb:latest`
       is unpinned.
 - [x] m2 README is stale (Milestone 1).
-- [ ] m3 Dead code and scaffolding: empty `frontend/src/components/editor/`,
+- [x] m3 Dead code and scaffolding: empty `frontend/src/components/editor/`,
       unused deps (check `react-query-devtools`, `canvas-confetti`, `zod`,
       `framer-motion`), the comment about Milestone 4 in `backend/Dockerfile`.
-- [ ] m4 Error handling: failed transcription, OOM, unsupported file, disk full,
+- [x] m4 Error handling: failed transcription, OOM, unsupported file, disk full,
       model download failure → friendly messages.
-- [ ] m5 Tests run against the live dev DB (conftest deletes `test-%` users) —
+- [x] m5 Tests run against the live dev DB (conftest deletes `test-%` users) —
       document this, or isolate them.
 
 ## Done
@@ -185,7 +199,40 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - Production compose project renamed to `vcm`, so it can't orphan or remove
   the dev stack (project `videocaptionmaker`).
 
+- M6 Production images: multi-stage backend (`VARIANT=cpu|cuda`), with the
+  CUDA libs moved to an extra (CPU image 7.3 → 3.5 GB; 0.8 GB compressed;
+  CUDA 2.3 GB compressed). Standalone Next frontend (0.05 GB). No certs, no
+  dev deps, no source. Constraints pin the verified stack. (`f594b6d`,
+  `e589f67`)
+- M8 `docker-compose.prod.yml` + `docker-compose.gpu.yml`: pinned images,
+  UI-only port on 127.0.0.1, healthchecks everywhere, named volumes, project
+  `vcm`. (`4384ff2`)
+- M9 `install.sh`, `install.ps1`, `vcm`, `vcm.ps1`/`vcm.cmd`. (`de8a875`)
+  PS 5.1: native stderr under `ErrorActionPreference=Stop` is terminating, so
+  the scripts use `Continue` plus explicit exit-code checks.
+- M10 `.github/workflows/release.yml` (GHCR cpu/cuda/frontend, free-disk
+  step, release assets) and `ci.yml`. (`90cc5d4`)
+- M12 GPU E2E through the installed prod stack: 2 clips × 6 targets (same,
+  en, hi, fr, de, nl), each exporting SRT/VTT/MP4. **ALL PASSED.**
+- M13 Windows installer on this host (GPU variant, port fallback to 3001)
+  and `install.sh` in a clean docker:dind machine with 0 images (CPU
+  variant): both installed and came up healthy.
+- After a reboot, both stacks came back on their own (`restart:
+  unless-stopped`).
+- Norton TLS interception: its root CA was regenerated after the reboot. The
+  runtime `certs/` folder plus `vcm restart` fixes it for users;
+  `SSL_CERT_FILE`/`REQUESTS_CA_BUNDLE` now cover httpx too. Builds take the CA
+  as a BuildKit secret. (`fc3b6da`)
+- Long large-v3 segments are split into captions of ≤ 84 chars / ≤ 6 s.
+  (`816bfa1`)
+- Hindi burn-in renders (Poppins has Devanagari). `fonts-noto-core` was added
+  as a fallback for other scripts.
+- U6: axe-core finds 0 WCAG 2 A/AA violations on dashboard, editor, settings
+  and search in both themes; every keyboard stop shows a 2 px outline.
+- U7: 5xx and network errors are sentences; disk full is a 507 that says so.
+- m5: README notes that the tests use the dev database.
+
 ## Next
-Finish M6/M8: build the images, then run the prod stack (GPU via the Windows
-installer on this host; CPU via `install.sh` in a clean docker:dind
-"machine"), then E2E in all languages.
+Rebuild images (Noto fonts, xet off, CA env), `vcm update` on the GPU install,
+finish the CPU E2E in the clean machine, a final screenshot pass (U4/U5), the
+`vcm stop/start/uninstall` tests, then the final DoD check.
