@@ -106,8 +106,9 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
       cuda, free-disk step) that attaches the install scripts to the release.
 - [x] M11 Failing test `test_instancing_produces_a_real_static_bold` — stale
       image, fixed by the rebuild; verify.
-- [ ] M12 End-to-end: real video, GPU and CPU, all 5 languages, export.
-- [ ] M13 Fresh-install test from scratch in a clean environment.
+- [x] M12 End-to-end: real video, GPU and CPU, all 5 languages, export.
+- [ ] M13 Fresh-install test from scratch in a clean environment (local
+      stand-ins pass; the real one is R6).
 
 ### Added by Tanush (2026-10-08)
 - [x] R1 Prove no Norton/local CA is in any committed file, in a built image
