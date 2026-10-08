@@ -87,6 +87,8 @@ services:
       # per-container; they are the same bytes for the life of the image, and
       # sharing one volume means the two services never hold two copies.
       - model_cache:/root/.cache/huggingface
+      # A TLS-inspecting proxy's root (gitignored); the entrypoint trusts it.
+      - ./backend/certs:/usr/local/share/ca-certificates/extra:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,6 +142,8 @@ services:
       # per-container; they are the same bytes for the life of the image, and
       # sharing one volume means the two services never hold two copies.
       - model_cache:/root/.cache/huggingface
+      # A TLS-inspecting proxy's root (gitignored); the entrypoint trusts it.
+      - ./backend/certs:/usr/local/share/ca-certificates/extra:ro
     depends_on:
       postgres:
         condition: service_healthy

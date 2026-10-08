@@ -45,3 +45,6 @@ chroma_data/
 
 # guide
 learning-guide.md
+
+# Database dumps hold user data.
+*.dump

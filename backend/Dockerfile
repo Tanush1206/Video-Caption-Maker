@@ -57,11 +57,13 @@ LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Capti
 
 # FFmpeg for audio extraction and burning captions in; Liberation for the
 # Arial/Times/Courier metric-compatible faces; fontconfig so libass finds the
-# vendored and downloaded fonts by family name. Noto Core is the fallback for
+# vendored and downloaded fonts by family name. DejaVu is offered in the style
+# panel and is named explicitly: once Noto satisfies fontconfig's font
+# dependency, apt stops pulling it in. Noto Core is the fallback for
 # scripts the chosen caption font lacks (Devanagari, Arabic, Thai, Cyrillic…):
 # without it libass draws empty boxes.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ffmpeg fonts-liberation fonts-noto-core fontconfig ca-certificates curl \
+        ffmpeg fonts-dejavu-core fonts-liberation fonts-noto-core fontconfig ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /opt/venv /opt/venv
@@ -107,6 +109,14 @@ CMD ["api"]
 # ── dev: the runtime plus test tools; source is bind-mounted over /app ───────
 FROM runtime AS dev
 COPY backend/pyproject.toml backend/constraints.txt /tmp/build/
-RUN pip install -c /tmp/build/constraints.txt "pytest>=8.2.0" "pytest-asyncio>=0.23.0" "ruff>=0.5.0"
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then \
+        cat /etc/ssl/certs/ca-certificates.crt /run/secrets/extra_ca > /tmp/ca.pem \
+        # The runtime's SSL_CERT_FILE / REQUESTS_CA_BUNDLE outrank PIP_CERT
+        # here, so all three point at the combined bundle for this step.
+        && export PIP_CERT=/tmp/ca.pem SSL_CERT_FILE=/tmp/ca.pem REQUESTS_CA_BUNDLE=/tmp/ca.pem; \
+    fi \
+    && pip install -c /tmp/build/constraints.txt "pytest>=8.2.0" "pytest-asyncio>=0.23.0" "ruff>=0.5.0" \
+    && rm -f /tmp/ca.pem
 COPY backend/tests ./tests
 COPY backend/pytest.ini ./
