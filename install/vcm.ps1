@@ -69,7 +69,7 @@ try {
         'pull'    { Assert-Docker; Invoke-Compose @('pull') }
         'stop'    { Assert-Docker; Invoke-Compose @('stop'); Write-Host "Stopped. Your videos are kept; 'vcm start' brings it back." }
         'restart' { Assert-Docker; Invoke-Compose @('stop'); Invoke-Compose @('up', '-d'); Wait-Ready | Out-Null }
-        'status'  { Assert-Docker; Invoke-Compose @('ps') }
+        'status'  { Assert-Docker; Invoke-Compose @('ps', '-a') }
         'logs'    { Assert-Docker; $a = @('logs', '-f', '--tail', '200'); if ($Service) { $a += $Service }; Invoke-Compose $a }
         'open'    { Start-Process $Url }
         'update'  {
@@ -99,11 +99,18 @@ try {
             } else {
                 Write-Host "Kept your data (Docker volumes named ${Project}_*). Reinstalling picks it up again."
             }
-            try { Invoke-Compose @('down', '--rmi', 'all') } catch { }
+            # Only this app's own images. postgres, redis and chroma are shared
+            # base images that other projects on this machine may be using.
+            try {
+                Invoke-Compose @('config', '--images') | Where-Object { $_ -match '/video-caption-maker-' } |
+                    Sort-Object -Unique | ForEach-Object { docker image rm $_ *> $null }
+            } catch { }
             $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
             $kept = ($userPath -split ';' | Where-Object { $_ -and $_ -ne $VcmHome }) -join ';'
             [Environment]::SetEnvironmentVariable('Path', $kept, 'User')
-            if ($deleted) {
+            # Never a directory this script did not install into.
+            if ($deleted -and (Test-Path (Join-Path $VcmHome 'docker-compose.prod.yml')) -and
+                ($VcmHome -ne $env:USERPROFILE)) {
                 Set-Location $env:USERPROFILE
                 Remove-Item -Recurse -Force $VcmHome
             } else {

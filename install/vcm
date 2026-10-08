@@ -63,7 +63,7 @@ case "$cmd" in
     pull)     need_docker; compose pull ;;
     stop)     need_docker; compose stop; echo "Stopped. Your videos are kept; 'vcm start' brings it back." ;;
     restart)  need_docker; compose stop; compose up -d; wait_ready ;;
-    status)   need_docker; compose ps ;;
+    status)   need_docker; compose ps -a ;;
     logs)     need_docker; compose logs -f --tail 200 "$@" ;;
     open)     open_browser ;;
     update)
@@ -92,10 +92,15 @@ case "$cmd" in
         else
             echo "Kept your data (Docker volumes named vcm_*). Reinstalling picks it up again."
         fi
-        compose down --rmi all >/dev/null 2>&1 || true
+        # Only this app's own images. postgres, redis and chroma are shared base
+        # images that other projects on this machine may be using.
+        compose config --images 2>/dev/null | grep '/video-caption-maker-' | sort -u \
+            | while read -r image; do docker image rm "$image" >/dev/null 2>&1 || true; done
         rm -f "$HOME/.local/bin/vcm"
         cd /
-        if [ "$deleted" = 1 ]; then
+        # Never a directory this script did not install into.
+        if [ "$deleted" = 1 ] && [ -f "$VCM_HOME/docker-compose.prod.yml" ] \
+            && [ "$VCM_HOME" != "$HOME" ] && [ "$VCM_HOME" != "/" ]; then
             rm -rf "$VCM_HOME"
         else
             # .env holds the database password the kept data is locked with.
