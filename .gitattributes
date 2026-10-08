@@ -3,3 +3,5 @@
 *.sh text eol=lf
 # PowerShell is happiest with CRLF.
 *.ps1 text eol=crlf
+# vcm has no extension but is a bash script too.
+install/vcm text eol=lf

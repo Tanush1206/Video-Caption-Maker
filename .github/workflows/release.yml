@@ -105,7 +105,7 @@ jobs:
           cp install/install.sh install/install.ps1 install/vcm install/vcm.ps1 install/vcm.cmd \
              docker-compose.prod.yml docker-compose.gpu.yml dist/
           chmod +x dist/install.sh dist/vcm
-          (cd dist && sha256sum * > SHA256SUMS)
+          (cd dist && sha256sum -- * > SHA256SUMS)
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
