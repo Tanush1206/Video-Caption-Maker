@@ -728,3 +728,62 @@ def test_failed_jobs_get_a_sentence_not_a_traceback():
     )
     generic = friendly_error(KeyError("segments"))
     assert "segments" not in generic
+
+
+# ── Caption length ─────────────────────────────────────────────────────────
+
+
+def _segment(words: list[tuple[str, float, float]]):
+    from types import SimpleNamespace
+
+    ws = [SimpleNamespace(word=w, start=s, end=e) for w, s, e in words]
+    return SimpleNamespace(
+        text="".join(w for w, _, _ in words),
+        start=words[0][1],
+        end=words[-1][2],
+        words=ws,
+        avg_logprob=-0.2,
+    )
+
+
+def test_short_segments_pass_through_untouched():
+    from app.services import transcription
+
+    seg = _segment([(" Hello", 0.0, 0.4), (" there.", 0.4, 0.9)])
+    assert list(transcription._split_long(seg)) == [seg]
+
+
+def test_a_long_segment_becomes_readable_captions_with_their_own_timings():
+    """large-v3 emits ~200-character segments; burned in, that is five lines."""
+    from app.services import transcription
+
+    words = [(f" word{i:02d}", i * 0.4, i * 0.4 + 0.35) for i in range(40)]
+    pieces = list(transcription._split_long(_segment(words)))
+
+    assert len(pieces) > 1
+    assert all(len(p.text) <= transcription.MAX_CAPTION_CHARS for p in pieces)
+    assert all(p.end - p.start <= transcription.MAX_CAPTION_SECONDS for p in pieces)
+    # Nothing lost, nothing repeated, and in order.
+    assert " ".join(p.text for p in pieces) == " ".join(w.strip() for w, _, _ in words)
+    assert [p.start for p in pieces] == sorted(p.start for p in pieces)
+    assert pieces[1].start == pytest.approx(pieces[0].words[-1].end + 0.05, abs=0.06)
+
+
+def test_a_long_segment_breaks_after_a_clause_when_it_can():
+    from app.services import transcription
+
+    words = [(" This", 0, 0.3), (" is", 0.3, 0.5), (" the", 0.5, 0.7), (" first", 0.7, 1.0),
+             (" sentence", 1.0, 1.4), (" of", 1.4, 1.5), (" a", 1.5, 1.6), (" fairly", 1.6, 1.9),
+             (" long", 1.9, 2.1), (" caption.", 2.1, 2.6)]
+    words += [(f" next{i}", 2.6 + i * 0.3, 2.85 + i * 0.3) for i in range(14)]
+    pieces = list(transcription._split_long(_segment(words)))
+    assert pieces[0].text.endswith("caption.")
+
+
+def test_segments_without_word_timings_are_not_split():
+    from types import SimpleNamespace
+
+    from app.services import transcription
+
+    seg = SimpleNamespace(text="x" * 300, start=0.0, end=20.0, words=None, avg_logprob=None)
+    assert list(transcription._split_long(seg)) == [seg]

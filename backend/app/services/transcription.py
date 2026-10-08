@@ -15,6 +15,7 @@ import subprocess
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 from app.config import get_settings
 from app.services import model_store
@@ -663,4 +664,59 @@ def transcribe(
 
 def _iter(segments) -> Iterator:
     """Consuming the generator is what actually performs the decoding."""
-    yield from segments
+    for segment in segments:
+        yield from _split_long(segment)
+
+
+# A caption a viewer can read: two lines of ~42 characters, on screen for no
+# more than a few seconds. large-v3 decodes in phrases of up to ~200 characters
+# — measured on a 60-second Hindi clip, six segments for the whole minute — and
+# burned in, one of those wraps to five lines across the middle of the frame.
+MAX_CAPTION_CHARS = 84
+MAX_CAPTION_SECONDS = 6.0
+# Where a sentence or clause ends, a break reads naturally. `।` is the
+# Devanagari full stop.
+CLAUSE_END = (".", ",", "!", "?", ";", ":", "।", "、", "。", "，")
+
+
+def _split_long(segment) -> Iterator:
+    """
+    Cut a long Whisper segment into caption-sized pieces at word boundaries.
+
+    Uses the per-word timings, so each piece starts and ends when its own
+    words are said rather than sharing the segment's span. Prefers to break
+    after a clause once a piece is reasonably full, so a line ends where a
+    reader would pause. Segments without word timings pass through whole:
+    there is no honest way to time a piece of them.
+    """
+    words = [w for w in (getattr(segment, "words", None) or []) if w.start is not None]
+    text = segment.text.strip()
+    duration = (segment.end or 0) - (segment.start or 0)
+    if not words or (len(text) <= MAX_CAPTION_CHARS and duration <= MAX_CAPTION_SECONDS):
+        yield segment
+        return
+
+    def piece(chunk):
+        return SimpleNamespace(
+            text="".join(w.word for w in chunk).strip(),
+            start=max(chunk[0].start, segment.start),
+            end=min(chunk[-1].end, segment.end),
+            words=chunk,
+            avg_logprob=getattr(segment, "avg_logprob", None),
+        )
+
+    chunk: list = []
+    for word in words:
+        if chunk:
+            length = len("".join(w.word for w in chunk + [word]).strip())
+            span = word.end - chunk[0].start
+            if length > MAX_CAPTION_CHARS or span > MAX_CAPTION_SECONDS:
+                yield piece(chunk)
+                chunk = []
+        chunk.append(word)
+        filled = len("".join(w.word for w in chunk).strip())
+        if filled >= MAX_CAPTION_CHARS * 0.5 and word.word.strip().endswith(CLAUSE_END):
+            yield piece(chunk)
+            chunk = []
+    if chunk:
+        yield piece(chunk)
