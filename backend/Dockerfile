@@ -57,9 +57,11 @@ LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Capti
 
 # FFmpeg for audio extraction and burning captions in; Liberation for the
 # Arial/Times/Courier metric-compatible faces; fontconfig so libass finds the
-# vendored and downloaded fonts by family name.
+# vendored and downloaded fonts by family name. Noto Core is the fallback for
+# scripts the chosen caption font lacks (Devanagari, Arabic, Thai, Cyrillic…):
+# without it libass draws empty boxes.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ffmpeg fonts-liberation fontconfig ca-certificates curl \
+        ffmpeg fonts-liberation fonts-noto-core fontconfig ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /opt/venv /opt/venv
