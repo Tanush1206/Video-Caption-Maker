@@ -13,9 +13,9 @@ set -e
 # trusted at start. Nothing is baked into the image.
 EXTRA_CA=/usr/local/share/ca-certificates/extra
 if ls "$EXTRA_CA"/*.crt >/dev/null 2>&1; then
+    # Rebuilds /etc/ssl/certs/ca-certificates.crt, which SSL_CERT_FILE and
+    # REQUESTS_CA_BUNDLE point every client at (see the Dockerfile).
     update-ca-certificates >/dev/null 2>&1 || true
-    export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-    export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     echo "Trusting extra CA certificates from $EXTRA_CA"
 fi
 

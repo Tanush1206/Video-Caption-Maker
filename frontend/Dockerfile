@@ -8,7 +8,11 @@ ARG NODE_IMAGE=node:20.20.2-alpine
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# Optional build-time CA, as in backend/Dockerfile: mounted for the step,
+# never stored in a layer.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
+    && npm ci --no-audit --no-fund
 
 FROM deps AS dev
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -25,7 +29,9 @@ ENV NEXT_PUBLIC_API_URL="" \
     NEXT_PUBLIC_AUTH_MODE=${NEXT_PUBLIC_AUTH_MODE} \
     BACKEND_URL=http://backend:8000 \
     NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
+    && npm run build
 
 FROM ${NODE_IMAGE} AS runtime
 ARG VERSION=dev

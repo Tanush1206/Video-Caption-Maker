@@ -27,7 +27,15 @@ WORKDIR /build
 COPY backend/pyproject.toml backend/constraints.txt ./
 # Only the package metadata is needed to resolve dependencies; an empty
 # package keeps this layer from depending on the source.
-RUN mkdir app && touch app/__init__.py \
+# Optional build-time CA (`--secret id=extra_ca,src=proxy-root.crt`) for
+# machines whose antivirus or proxy re-signs TLS. Mounted for this step only:
+# it is never written to a layer, and CI builds without it.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then \
+        cat /etc/ssl/certs/ca-certificates.crt /run/secrets/extra_ca > /tmp/ca.pem \
+        && export PIP_CERT=/tmp/ca.pem; \
+    fi \
+    && mkdir app && touch app/__init__.py \
     # torch arrives with sentence-transformers. The CPU wheel, in both
     # variants: it only embeds short captions for search, and the CUDA wheel
     # is 5 GB of libraries nothing else here uses.
@@ -36,7 +44,8 @@ RUN mkdir app && touch app/__init__.py \
     && if [ "$VARIANT" = "cuda" ]; then \
         pip install nvidia-cublas-cu12==12.9.2.10 nvidia-cudnn-cu12==9.24.0.43; \
     fi \
-    && pip uninstall -y videocaptionmaker-backend
+    && pip uninstall -y videocaptionmaker-backend \
+    && rm -f /tmp/ca.pem
 
 # ── runtime ──────────────────────────────────────────────────────────────────
 FROM ${PYTHON_IMAGE} AS runtime
@@ -71,6 +80,12 @@ ENV PATH=/opt/venv/bin:$PATH \
     # its whole download; HTTP writes as it goes (progress the user can watch)
     # and resumes from the partial file after a dropped connection.
     HF_HUB_DISABLE_XET=1 \
+    # One trust store for every client. httpx (huggingface_hub) and requests
+    # ship their own certifi bundle and ignore the system one, so an extra CA
+    # trusted by the entrypoint would reach urllib and nothing else. The
+    # system bundle already holds the standard roots.
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
     TOKENIZERS_PARALLELISM=false
 
 COPY frontend/public/fonts/ /usr/share/fonts/truetype/vcm/
