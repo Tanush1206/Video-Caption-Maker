@@ -90,16 +90,37 @@ $ErrorActionPreference = 'Continue'
 
     # -- 4. Files -------------------------------------------------------------
     New-Item -ItemType Directory -Force -Path (Join-Path $VcmHome 'certs') | Out-Null
-    foreach ($file in @('docker-compose.prod.yml', 'docker-compose.gpu.yml', 'vcm.ps1', 'vcm.cmd')) {
-        $target = Join-Path $VcmHome $file
-        try {
-            Invoke-WebRequest -ErrorAction Stop -UseBasicParsing -Uri "$BaseUrl/$file" -OutFile "$target.tmp"
-            Move-Item -ErrorAction Stop -Force "$target.tmp" $target
-        } catch {
-            Remove-Item -ErrorAction SilentlyContinue "$target.tmp"
-            Fail "Couldn't download $file from $BaseUrl" @('Check your internet connection and try again.')
+    # Everything is downloaded and checked against the release's SHA256SUMS
+    # before anything is replaced, so a truncated or altered file never lands.
+    $files = @('docker-compose.prod.yml', 'docker-compose.gpu.yml', 'vcm.ps1', 'vcm.cmd')
+    $temps = @()
+    try {
+        foreach ($file in $files + @('SHA256SUMS')) {
+            $target = Join-Path $VcmHome "$file.tmp"
+            $temps += $target
+            Invoke-WebRequest -ErrorAction Stop -UseBasicParsing -Uri "$BaseUrl/$file" -OutFile $target
+        }
+    } catch {
+        $temps | ForEach-Object { Remove-Item -ErrorAction SilentlyContinue $_ }
+        Fail "Couldn't download $file from $BaseUrl" @('Check your internet connection and try again.')
+    }
+    $sums = @{}
+    foreach ($line in [IO.File]::ReadAllLines((Join-Path $VcmHome 'SHA256SUMS.tmp'))) {
+        if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+)$') { $sums[$Matches[2]] = $Matches[1].ToLower() }
+    }
+    foreach ($file in $files) {
+        $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $VcmHome "$file.tmp")).Hash.ToLower()
+        if (-not $sums.ContainsKey($file) -or $sums[$file] -ne $actual) {
+            $temps | ForEach-Object { Remove-Item -ErrorAction SilentlyContinue $_ }
+            Fail "$file didn't match the release's SHA256SUMS; nothing was installed." @(
+                'Try again. If it keeps happening, something between you and GitHub is altering downloads.')
         }
     }
+    foreach ($file in $files) {
+        Move-Item -ErrorAction Stop -Force (Join-Path $VcmHome "$file.tmp") (Join-Path $VcmHome $file)
+    }
+    Remove-Item -ErrorAction SilentlyContinue (Join-Path $VcmHome 'SHA256SUMS.tmp')
+    Ok "Downloaded files match the release's SHA256SUMS"
     Ok "Installed to $VcmHome"
 
     # -- 5. Secrets and settings (.env) ---------------------------------------

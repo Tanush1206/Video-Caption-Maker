@@ -103,15 +103,32 @@ fi
 # ── 4. Files ────────────────────────────────────────────────────────────────
 mkdir -p "$VCM_HOME/certs"
 cd "$VCM_HOME"
+FILES="docker-compose.prod.yml docker-compose.gpu.yml vcm"
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
+    else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
 fetch() {
     if ! curl -fsSL --retry 3 "$BASE_URL/$1" -o "$1.tmp"; then
-        rm -f "$1.tmp"
+        rm -f ./*.tmp
         die "Couldn't download $1 from $BASE_URL" "Check your internet connection and try again."
     fi
-    mv "$1.tmp" "$1"
 }
-for file in docker-compose.prod.yml docker-compose.gpu.yml vcm; do fetch "$file"; done
+# Everything is downloaded and checked against the release's SHA256SUMS
+# before anything is replaced, so a truncated or altered file never lands.
+for file in $FILES SHA256SUMS; do fetch "$file"; done
+for file in $FILES; do
+    expected="$(awk -v f="$file" '$2 == f || $2 == "*"f { print $1 }' SHA256SUMS.tmp)"
+    if [ -z "$expected" ] || [ "$(sha256 "$file.tmp")" != "$expected" ]; then
+        rm -f ./*.tmp
+        die "$file didn't match the release's SHA256SUMS; nothing was installed." \
+            "Try again. If it keeps happening, something between you and GitHub is altering downloads."
+    fi
+done
+for file in $FILES; do mv "$file.tmp" "$file"; done
+rm -f SHA256SUMS.tmp
 chmod +x vcm
+ok "Downloaded files match the release's SHA256SUMS"
 ok "Installed to $VCM_HOME"
 
 # ── 5. Secrets and settings (.env) ──────────────────────────────────────────
