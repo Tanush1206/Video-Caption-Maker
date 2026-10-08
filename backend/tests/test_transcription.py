@@ -477,6 +477,42 @@ def test_a_detected_language_is_used_as_detected():
     assert not hasattr(languages, "TRANSCRIPTION_SUBSTITUTES")
 
 
+def test_nothing_past_the_no_speech_check_retries_without_it(tmp_path, monkeypatch):
+    """
+    Whisper small on fast Hindi skipped every window as "probably not speech"
+    and the video finished with no captions and no error. An empty first pass
+    is retried with the check off, and the video says the result is shaky.
+    """
+    from types import SimpleNamespace
+
+    from app.services import transcription
+
+    calls = []
+
+    class Model:
+        def transcribe(self, path, **options):
+            calls.append(options)
+            info = SimpleNamespace(duration=10.0, language="hi")
+            if "no_speech_threshold" not in options:
+                return iter([]), info
+            word = SimpleNamespace(start=1.0, end=2.0, word=" नमस्ते")
+            seg = SimpleNamespace(
+                text=" नमस्ते", start=1.0, end=2.0, words=[word], avg_logprob=-1.2
+            )
+            return iter([seg]), info
+
+    monkeypatch.setattr(transcription, "get_model", lambda: Model())
+    monkeypatch.setattr(transcription, "silent_spans", lambda path: [])
+    monkeypatch.setattr(transcription, "vocal_envelope", lambda path: [])
+
+    segments, language = transcription.transcribe(tmp_path / "a.wav", language="hi")
+
+    assert [s.text for s in segments] == ["नमस्ते"]
+    assert language == "hi"
+    assert calls[1]["no_speech_threshold"] is None
+    assert transcription.low_confidence_note == transcription.LOW_CONFIDENCE_NOTE
+
+
 def test_silent_spans_parses_ffmpeg_output(tmp_path, monkeypatch):
     """Parsed from silencedetect's log lines, which is where it reports."""
     import subprocess

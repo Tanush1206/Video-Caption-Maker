@@ -218,6 +218,8 @@ async def _run(video_id: int) -> dict:
             on_progress=report,
         )
         logger.info("Video %s: %d segments (%s)", video_id, len(segments), language)
+        if transcription.low_confidence_note:
+            notices.append(transcription.low_confidence_note)
 
     finally:
         # The WAV is a large intermediate; drop it however this ends.

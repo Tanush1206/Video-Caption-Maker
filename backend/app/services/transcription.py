@@ -39,6 +39,14 @@ _model_key: tuple[str, str, str] | None = None
 # Set when the GPU was asked for and could not be used, so the job can say
 # why it ran slowly instead of leaving the user to guess.
 fallback_note: str | None = None
+# Set by transcribe() when nothing cleared Whisper's no-speech check and the
+# captions came from a second, less strict pass.
+low_confidence_note: str | None = None
+
+LOW_CONFIDENCE_NOTE = (
+    "The speech model was unsure of this audio, so the captions may have errors. "
+    "A larger speech model in Settings is more accurate."
+)
 
 
 @dataclass
@@ -584,8 +592,41 @@ def transcribe(
     reported from how far through the audio each segment ends — the only
     progress signal available without patching the library.
     """
+    global low_confidence_note
+    low_confidence_note = None
     model = get_model()
 
+    # Measured once, up front, rather than per segment: one pass over the file
+    # against thousands of interval comparisons.
+    spans = silent_spans(audio_path) if not settings.whisper_vad_filter else []
+    # The second measurement of the same audio, asking a different question:
+    # `spans` is "is there any sound at all", this is "when does the voice
+    # arrive". Silence detection cannot see a singer entering over an
+    # instrumental, because the instrumental is not silent.
+    levels = vocal_envelope(audio_path)
+
+    segments, info = _decode(model, audio_path, language, task, spans, levels, on_progress)
+    if not segments:
+        # Whisper skips a 30-second window when it thinks it is probably not
+        # speech AND its words are unlikely. A small model on fast speech in
+        # a language it knows less well can do that to every window: Whisper
+        # small on a 60-second Hindi tutorial scored no_speech 0.61-0.67 at
+        # logprob below -1.0 throughout, and returned nothing at all. Without
+        # the no-speech check it returns real, if rough, captions. Hallucination
+        # over genuine silence is still caught by the silent-span check.
+        logger.info("No segments passed the no-speech check; retrying without it")
+        segments, info = _decode(
+            model, audio_path, language, task, spans, levels, on_progress,
+            no_speech_threshold=None,
+        )
+        if segments:
+            low_confidence_note = LOW_CONFIDENCE_NOTE
+
+    return segments, info.language or "unknown"
+
+
+def _decode(model, audio_path, language, task, spans, levels, on_progress, **options):
+    """One Whisper pass, filtered and retimed into caption segments."""
     raw_segments, info = model.transcribe(
         str(audio_path),
         vad_filter=settings.whisper_vad_filter,
@@ -605,19 +646,11 @@ def transcribe(
         # are said rather than when Whisper's decode window opened. See
         # _spoken_bounds for the measurements; it costs an alignment pass.
         word_timestamps=True,
+        **options,
     )
 
     total_seconds = info.duration or 0
     segments: list[Segment] = []
-
-    # Measured once, up front, rather than per segment: one pass over the file
-    # against thousands of interval comparisons.
-    spans = silent_spans(audio_path) if not settings.whisper_vad_filter else []
-    # The second measurement of the same audio, asking a different question:
-    # `spans` is "is there any sound at all", this is "when does the voice
-    # arrive". Silence detection cannot see a singer entering over an
-    # instrumental, because the instrumental is not silent.
-    levels = vocal_envelope(audio_path)
     dropped = 0
 
     for index, segment in enumerate(_iter(raw_segments)):
@@ -659,7 +692,7 @@ def transcribe(
     if dropped:
         logger.info("Dropped %d segment(s) that fell in silence", dropped)
 
-    return segments, info.language or "unknown"
+    return segments, info
 
 
 def _iter(segments) -> Iterator:
