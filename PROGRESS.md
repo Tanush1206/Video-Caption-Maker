@@ -117,9 +117,8 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - [x] R3 Report the language pairs and engine the 12 E2E jobs covered. All 20
       pairs on local M2M100; a bad or missing Gemini key falls back without
       failing the job.
-- [ ] R4 Test the low-RAM CPU tier (< 12 GB → small + M2M100-418M) with a
-      memory-limited worker. (Tier selected correctly; Hindi gave 0 captions →
-      fixed in `b8c446a`, rerun pending.)
+- [x] R4 Test the low-RAM CPU tier (< 12 GB → small + M2M100-418M) with a
+      memory-limited worker.
 - [x] R5 `vcm update` keeps videos, captions and the DB, and runs migrations.
 - [ ] R6 Final install test from the published GitHub Release + GHCR images.
       Tell Tanush when to make the repo and packages public. Wait for his
@@ -141,9 +140,9 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
       translating, rendering, done with a download link.
 - [x] U3 No login or landing page in local mode; Settings gets a Gemini key
       field, a Whisper model override and hardware info; account UI hidden.
-- [ ] U4 Consistency pass: spacing and type scale, buttons, inputs, cards,
+- [x] U4 Consistency pass: spacing and type scale, buttons, inputs, cards,
       overflow.
-- [ ] U5 Responsive at 375px through wide desktop; light and dark.
+- [x] U5 Responsive at 375px through wide desktop; light and dark.
 - [x] U6 Accessibility: keyboard, focus rings, labels, AA contrast.
 - [x] U7 Empty, loading and error states on every screen; no raw error dumps.
 
@@ -275,7 +274,15 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - Secrets are 64 hex chars (`openssl rand -hex 32` / RNG bytes as `x2`):
   never `$`. Verified on both installs' `.env` without printing values.
 
+- R4: worker capped at 8 GB (cgroup) → small int8 + m2m100_418M. English
+  and German clips × 6 targets passed; Hindi × 6 passed after `b8c446a`
+  (9-22 captions; 4 of 6 carry the low-confidence notice).
+- R8 DELETE path, clean machine only: removed the 6 containers, 5 `vcm_*`
+  volumes, `vcm_default`, the 2 app images, the install dir and the `vcm`
+  link. Base images (postgres, redis, chroma) and an unlabelled volume kept.
+- U4/U5: 5 screens × desktop 1440 / mobile 375 × light/dark on the release
+  build: no console errors, no horizontal overflow; reviewed by eye.
+
 ## Next
-Low-RAM Hindi rerun and the DELETE uninstall in the clean machine; final
-screenshot pass (U4/U5); then R6 (publish, with Tanush) and the final DoD
-check; then R10.
+R6 publish, one step at a time with Tanush's confirmation; then the install
+from the real Release + GHCR, R1 recheck on GHCR images, final DoD; then R10.

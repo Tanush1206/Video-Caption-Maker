@@ -152,6 +152,10 @@ healthy.
   everything runs on the CPU; NVIDIA GPUs are Windows and Linux only.
 - **Caption languages:** English, Hindi, French, German and Dutch. "Same as
   spoken" works for any language Whisper recognises.
+- **The small speech model** (chosen on machines under 12 GB RAM) is rough
+  on fast speech outside English. On Hindi, expect many wrong words; the
+  video says so when the model was unsure. A larger model in Settings is
+  much better, if the machine has the memory.
 - **Local translation** (M2M100) translates each caption line on its own, so
   idioms and fragments read more literally than with Gemini.
 - **Chinese, Japanese and Korean** captions burned into video need a CJK font
