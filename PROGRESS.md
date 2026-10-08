@@ -284,6 +284,21 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - U4/U5: 5 screens × desktop 1440 / mobile 375 × light/dark on the release
   build: no console errors, no horizontal overflow; reviewed by eye.
 
+- R6 progress: pushed `main` (CI green on `ac2251c`); repo public (intended);
+  tag v1.0.0 → release workflow green: GHCR backend (1.0.0-cpu/-cuda,
+  latest-*) and frontend, Release with 8 assets; both packages public
+  (anonymous manifest fetch 200, confirmed by Tanush).
+- Found before the final test: the installers never checked SHA256SUMS.
+  Now install.sh, install.ps1 and `vcm update` verify every file before
+  replacing anything; tampered-file tests pass on both platforms
+  (`d0fb999`). DELETE uninstall left redis's anonymous volume; fixed
+  (`95f5952`). Both need a v1.0.1 release.
+- Test install on this PC deleted (approved by Tanush): exactly the 6
+  containers, 5 `vcm_*` volumes, 2 test images and the folder; dev stack
+  diff empty.
+
 ## Next
-R6 publish, one step at a time with Tanush's confirmation; then the install
-from the real Release + GHCR, R1 recheck on GHCR images, final DoD; then R10.
+v1.0.1 (push + tag, with Tanush), then the final install test exactly as a
+user would, from the README on GitHub: clean Linux machine and Windows,
+E2E on both, R1 recheck on GHCR images, DELETE uninstall leaves nothing;
+final DoD; then R10.

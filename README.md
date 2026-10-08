@@ -29,7 +29,8 @@ The installer:
 1. checks that Docker is running and that there's enough disk space;
 2. checks for a usable NVIDIA GPU;
 3. generates this install's private settings;
-4. downloads the app;
+4. downloads the app, checking each downloaded file against the release's
+   `SHA256SUMS` (the same check runs on `vcm update`);
 5. starts it, waits until it's healthy, and opens
    **http://localhost:3000**.
 
