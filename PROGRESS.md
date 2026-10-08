@@ -110,18 +110,29 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - [ ] M13 Fresh-install test from scratch in a clean environment.
 
 ### Added by Tanush (2026-10-08)
-- [ ] R1 Prove no Norton/local CA is in any committed file, in a built image
-      (inspect for *.crt), or in a release. Dev machine only.
-- [ ] R2 Frontend `npm run build` + `npm run lint`: run and report.
-- [ ] R3 Report the language pairs and engine the 12 E2E jobs covered. All 20
+- [x] R1 Prove no Norton/local CA is in any committed file, in a built image
+      (inspect for *.crt), or in a release. Dev machine only. (Re-check the
+      GHCR images in R6.)
+- [x] R2 Frontend `npm run build` + `npm run lint`: run and report.
+- [x] R3 Report the language pairs and engine the 12 E2E jobs covered. All 20
       pairs on local M2M100; a bad or missing Gemini key falls back without
       failing the job.
 - [ ] R4 Test the low-RAM CPU tier (< 12 GB → small + M2M100-418M) with a
-      memory-limited worker.
-- [ ] R5 `vcm update` keeps videos, captions and the DB, and runs migrations.
+      memory-limited worker. (Tier selected correctly; Hindi gave 0 captions →
+      fixed in `b8c446a`, rerun pending.)
+- [x] R5 `vcm update` keeps videos, captions and the DB, and runs migrations.
 - [ ] R6 Final install test from the published GitHub Release + GHCR images.
-      Tell Tanush when to make the repo and packages public.
-- [ ] R7 macOS untested: a known limitation in the README and final report.
+      Tell Tanush when to make the repo and packages public. Wait for his
+      confirmation after each publishing step.
+- [x] R7 macOS untested: a known limitation in the README and final report.
+
+### Added by Tanush (2026-10-08, second round)
+- [x] R8 Uninstall touches only the installed project: list targets first;
+      never the dev stack. DELETE path only in the clean machine; on this PC
+      only the keep-data path.
+- [x] R9 Answer: what the R5 downgrade dropped, which stack was rolled back and
+      whether a backup existed; whether secrets can contain `$`.
+- [ ] R10 Remove `vcm-test-registry` and `vcm-clean` after testing.
 
 ### UI
 - [x] U1 3-step flow (Upload → Language → Export) with a stepper; editor,
@@ -232,7 +243,39 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - U7: 5xx and network errors are sentences; disk full is a 507 that says so.
 - m5: README notes that the tests use the dev database.
 
+- R1: `git log --all` has never tracked a `.crt`/`.pem`. In all three built
+  images, no cert outside the distro store, an empty extra-CA dir, and the
+  Norton root's fingerprint in no bundle.
+- R2: `npm run lint` clean; `npm run build` succeeds.
+- R3: GPU E2E covers 5 spoken languages (en, hi, fr, de, nl) × 6 targets
+  (same, en, hi, fr, de, nl) = 30 jobs, all passed, local M2M100-1.2B (X→en
+  via Whisper translate). M2M100 service level: 20/20 pairs. An invalid
+  Gemini key falls back to local with a notice; the job succeeds.
+- R5: on the GPU install, rolled back one migration (a9d3e6f20b14 →
+  f1c93d05a827), then `vcm update`: upgrade ran on start, 12 videos /
+  136 captions / 36 exports and the caption-text md5 unchanged. That
+  downgrade drops `app_settings` and `videos.stage_detail`/`videos.notice`;
+  after the upgrade all 12 older videos have both NULL, and `app_settings`
+  holds only `worker_hardware` (re-reported by the worker on start). No
+  backup was taken first, so whether any of those held a value before is
+  unknown. A real `vcm update` only upgrades, so it drops nothing.
+- Low-RAM Hindi: Whisper small skipped every window as not-speech (0
+  captions, no error). An empty pass now retries without the no-speech
+  check, with a notice. (`b8c446a`)
+- DejaVu Sans was offered but missing from the image once `fonts-noto-core`
+  satisfied fontconfig's dependency; installed explicitly. The dev image now
+  builds behind a TLS proxy. (`5a897db`)
+- R8: uninstall used `down --rmi all`, which targets `chromadb/chroma:1.0.0`,
+  shared with the dev stack. Now it removes only `video-caption-maker-*`
+  images and guards the directory delete. On this PC, keep-data uninstall
+  removed exactly the 6 `vcm-*-1` containers and 2 app images; dev stack
+  containers, volumes, images and DB checksum identical. Reinstall picked
+  the data back up (32 videos). `vcm status` shows stopped containers.
+  (`07f0326`)
+- Secrets are 64 hex chars (`openssl rand -hex 32` / RNG bytes as `x2`):
+  never `$`. Verified on both installs' `.env` without printing values.
+
 ## Next
-Rebuild images (Noto fonts, xet off, CA env), `vcm update` on the GPU install,
-finish the CPU E2E in the clean machine, a final screenshot pass (U4/U5), the
-`vcm stop/start/uninstall` tests, then the final DoD check.
+Low-RAM Hindi rerun and the DELETE uninstall in the clean machine; final
+screenshot pass (U4/U5); then R6 (publish, with Tanush) and the final DoD
+check; then R10.
