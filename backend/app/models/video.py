@@ -93,6 +93,11 @@ class Video(Base):
     # Progress through the current pipeline stage, 0-100. Transient: it is
     # meaningful only while status is PROCESSING.
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Times a worker restart found this job stranded and requeued it; reset
+    # when the user queues it themselves. See app/workers/recovery.py.
+    recovery_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # Which stage is running ("extracting", "transcribing", "embedding"), so
     # the UI can say something more useful than a bare percentage.

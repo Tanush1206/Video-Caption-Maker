@@ -115,6 +115,8 @@ async def mark_queued(db: AsyncSession, video: Video) -> Video:
     video.stage = None
     video.progress = 0
     video.error_message = None
+    # A deliberate retry gets a fresh allowance of automatic requeues.
+    video.recovery_attempts = 0
     await db.commit()
     await db.refresh(video)
     return video

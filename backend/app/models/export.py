@@ -93,6 +93,11 @@ class Export(Base):
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Times a worker restart found this render stranded and requeued it.
+    # See app/workers/recovery.py.
+    recovery_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
