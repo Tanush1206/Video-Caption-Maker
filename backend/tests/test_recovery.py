@@ -46,26 +46,97 @@ def test_reads_delivered_but_unacknowledged_jobs(spare_broker):
     assert recovery.jobs_in_broker(client) == {("video", 42)}
 
 
-async def test_only_unfinished_work_the_broker_lost_is_stranded(
+async def _upload(client, auth_headers, sample_video_bytes) -> int:
+    response = await client.post(
+        "/api/videos",
+        headers=auth_headers,
+        files={"file": ("clip.mp4", sample_video_bytes, "video/mp4")},
+    )
+    return response.json()["id"]
+
+
+async def test_only_unfinished_work_the_broker_lost_is_requeued(
     client, auth_headers, sample_video_bytes, db_session
 ):
     from app.models.video import Video, VideoStatus
 
-    ids = []
-    for _ in range(3):
-        response = await client.post(
-            "/api/videos",
-            headers=auth_headers,
-            files={"file": ("clip.mp4", sample_video_bytes, "video/mp4")},
-        )
-        ids.append(response.json()["id"])
-    lost, still_queued, finished = ids
+    lost, still_queued, finished = [
+        await _upload(client, auth_headers, sample_video_bytes) for _ in range(3)
+    ]
     (await db_session.get(Video, lost)).status = VideoStatus.PROCESSING
     (await db_session.get(Video, finished)).status = VideoStatus.COMPLETED
     await db_session.commit()
 
-    videos, _ = await recovery.stranded(db_session, held={("video", still_queued)})
+    result = await recovery.recover(db_session, held={("video", still_queued)})
 
-    assert lost in videos
-    assert still_queued not in videos
-    assert finished not in videos
+    assert lost in result.videos
+    assert still_queued not in result.videos
+    assert finished not in result.videos
+    db_session.expire_all()
+    assert (await db_session.get(Video, lost)).recovery_attempts == 1
+    assert (await db_session.get(Video, still_queued)).recovery_attempts == 0
+
+
+async def test_a_job_that_keeps_crashing_the_worker_is_failed_not_requeued_forever(
+    client, auth_headers, sample_video_bytes, db_session
+):
+    """
+    Each worker start finds the video still "processing" (the crash left it so)
+    and requeues it, up to MAX_REQUEUES times. The next start fails it with a
+    reason, and a manual retry gets a fresh allowance.
+    """
+    from app.models.video import Video, VideoStatus
+
+    video_id = await _upload(client, auth_headers, sample_video_bytes)
+    (await db_session.get(Video, video_id)).status = VideoStatus.PROCESSING
+    await db_session.commit()
+
+    for attempt in range(1, recovery.MAX_REQUEUES + 1):
+        result = await recovery.recover(db_session, held=set())
+        assert video_id in result.videos, f"start {attempt} should requeue"
+        # The requeued job crashes the worker again: still processing.
+        video = await db_session.get(Video, video_id)
+        assert video.recovery_attempts == attempt
+        video.status = VideoStatus.PROCESSING
+        await db_session.commit()
+
+    result = await recovery.recover(db_session, held=set())
+
+    assert video_id not in result.videos
+    assert video_id in result.failed_videos
+    db_session.expire_all()
+    video = await db_session.get(Video, video_id)
+    assert video.status == VideoStatus.FAILED
+    assert "smaller speech model" in video.error_message
+
+    # The user retries by hand: allowed, and the count starts over.
+    response = await client.post(f"/api/videos/{video_id}/transcribe", headers=auth_headers)
+    assert response.status_code == 200
+    db_session.expire_all()
+    assert (await db_session.get(Video, video_id)).recovery_attempts == 0
+
+
+async def test_an_export_that_keeps_crashing_the_worker_is_failed(
+    client, auth_headers, sample_video_bytes, db_session
+):
+    from app.models.export import Export, ExportFormat, ExportStatus
+
+    video_id = await _upload(client, auth_headers, sample_video_bytes)
+    export = Export(
+        video_id=video_id,
+        format=ExportFormat.MP4,
+        status=ExportStatus.PROCESSING,
+        recovery_attempts=recovery.MAX_REQUEUES,
+    )
+    db_session.add(export)
+    await db_session.commit()
+    export_id = export.id
+
+    result = await recovery.recover(db_session, held=set())
+
+    assert export_id in result.failed_exports
+    assert export_id not in result.exports
+    db_session.expire_all()
+    failed = await db_session.get(Export, export_id)
+    assert failed.status == ExportStatus.FAILED
+    assert "ran out of memory" in failed.error_message
