@@ -297,8 +297,22 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   containers, 5 `vcm_*` volumes, 2 test images and the folder; dev stack
   diff empty.
 
+- v1.0.1 published (all 4 release jobs green; `latest` digests = 1.0.1).
+  Final install test, commands copied from the README on GitHub, no
+  overrides: clean Linux (CPU, large-v3-turbo int8) and Windows default
+  location (GPU, large-v3 fp16, port 3001) both installed, both logged
+  "Downloaded files match the release's SHA256SUMS", both healthy on GHCR
+  images. Behind Norton, the first model download gave the friendly
+  certificate message; the README fix (certs/ + `vcm restart`) worked.
+- R1 rechecked on the published GHCR 1.0.1 images: no extra CA, empty
+  `/usr/local/share/ca-certificates`, no `.env`; Norton root (both versions)
+  in no bundle.
+- Docker restarted mid-E2E: both installs and the dev stack came back on
+  their own, but the job in flight stayed "processing" forever (Redis isn't
+  persisted; retry refused). Fixed: the worker requeues stranded jobs on
+  start; verified live (`8e137c0`). Needs v1.0.2.
+
 ## Next
-v1.0.1 (push + tag, with Tanush), then the final install test exactly as a
-user would, from the README on GitHub: clean Linux machine and Windows,
-E2E on both, R1 recheck on GHCR images, DELETE uninstall leaves nothing;
-final DoD; then R10.
+v1.0.2 (push + tag, with Tanush); `vcm update` both installs from the real
+Release (tests update + checksums); finish both E2E matrices; DELETE
+uninstall in the clean machine leaves nothing; final DoD; then R10.
