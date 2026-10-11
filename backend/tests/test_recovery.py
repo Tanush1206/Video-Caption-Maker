@@ -5,6 +5,8 @@ Redis runs without persistence, so a reboot during processing used to leave a
 video on "processing" forever, with retry refused because it was processing.
 """
 
+import json
+
 import pytest
 import redis
 from celery import Celery
@@ -36,14 +38,35 @@ def test_reads_the_jobs_celery_actually_queued(spare_broker):
     assert recovery.jobs_in_broker(client) == {("video", 11), ("export", 7)}
 
 
-def test_reads_delivered_but_unacknowledged_jobs(spare_broker):
-    """An unacked entry wraps the message as [message, exchange, routing_key]."""
-    url, client = spare_broker
-    Celery("probe", broker=url).send_task("transcribe_video", args=[42])
+def _deliver_and_crash(client, url, task, args, tag):
+    """What a worker killed mid-task leaves: its message in the unacked set."""
+    Celery("probe", broker=url).send_task(task, args=args)
     message = client.lpop(recovery.QUEUE)
-    client.hset(recovery.UNACKED, "tag-1", b'[' + message + b', "", "celery"]')
+    client.hset(recovery.UNACKED, tag, b"[" + message + b', "", "celery"]')
+    client.zadd(recovery.UNACKED_INDEX, {tag: 1.0})
 
-    assert recovery.jobs_in_broker(client) == {("video", 42)}
+
+def test_a_job_the_dead_worker_held_is_taken_over_not_left_for_an_hour(spare_broker):
+    """
+    Found with a real OOM kill: the job sat in Redis's unacked set, so it was
+    not "stranded", and Redis would have redelivered it an hour later,
+    outside the attempt counter. Taken over at startup instead; anything that
+    is not a video or export goes back on the queue untouched.
+    """
+    url, client = spare_broker
+    _deliver_and_crash(client, url, "transcribe_video", [42], "tag-1")
+    _deliver_and_crash(client, url, "reindex_captions", [5], "tag-2")
+
+    taken = recovery.take_over_unacked(client)
+
+    assert taken == {("video", 42)}
+    assert client.hlen(recovery.UNACKED) == 0
+    assert client.zcard(recovery.UNACKED_INDEX) == 0
+    # The video job is left to recover() and its counter, so it is not
+    # "held": nothing in the queue will run it.
+    assert ("video", 42) not in recovery.jobs_in_broker(client)
+    requeued = [json.loads(m)["headers"]["task"] for m in client.lrange(recovery.QUEUE, 0, -1)]
+    assert requeued == ["reindex_captions"]
 
 
 async def _upload(client, auth_headers, sample_video_bytes) -> int:
