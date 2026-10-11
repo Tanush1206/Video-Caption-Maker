@@ -72,3 +72,20 @@ def report_hardware(**_kwargs) -> None:
         asyncio.run(write())
     except Exception:  # noqa: BLE001
         logging.getLogger(__name__).exception("Could not record worker hardware")
+
+
+@worker_ready.connect
+def requeue_interrupted(**_kwargs) -> None:
+    """Restart jobs a reboot or restart dropped; see workers/recovery.py."""
+    import asyncio
+    import logging
+
+    import redis
+
+    from app.workers import recovery
+
+    try:
+        client = redis.Redis.from_url(settings.redis_url)
+        asyncio.run(recovery.requeue_stranded(client))
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("Could not requeue interrupted work")
