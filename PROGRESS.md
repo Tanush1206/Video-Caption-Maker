@@ -312,7 +312,19 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   persisted; retry refused). Fixed: the worker requeues stranded jobs on
   start; verified live (`8e137c0`). Needs v1.0.2.
 
+- Tanush: the startup requeue could loop forever on a job that crashes the
+  worker (OOM). Added `recovery_attempts` (migration `b4e7c2d91a36`): each
+  requeue is counted and committed before the task is sent; after 3, the
+  job fails with "…ran out of memory. Choose a smaller speech model…"; a
+  manual retry resets the count. 5 tests (`8c4a461`, `98202fe`). The worker
+  uses `--pool=solo`, so an OOM kill takes the container down and Docker's
+  restart runs recovery: there is no child-only kill that would skip it.
+- The temporary patch on the clean install lives only in `vcm-worker-1`'s
+  writable layer (`docker diff`); `vcm update` recreates the container from
+  the new image. Staging copies removed.
+
 ## Next
 v1.0.2 (push + tag, with Tanush); `vcm update` both installs from the real
-Release (tests update + checksums); finish both E2E matrices; DELETE
-uninstall in the clean machine leaves nothing; final DoD; then R10.
+Release (tests update + checksums + migration b4e7c2d91a36); confirm the
+patch is gone (`docker diff`); real OOM loop test (worker capped at 1 GB);
+finish both E2E matrices; DELETE uninstall leaves nothing; final DoD; R10.
