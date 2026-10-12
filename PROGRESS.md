@@ -470,11 +470,42 @@ through a 127.0.0.1:8001 relay container (`vcm-redesign-relay`).
   zone, project cards grid + list view, first-run step cards. Not shown:
   the app version (the API doesn't expose it; adding it would be logic),
   "inference speed" tiles (no real figure). axe 0.
+- Language step (`8dd98f9`): caption language as radio cards with each
+  language's own name; spoken audio stated (uploads always auto-detect;
+  the upload API takes no spoken language). Found and fixed a pre-existing
+  bug: tailwind-merge read `text-body-md` as a colour and dropped
+  `text-primary-foreground`, so medium primary buttons had dark labels.
+  Real upload through it: 201, caption_language=hi, lands in the editor.
+- Processing / failed (`3ad3d1d`): the worker's own stage list with
+  done/active/queued; the one-time download card only for a real download
+  (the worker also reports "downloading" while loading a cached model).
+  Failed state shot from the clean install's real failure (relay chain to
+  its backend). No live transcript, cancel or memory figures (no API).
+- Editor (`cfbda0c`, `e4b1412`): editor bar (title, length, languages,
+  Export), two columns, transcript pinned right, phone bottom bar; style
+  studio as Typography/Appearance/Position tabs; caption rows with
+  'Check this line' for low confidence. Export moved into a dialog.
+- Export dialog (`db5741c`): five format cards, file name, resolution,
+  render progress, previous exports. Real SRT and MP4 exported and
+  downloaded through it.
+- Search (`64fc9b6`): results grouped by video, preview panel. No term
+  highlighting (semantic matches have no matched words).
+- Settings (`c51dad9`): hardware, model cards (same PATCH; round trip
+  verified and restored to auto), translation engine in use, disk, theme.
+- Also verified: first-run cards (test-only empty stub), delete through a
+  card (204, gone), axe 0 on dashboard/search/settings/editor, both themes.
+- v1.0.3 E2E, Windows GPU install (large-v3 float16, M2M100-1.2B): 5 clips
+  × 6 targets = 30 jobs, each SRT/VTT/MP4: ALL PASSED.
+- Follow-up, not in the design list: there is no custom 404 page (Next's
+  default shows); unchanged from before.
+- Since v1.0.3 no file under backend/, install/, the compose files or
+  frontend/public changed, so the v1.0.4 backend image should be
+  layer-identical and the update should download only frontend layers.
 
 ## Next
-Finish the Windows E2E matrix; v1.0.4 screens; release; update both
-installs; measure with scripts/update_layers.py; DELETE uninstall (clean
-machine); final DoD; R10.
+Push, CI, tag v1.0.4; update both installs; measure with
+scripts/update_layers.py against the v1.0.3 baseline above; UI checks on
+both installs; DELETE uninstall (clean machine); final DoD; R10.
 
 ## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
 ## v1.0.3 is released and verified)
