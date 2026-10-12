@@ -57,8 +57,14 @@ def _audit(storage) -> list[dict]:
         # Another app on this machine, on a different port.
         {"x-forwarded-host": "localhost:3001", "origin": "http://localhost:5173",
          "sec-fetch-site": "same-site"},
+        # The dev frontend, on the port the backend's default CORS_ORIGINS
+        # names: trusted by that list, but not this install's page.
+        {"x-forwarded-host": "localhost:3001", "origin": "http://localhost:3000",
+         "sec-fetch-site": "same-site"},
+        # A sandboxed frame or file:// page.
+        {"x-forwarded-host": "localhost:3001", "origin": "null"},
     ],
-    ids=["dns-rebinding", "cross-site", "other-local-app"],
+    ids=["dns-rebinding", "cross-site", "other-local-app", "dev-app-on-3000", "null-origin"],
 )
 async def test_a_delete_from_anywhere_but_the_app_is_refused_and_recorded(
     client, local_install, sample_video_bytes, headers
@@ -72,6 +78,18 @@ async def test_a_delete_from_anywhere_but_the_app_is_refused_and_recorded(
     refused = [e for e in _audit(local_install) if e["status"] == 403]
     assert refused and refused[-1]["path"] == f"/api/videos/{video_id}"
     assert refused[-1]["origin"] == headers["origin"]
+
+
+@pytest.mark.parametrize("address", ["localhost:3001", "127.0.0.1:3001", "localhost:3000"])
+async def test_the_app_can_delete_on_whatever_port_and_name_it_was_opened_at(
+    client, local_install, sample_video_bytes, address
+):
+    """The allowed origin is the install's own address, not a fixed port."""
+    video_id = await _a_video(client, sample_video_bytes)
+    page = {"x-forwarded-host": address, "origin": f"http://{address}",
+            "sec-fetch-site": "same-origin"}
+
+    assert (await client.delete(f"/api/videos/{video_id}", headers=page)).status_code == 204
 
 
 async def test_a_rebound_page_cannot_read_either(client, local_install):
@@ -135,3 +153,24 @@ async def test_a_hosted_deployment_is_not_restricted_to_localhost(client, auth_h
         "/api/videos", headers={**auth_headers, "x-forwarded-host": "captions.example.com"}
     )
     assert response.status_code == 200
+
+
+def test_the_audit_log_cannot_grow_without_bound(local_install, monkeypatch):
+    """One current file and one previous, each about AUDIT_MAX_BYTES at most."""
+    from starlette.requests import Request
+
+    from app import request_guard
+
+    monkeypatch.setattr(request_guard, "AUDIT_MAX_BYTES", 2_000)
+    request = Request({
+        "type": "http", "method": "DELETE", "path": "/api/videos/1", "query_string": b"",
+        "headers": [(b"user-agent", b"x" * 100)], "client": ("127.0.0.1", 1),
+    })
+    for _ in range(500):
+        request_guard.audit(request, 204)
+
+    files = sorted(p.name for p in local_install.iterdir())
+    assert files == ["audit.log", "audit.log.1"]
+    for name in files:
+        # The limit, plus the one line that crossed it.
+        assert (local_install / name).stat().st_size < 2_000 + 500

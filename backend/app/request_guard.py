@@ -62,21 +62,34 @@ def refusal_reason(request: Request) -> str | None:
     # Behind the Next proxy, Host is always backend:8000 and the browser's own
     # Host arrives as X-Forwarded-Host. Called directly (dev, healthchecks,
     # scripts), Host is the real one.
-    host = _hostname(headers.get("x-forwarded-host") or headers.get("host"))
+    forwarded = (headers.get("x-forwarded-host") or "").strip().lower()
+    host = _hostname(forwarded or headers.get("host"))
     if host is not None and host not in LOCAL_HOSTS:
         return f"host {host!r} is not this computer"
 
     if request.method in SAFE_METHODS:
         return None
 
-    fetch_site = (headers.get("sec-fetch-site") or "").lower()
-    origin = headers.get("origin")
-    if fetch_site == "cross-site":
+    if (headers.get("sec-fetch-site") or "").lower() == "cross-site":
         return "cross-site request"
-    if fetch_site == "same-site" and origin not in get_settings().cors_origins_list:
-        return f"same-site request from {origin!r}"
-    if origin and origin != "null" and _hostname(urlsplit(origin).netloc) not in LOCAL_HOSTS:
-        return f"origin {origin!r} is not this computer"
+
+    # A browser sends Origin on every state-changing request; a script sends
+    # none and is let through (it could send any header it liked anyway).
+    origin = headers.get("origin")
+    if origin is None:
+        return None
+    if forwarded:
+        # Through the app's own proxy, the page that sent this was served by
+        # this install, so its origin is exactly the address in the browser:
+        # host and port, whichever port the install was given, localhost or
+        # 127.0.0.1. Another app on this machine has another port.
+        if urlsplit(origin.lower()).netloc != forwarded:
+            return f"origin {origin!r} is not this app ({forwarded})"
+        return None
+    # Straight to the backend, which only the dev setup exposes: its frontend
+    # is another origin, listed in CORS_ORIGINS.
+    if origin not in get_settings().cors_origins_list:
+        return f"origin {origin!r} is not an allowed frontend"
     return None
 
 
