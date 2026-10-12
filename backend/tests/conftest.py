@@ -42,7 +42,7 @@ def a_style(**overrides) -> CaptionStyle:
 @pytest.fixture
 async def client():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://localhost") as ac:
         yield ac
 
 

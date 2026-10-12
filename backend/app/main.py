@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import request_guard
 from app.api.router import api_router
 from app.config import get_settings
 
@@ -39,6 +40,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Local mode has no login; this decides who may use the API anyway, and
+# records what changed. See app/request_guard.py.
+app.middleware("http")(request_guard.guard)
 
 app.include_router(api_router)
 
