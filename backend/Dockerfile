@@ -50,10 +50,8 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 # ── runtime ──────────────────────────────────────────────────────────────────
 FROM ${PYTHON_IMAGE} AS runtime
 ARG VARIANT=cpu
-ARG VERSION=dev
 LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Caption-Maker" \
-      org.opencontainers.image.title="VideoCaptionMaker backend (${VARIANT})" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.title="VideoCaptionMaker backend (${VARIANT})"
 
 # FFmpeg for audio extraction and burning captions in; Liberation for the
 # Arial/Times/Courier metric-compatible faces; fontconfig so libass finds the
@@ -71,7 +69,6 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     VCM_VARIANT=${VARIANT} \
-    VCM_VERSION=${VERSION} \
     # CTranslate2 loads libcublas/libcudnn by soname and does not look inside
     # pip's nvidia/* package directories on its own. Harmless in the CPU image.
     LD_LIBRARY_PATH=/opt/venv/lib/python3.11/site-packages/nvidia/cublas/lib:/opt/venv/lib/python3.11/site-packages/nvidia/cudnn/lib \
@@ -101,6 +98,15 @@ COPY backend/alembic ./alembic
 COPY backend/app ./app
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /app/storage
+
+# The version goes last. An ARG is visible to every RUN after it, so declared
+# at the top of this stage a new version number invalidated every layer below
+# it: each release re-downloaded the whole image (0.8 GB CPU, 2.3 GB CUDA)
+# though nothing but the app had changed. Here it is metadata only, and an
+# update with unchanged dependencies fetches just the app layers.
+ARG VERSION=dev
+LABEL org.opencontainers.image.version="${VERSION}"
+ENV VCM_VERSION=${VERSION}
 
 EXPOSE 8000
 ENTRYPOINT ["docker-entrypoint.sh"]

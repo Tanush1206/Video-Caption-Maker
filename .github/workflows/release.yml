@@ -90,8 +90,14 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:${{ steps.version.outputs.version }}${{ matrix.suffix }}
             ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/video-caption-maker-{1}:latest{2}', env.REGISTRY, matrix.name, matrix.suffix) || '' }}
-          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}${{ matrix.suffix }}
+          # A registry cache, not the Actions cache: that one holds 10 GB per
+          # repo and evicts after 7 days, and these three images overflow it.
+          # A miss rebuilds the Python environment, pip writes new timestamps,
+          # the 570 MB layer gets a new digest, and every user re-downloads it
+          # on 'vcm update'. Cached in GHCR, unchanged layers stay byte-for-byte
+          # identical from release to release.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:buildcache${{ matrix.suffix }}
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:buildcache${{ matrix.suffix }},mode=max
 
   release:
     needs: images

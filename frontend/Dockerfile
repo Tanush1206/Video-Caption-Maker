@@ -34,10 +34,8 @@ RUN --mount=type=secret,id=extra_ca,required=false \
     && npm run build
 
 FROM ${NODE_IMAGE} AS runtime
-ARG VERSION=dev
 LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Caption-Maker" \
-      org.opencontainers.image.title="VideoCaptionMaker frontend" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.title="VideoCaptionMaker frontend"
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
@@ -48,6 +46,10 @@ COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 USER app
+# Last, so a new version number is metadata only and does not invalidate the
+# layers above it (see backend/Dockerfile).
+ARG VERSION=dev
+LABEL org.opencontainers.image.version="${VERSION}"
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
     CMD wget -q --spider http://127.0.0.1:3000/healthz || exit 1
