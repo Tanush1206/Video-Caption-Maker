@@ -1,7 +1,9 @@
 "use client";
 
-import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
+import { Loader2, Move, Paintbrush, RotateCcw, Type } from "lucide-react";
+import { useState } from "react";
 
+import { RailTabs } from "@/components/layout/editor-panel";
 import { FontPicker } from "@/components/styles/font-picker";
 import { Range } from "@/components/ui/range";
 import {
@@ -45,33 +47,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/**
- * A collapsible group of controls.
- *
- * Native `<details>` rather than a useState toggle: it is keyboard accessible
- * and findable by the browser's own in-page search without any of that being
- * written here. Open by default, because a control you cannot see is a control
- * you do not know exists — collapsing is for tidying, not for discovery.
- */
-function Group({
-  title,
-  children,
-  defaultOpen = true,
-}: {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}) {
+/** One tab's controls: two columns where there is room. */
+function Pane({ hidden, children }: { hidden: boolean; children: React.ReactNode }) {
   return (
-    <details open={defaultOpen} className="group border-t border-border pt-3 first:border-t-0 first:pt-0">
-      <summary className="label-caps flex cursor-pointer list-none items-center justify-between transition-colors hover:text-foreground">
-        {title}
-        <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
-      </summary>
-      <div className="mt-3 space-y-3">{children}</div>
-    </details>
+    // A class, not the `hidden` attribute: `grid` would override the
+    // attribute's display:none.
+    <div className={cn(hidden ? "hidden" : "grid", "items-start gap-x-6 gap-y-4 sm:grid-cols-2")}>
+      {children}
+    </div>
   );
 }
+
+const TABS = [
+  { id: "typography", label: "Typography", icon: Type },
+  { id: "appearance", label: "Appearance", icon: Paintbrush },
+  { id: "position", label: "Position", icon: Move },
+];
 
 /** A row of on/off pills — bold, italic, underline and the rest. */
 function Toggles<T extends string>({
@@ -200,7 +191,7 @@ function AnchorGrid({
         // 16:9 control over a vertical video would put the dots somewhere the
         // caption will not be.
         style={{ aspectRatio: aspect }}
-        className="mx-auto grid w-full max-w-full grid-cols-3 grid-rows-3 gap-0.5 rounded-md border border-border bg-background/40 p-0.5"
+        className="grid w-full max-w-sm grid-cols-3 grid-rows-3 gap-0.5 rounded-md border border-border bg-background/40 p-0.5"
       >
         {POSITIONS.map((row) =>
           ALIGNMENTS.map((column) => {
@@ -285,6 +276,9 @@ export function StylePanel({
 
   const applyPreset = useApplyPreset(videoId);
   const resetStyle = useResetStyle(videoId);
+  // All three stay mounted and are only hidden, so a colour picker mid-edit
+  // or a scrolled font list survives a look at another tab.
+  const [tab, setTab] = useState("typography");
 
   if (isLoading || !style) {
     return (
@@ -299,12 +293,13 @@ export function StylePanel({
   const set = (patch: Partial<CaptionStyle>) => update(patch);
 
   return (
-    // No border or fill of its own: this sits inside the rail's glass pane,
-    // and a card inside a pane is a box in a box. It has no heading either —
-    // the rail tab above it is the heading, and printing "Caption style" under
-    // a tab reading "Style" is the same word twice in two type sizes.
+    // No border or fill of its own: this sits inside the studio panel, which
+    // carries the heading.
     <section>
-      <header className="mb-3 flex items-center justify-end">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full sm:w-auto sm:min-w-[22rem]">
+          <RailTabs tabs={TABS} value={tab} onChange={setTab} />
+        </div>
         <div className="flex items-center gap-2">
           {isSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
           <button
@@ -319,7 +314,8 @@ export function StylePanel({
         </div>
       </header>
 
-      <div className="mb-3 flex gap-1.5">
+      <div className="mb-4 flex items-center gap-1.5">
+        <span className="label-caps mr-2 hidden sm:inline">Preset</span>
         {(options?.presets ?? []).map((preset) => (
           <button
             key={preset}
@@ -332,8 +328,8 @@ export function StylePanel({
         ))}
       </div>
 
-      <div className="space-y-3">
-        <Group title="Text">
+      <div className="border-t border-border pt-4">
+        <Pane hidden={tab !== "typography"}>
           <Field label="Font">
             <FontPicker
               builtins={options?.fonts ?? []}
@@ -365,9 +361,9 @@ export function StylePanel({
             suffix="px"
             onChange={(letter_spacing) => set({ letter_spacing })}
           />
-        </Group>
+        </Pane>
 
-        <Group title="Fill and edge">
+        <Pane hidden={tab !== "appearance"}>
           <Swatch
             label="Text colour"
             value={style.text_color}
@@ -405,9 +401,6 @@ export function StylePanel({
               onChange={(shadow_color) => set({ shadow_color })}
             />
           )}
-        </Group>
-
-        <Group title="Box">
           <Slider
             label="Opacity"
             value={Math.round(style.box_opacity * 100)}
@@ -433,15 +426,15 @@ export function StylePanel({
               />
               {/* An opaque box replaces both the outline and the shadow in ASS,
                   so saying so beats leaving two controls that do nothing. */}
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground sm:col-span-2">
                 A box replaces the outline and shadow — that&apos;s how it renders
                 on export.
               </p>
             </>
           )}
-        </Group>
+        </Pane>
 
-        <Group title="Placement">
+        <Pane hidden={tab !== "position"}>
           <AnchorGrid
             position={style.position}
             alignment={style.alignment}
@@ -478,7 +471,7 @@ export function StylePanel({
             suffix="px"
             onChange={(margin_h) => set({ margin_h })}
           />
-        </Group>
+        </Pane>
       </div>
 
       <p className="mt-3 text-[11px] text-muted-foreground">

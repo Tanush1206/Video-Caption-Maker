@@ -118,10 +118,12 @@ export function CaptionRow({
     <div
       ref={registerRow}
       className={cn(
-        "group rounded-md border p-2 transition-colors",
+        "group rounded-lg border p-3 transition-colors",
         isActive
-          ? "border-l-2 border-l-primary border-border bg-primary/5"
-          : "border-border bg-card hover:bg-surface-2"
+          ? "border-primary/60 bg-primary/10"
+          : lowConfidence
+            ? "border-warning/40 bg-surface-1 hover:bg-surface-2"
+            : "border-border bg-surface-1 hover:border-input hover:bg-surface-2"
       )}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -130,15 +132,23 @@ export function CaptionRow({
           onClick={onSeek}
           title="Jump the video here"
           className={cn(
-            "flex items-center gap-1.5 font-mono text-mono-data-sm tabular-nums transition-colors hover:text-primary",
-            isActive ? "text-primary" : "text-muted-foreground"
+            "flex items-center gap-2 font-mono text-xs tabular-nums transition-colors hover:text-primary",
+            isActive ? "font-semibold text-primary" : "text-muted-foreground"
           )}
         >
-          <PlayCircle className="size-3" />
+          <PlayCircle className={cn("size-4", isActive && "fill-primary/20")} />
           {formatTimecode(caption.start_ms)}
-          <span className="text-muted-foreground">–</span>
+          <span aria-hidden="true">→</span>
+          <span className="sr-only">to</span>
           {formatTimecode(caption.end_ms)}
         </button>
+
+        {lowConfidence && (
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[11px] font-medium text-warning group-hover:hidden">
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+            Check this line
+          </span>
+        )}
 
         {/* Always visible on the active row: it is the one you are editing, so
             its actions should not require a hover to find. */}
@@ -205,17 +215,16 @@ export function CaptionRow({
         onBlur={flush}
         onKeyDown={handleKeyDown}
         className={cn(
-          "w-full resize-none rounded-sm border bg-subtle px-2 py-1.5 text-body-md leading-relaxed transition-colors",
-          "focus:outline-none focus:ring-1 focus:ring-primary",
-          dirty ? "border-primary/50" : "border-border",
-          lowConfidence && !dirty && "border-warning/50"
+          // Reads as text, not a form field, until it is touched: DESIGN.md's
+          // "transparent background and seamless borders".
+          "-mx-1.5 w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-1 text-[15px] leading-relaxed transition-colors",
+          "hover:border-border focus:border-ring focus:bg-background/40 focus:outline-none",
+          dirty ? "border-primary/50" : "border-transparent"
         )}
         aria-label={`Caption at ${formatTimecode(caption.start_ms)}`}
       />
 
-      {lowConfidence && (
-        <p className="mt-1 text-mono-data-sm text-warning">Low confidence — worth checking</p>
-      )}
+      {lowConfidence && <span className="sr-only">Low confidence: worth checking.</span>}
     </div>
   );
 }

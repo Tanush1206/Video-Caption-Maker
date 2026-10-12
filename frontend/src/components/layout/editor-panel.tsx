@@ -39,14 +39,14 @@ export function EditorPanel({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cn("glass-panel flex min-h-0 flex-col overflow-hidden", className)}>
-      <header className="glass-panel-head flex shrink-0 items-start gap-2.5 px-3.5 py-2.5">
-        <span className="mt-px flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
-          <Icon className="size-3.5" />
+    <section className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card", className)}>
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-4 py-3">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+          <Icon className="size-4" />
         </span>
 
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[13px] font-semibold leading-tight">{title}</h2>
+          <h2 className="truncate text-[15px] font-semibold leading-tight">{title}</h2>
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{hint}</p>
         </div>
 
@@ -86,7 +86,7 @@ export function RailTabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label="Editor tools" className="rail-tabs flex gap-1 rounded-xl p-1">
+    <div role="radiogroup" aria-label="Editor tools" className="flex gap-1 rounded-lg border border-border bg-surface-1 p-1">
       {tabs.map((tab) => {
         const selected = tab.id === value;
         return (
@@ -98,12 +98,12 @@ export function RailTabs({
             data-selected={selected}
             onClick={() => onChange(tab.id)}
             className={cn(
-              "rail-tab flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5",
-              "text-[12px] font-medium transition-colors",
-              selected ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5",
+              "text-[13px] font-medium transition-colors",
+              selected ? "bg-surface-3 text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <tab.icon className="size-3.5" />
+            <tab.icon className="hidden size-3.5 sm:block" />
             {tab.label}
           </button>
         );
