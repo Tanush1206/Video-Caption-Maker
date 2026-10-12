@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, FileVideo, Loader2, Upload, X } from "lucide-react";
+import { ArrowRight, FileUp, FileVideo, FolderOpen, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
@@ -92,14 +92,31 @@ export function VideoUpload() {
   const step = file ? 2 : 1;
   const translating = language !== "same";
 
+  const hardware = system?.hardware;
+  const localOnly = system?.translation_engine !== "gemini";
+
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-h2">Caption a video</h2>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 sm:px-6">
+        <h2 className="sr-only">Caption a video</h2>
         <Stepper current={step} />
+        {/* What the transcription will run on, from the worker's own report. */}
+        {hardware && (
+          <span
+            className={cn(
+              "hidden shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[11px] sm:inline-flex",
+              hardware.cuda
+                ? "border-success/30 bg-success/10 text-success"
+                : "border-border bg-surface-2 text-muted-foreground"
+            )}
+          >
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+            {hardware.cuda ? "CUDA enabled" : "CPU"}
+          </span>
+        )}
       </div>
 
-      <div className="mt-4">
+      <div>
         {!file ? (
           // A <label> wrapping the input, rather than a div with a click
           // handler: it is focusable and opens the picker from the keyboard
@@ -124,41 +141,61 @@ export function VideoUpload() {
               if (dropped) choose(dropped);
             }}
             className={cn(
-              "group flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-4 py-8 text-center transition-colors duration-200 sm:py-10",
+              "group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed px-4 py-10 text-center transition-colors duration-200 sm:p-10",
               "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
               dragging
-                ? "border-primary bg-primary/5"
-                : // Translucent, not `bg-subtle`. On glass an opaque fill punches a
-                  // solid rectangle through the panel and the whole effect stops
-                  // at its edges.
-                  "border-border/70 bg-background/30 hover:border-primary/40 hover:bg-background/60"
+                ? "border-primary bg-primary/10"
+                : "border-primary/40 bg-primary/[0.03] hover:border-primary hover:bg-primary/[0.06]"
             )}
           >
             <span
               className={cn(
-                "flex size-11 items-center justify-center rounded-lg transition-all duration-200 ease-out",
+                "mb-4 flex size-14 items-center justify-center rounded-lg border border-border transition-transform duration-200 ease-out",
                 dragging
                   ? "scale-110 bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground group-hover:scale-105"
+                  : "bg-surface-2 text-primary group-hover:scale-105"
               )}
             >
-              <Upload className="size-5" aria-hidden="true" />
+              <FileUp className="size-7" aria-hidden="true" />
             </span>
-            <span className="mt-3.5 text-sm font-medium">
+            <span className="text-xl font-semibold tracking-tight sm:text-2xl">
               {dragging ? (
                 "Drop to choose this video"
               ) : (
                 <>
-                  Drop a video here, or <span className="text-primary">browse</span>
+                  <span className="sm:hidden">Tap or drop a video to caption it</span>
+                  <span className="hidden sm:inline">Drop a video to caption it</span>
                 </>
               )}
             </span>
-            <span className="mt-1 font-mono text-body-sm text-muted-foreground">
-              {ACCEPTED_EXTENSIONS.join("  ·  ")}
+            <span className="mt-2 max-w-xl text-sm text-muted-foreground">
+              {localOnly
+                ? "Transcribe and translate locally on your machine. Private, no cloud required."
+                : "Transcribed locally on your machine. Translations into another language use Gemini."}
+            </span>
+            <span className="mt-4 flex flex-wrap justify-center gap-1.5">
+              {ACCEPTED_EXTENSIONS.map((extension) => (
+                <span
+                  key={extension}
+                  className="rounded-sm border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] uppercase text-muted-foreground"
+                >
+                  {extension.slice(1)}
+                </span>
+              ))}
+            </span>
+            {/* Looks like a button; the whole zone is the <label>, so a click
+                anywhere opens the picker. */}
+            <span
+              aria-hidden="true"
+              className="mt-6 inline-flex h-9 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/30 transition-colors group-hover:bg-primary/90"
+            >
+              <FolderOpen className="size-4" />
+              Browse files
             </span>
             <input
               type="file"
               className="sr-only"
+              aria-label="Choose a video to caption"
               accept={[...ACCEPTED_VIDEO_TYPES, ...ACCEPTED_EXTENSIONS].join(",")}
               onChange={(e) => {
                 const picked = e.target.files?.[0];

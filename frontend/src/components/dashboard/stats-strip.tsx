@@ -13,16 +13,15 @@ import { formatDurationLong, formatFileSize } from "@/lib/format";
  * on, they are context for the library underneath.
  *
  * So: one line, numbers in mono at a size you can scan without stopping. The
- * hairlines it used to draw for itself are gone — it sits inside a glass panel
- * that already has edges, and a rule immediately inside a border reads as a
- * seam. No boxes, no fills, no icons. The disk bar is the one thing here with a
+ * hairlines it used to draw for itself are gone — it is one slim panel
+ * above the projects, so a rule inside it would read as a seam. No boxes, no fills, no icons. The disk bar is the one thing here with a
  * shape, because it is the one figure that is a proportion rather than a
  * count.
  */
 function Figure({ value, label }: { value: string; label: string }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="font-mono text-xl font-semibold tabular-nums">{value}</span>
+      <span className="font-mono text-base font-semibold tabular-nums">{value}</span>
       <span className="label-caps">{label}</span>
     </div>
   );
@@ -33,7 +32,7 @@ export function StatsStrip() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border border-border bg-card px-4 py-2.5 sm:px-5">
         {Array.from({ length: 4 }, (_, i) => (
           <Skeleton key={i} className="h-6 w-28" />
         ))}
@@ -55,7 +54,7 @@ export function StatsStrip() {
     data.disk_total_bytes > 0 ? Math.round((diskUsed / data.disk_total_bytes) * 100) : 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border border-border bg-card px-4 py-2.5 sm:px-5">
       <Figure value={String(data.videos)} label={data.videos === 1 ? "video" : "videos"} />
       <Figure value={formatDurationLong(data.duration_ms)} label="footage" />
       <Figure value={data.captions.toLocaleString()} label="captions" />
@@ -89,7 +88,7 @@ export function StatsStrip() {
           aria-valuemax={100}
           aria-label="Host disk usage"
         >
-          <div className="bar-fill h-full rounded-full" style={{ width: `${diskPercent}%` }} />
+          <div className="h-full rounded-full bg-primary" style={{ width: `${diskPercent}%` }} />
         </div>
         <span className="shrink-0 font-mono text-body-sm tabular-nums text-muted-foreground">
           {formatFileSize(data.disk_free_bytes)} free
