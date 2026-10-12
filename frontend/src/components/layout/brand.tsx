@@ -24,11 +24,11 @@ export function Brand({
       className={cn("group flex shrink-0 items-center gap-2.5", className)}
       aria-label="VideoCaptionMaker home"
     >
-      <span className="relative flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent shadow-sm transition-transform duration-200 ease-out group-hover:scale-105">
+      <span className="relative flex size-7 items-center justify-center rounded-md bg-primary shadow-sm shadow-primary/30 transition-transform duration-200 ease-out group-hover:scale-105">
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          className="size-[18px] text-primary-foreground"
+          className="size-4 text-primary-foreground"
           aria-hidden="true"
         >
           {/* A frame with two caption lines inside it — the whole product in
@@ -59,9 +59,7 @@ export function Brand({
       </span>
 
       {showText && (
-        <span className="text-[15px] font-semibold tracking-tight">
-          VideoCaption<span className="text-muted-foreground">Maker</span>
-        </span>
+        <span className="truncate text-[15px] font-semibold tracking-tight">VideoCaptionMaker</span>
       )}
     </Link>
   );

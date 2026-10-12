@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { DashboardHeader } from "@/components/layout/dashboard-header";
-import { TopGlow } from "@/components/layout/page-frame";
+import { AppFooter } from "@/components/layout/app-footer";
+import { DashboardHeader, MobileTabBar } from "@/components/layout/dashboard-header";
 import { ServerUnavailable } from "@/components/layout/server-unavailable";
 import { useAuth } from "@/hooks/use-auth";
 import { useTranscriptionAlerts } from "@/hooks/use-transcription-alerts";
@@ -16,6 +16,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, initialized, bootstrap } = useAuth();
 
   // Here rather than on any one page: a transcription outlives the screen that
@@ -50,13 +51,15 @@ export default function DashboardLayout({
   }
 
   return (
-    // `relative isolate` so the glow can position against this and stay behind
-    // the content. Deliberately *not* overflow-hidden — that would make the
-    // sticky header stop sticking. The glow clips itself instead.
-    <div className="relative isolate min-h-screen">
-      <TopGlow />
+    // The bottom padding on phones is the tab bar's height, so the last row
+    // of any page can scroll clear of it.
+    <div className="flex min-h-screen flex-col pb-16 md:pb-0">
       <DashboardHeader />
       {children}
+      {/* The editor is a full-height workspace; a footer would only push its
+          panels down. */}
+      {!pathname.startsWith("/editor") && <AppFooter />}
+      <MobileTabBar />
     </div>
   );
 }

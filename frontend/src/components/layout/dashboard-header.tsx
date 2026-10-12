@@ -2,92 +2,63 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Film, LogOut, Menu, Search, Settings, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { FolderOpen, Search, Settings } from "lucide-react";
 
 import { Brand } from "@/components/layout/brand";
+import { EngineChip, HostChip } from "@/components/layout/engine-chip";
 import { PageHeader } from "@/components/layout/page-frame";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
 import { LOCAL_MODE } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard", label: "Videos", icon: Film },
+  { href: "/dashboard", label: "Projects", icon: FolderOpen },
   { href: "/search", label: "Search", icon: Search },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function DashboardHeader() {
-  const { user, logout } = useAuth();
+function useIsActive() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // startsWith, so /search/12 still lights up "Search" — but not for
+  // /dashboard, which would then match everything under it. The editor is a
+  // project, so it keeps "Projects" lit.
+  return (href: string) =>
+    href === "/dashboard"
+      ? pathname === href || pathname.startsWith("/editor")
+      : pathname.startsWith(href);
+}
 
-  // Navigating with the menu open would leave it covering the page it just
-  // moved to. Closing on the path change is simpler than wiring every link.
-  useEffect(() => setOpen(false), [pathname]);
-
-  function isActive(href: string) {
-    // startsWith, so /search/12 still lights up "Search" — but not for
-    // /dashboard, which would then match everything under it.
-    return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
-  }
-
-  const mobileNav = open ? (
-    <nav className="animate-fade-in border-t border-border bg-card px-3 py-2 md:hidden">
-      {NAV.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          aria-current={isActive(item.href) ? "page" : undefined}
-          className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
-            isActive(item.href)
-              ? "bg-primary/10 font-medium text-primary"
-              : "text-muted-foreground hover:bg-muted"
-          )}
-        >
-          <item.icon className="size-4" />
-          {item.label}
-        </Link>
-      ))}
-
-      {/* Nobody to sign out as on a local install. */}
-      {!LOCAL_MODE && (
-        <div className="mt-1 border-t border-border pt-1">
-          <p className="truncate px-3 py-2 text-xs text-muted-foreground">
-            {user?.full_name || user?.email}
-          </p>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4" />
-            Sign out
-          </button>
-        </div>
-      )}
-    </nav>
-  ) : null;
+/**
+ * The top bar: wordmark and address on the left, the three sections as one
+ * segmented control in the middle, the hardware readout on the right. On a
+ * phone the sections move to a tab bar at the bottom (MobileTabBar), where a
+ * thumb can reach them.
+ */
+export function DashboardHeader() {
+  const isActive = useIsActive();
 
   return (
-    <PageHeader sticky below={mobileNav} wide={pathname.startsWith("/editor")}>
-      <Brand href="/dashboard" />
+    <PageHeader sticky wide>
+      <div className="flex min-w-0 items-center gap-3">
+        <Brand href="/dashboard" />
+        <HostChip className="hidden lg:inline-flex" />
+      </div>
 
-      <nav className="hidden items-center gap-0.5 md:flex">
+      <nav
+        aria-label="Sections"
+        className="mx-auto hidden items-center gap-1 rounded-lg border border-border bg-card p-1 md:flex"
+      >
         {NAV.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             aria-current={isActive(item.href) ? "page" : undefined}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm transition-colors",
+              "rounded-md px-3.5 py-1 text-[13px] font-medium transition-colors",
               isActive(item.href)
-                ? "bg-muted font-medium text-foreground"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                ? "bg-surface-3 text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             )}
           >
             {item.label}
@@ -95,25 +66,39 @@ export function DashboardHeader() {
         ))}
       </nav>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex min-w-0 items-center gap-1.5 md:ml-0">
+        <EngineChip className="hidden max-w-[22rem] sm:inline-flex" />
         <ThemeToggle />
-        {!LOCAL_MODE && (
-          <div className="hidden md:block">
-            <UserMenu />
-          </div>
-        )}
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-label={open ? "Close menu" : "Open menu"}
-          className="md:hidden"
-        >
-          {open ? <X /> : <Menu />}
-        </Button>
+        {/* Nobody to sign out as on a local install. */}
+        {!LOCAL_MODE && <UserMenu />}
       </div>
     </PageHeader>
+  );
+}
+
+/** Phone navigation, fixed to the bottom edge. The layout pads for it. */
+export function MobileTabBar() {
+  const isActive = useIsActive();
+
+  return (
+    <nav
+      aria-label="Sections"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden"
+    >
+      {NAV.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={isActive(item.href) ? "page" : undefined}
+          className={cn(
+            "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors",
+            isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <item.icon className="size-5" aria-hidden="true" />
+          {item.label}
+        </Link>
+      ))}
+    </nav>
   );
 }
