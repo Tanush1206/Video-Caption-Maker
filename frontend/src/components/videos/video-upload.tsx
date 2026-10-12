@@ -1,17 +1,15 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, FileUp, FileVideo, FolderOpen, Loader2, X } from "lucide-react";
+import { FileUp, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
 import { Stepper } from "@/components/flow/stepper";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { LanguageStep } from "@/components/videos/language-step";
 import { statsKeys } from "@/hooks/use-stats";
 import { useSystem } from "@/hooks/use-system";
 import { useLanguageOptions, videoKeys } from "@/hooks/use-videos";
-import { formatFileSize } from "@/lib/format";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { uploadVideo, type UploadHandle } from "@/lib/upload";
 import { cn } from "@/lib/utils";
@@ -90,7 +88,6 @@ export function VideoUpload() {
   }
 
   const step = file ? 2 : 1;
-  const translating = language !== "same";
 
   const hardware = system?.hardware;
   const localOnly = system?.translation_engine !== "gemini";
@@ -206,107 +203,24 @@ export function VideoUpload() {
             />
           </label>
         ) : (
-          <div className="animate-fade-in rounded-lg border border-border bg-background/40 p-4">
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <FileVideo className="size-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" title={file.name}>
-                  {file.name}
-                </p>
-                <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-              </div>
-              {!upload && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setFile(null)}
-                  aria-label="Choose a different video"
-                >
-                  Change
-                </Button>
-              )}
-            </div>
-
-            {!upload ? (
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="sm:w-72">
-                  <Select
-                    label="Caption language"
-                    name="caption_language"
-                    value={language}
-                    onChange={(event) => setLanguage(event.target.value)}
-                    disabled={!languageOptions}
-                  >
-                    {(languageOptions?.caption ?? [{ code: "same", label: "Same as spoken" }]).map(
-                      (option) => (
-                        <option key={option.code} value={option.code}>
-                          {option.label}
-                        </option>
-                      )
-                    )}
-                  </Select>
-                </div>
-                <Button onClick={start} className="sm:ml-auto">
-                  Generate captions
-                  <ArrowRight />
-                </Button>
-              </div>
-            ) : (
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-body-sm text-muted-foreground">
-                  <span className="flex items-center gap-2">
-                    {upload.percent >= 100 && <Loader2 className="size-3.5 animate-spin" />}
-                    {/* The bar hits 100% when the bytes are sent, but the server
-                        is still probing the file and making a thumbnail. */}
-                    {upload.percent < 100 ? "Uploading…" : "Preparing…"}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono tabular-nums">{upload.percent}%</span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => upload.handle.cancel()}
-                      aria-label="Cancel upload"
-                    >
-                      <X />
-                    </Button>
-                  </span>
-                </div>
-                <div
-                  className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
-                  role="progressbar"
-                  aria-label="Upload progress"
-                  aria-valuenow={upload.percent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-200 ease-out"
-                    style={{ width: `${upload.percent}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {!upload && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                {translating
-                  ? system?.translation_engine === "gemini"
-                    ? "Speech is transcribed on this computer, then translated with Gemini."
-                    : "Speech is transcribed and translated on this computer."
-                  : "Captions come out in whatever language is spoken. It's detected automatically."}
-              </p>
-            )}
-          </div>
+          <LanguageStep
+            file={file}
+            language={language}
+            onLanguage={setLanguage}
+            options={languageOptions}
+            system={system}
+            upload={upload}
+            onBack={() => setFile(null)}
+            onStart={start}
+            onCancel={() => upload?.handle.cancel()}
+          />
         )}
       </div>
 
       {error && (
         <p
           role="alert"
-          className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </p>
