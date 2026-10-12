@@ -1,31 +1,53 @@
 "use client";
 
-import { Check, Cpu, KeyRound, MemoryStick, Mic } from "lucide-react";
-import { useState } from "react";
+import { Check, Cpu, HardDrive, KeyRound, Languages, Moon, Sparkles, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import { useTheme } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
-import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useStats } from "@/hooks/use-stats";
 import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
+import { formatFileSize } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
 
+/** One settings card: a small caps eyebrow, a title, and its controls. */
 export function SettingsSection({
+  eyebrow,
   title,
   description,
+  icon: Icon,
+  aside,
   children,
 }: {
+  eyebrow?: string;
   title: string;
   description?: string;
+  icon?: typeof Cpu;
+  aside?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
-      <div className="mt-4">{children}</div>
-    </Card>
+    <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          {Icon && (
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-primary">
+              <Icon className="size-5" aria-hidden="true" />
+            </span>
+          )}
+          <div className="min-w-0">
+            {eyebrow && <p className="label-caps">{eyebrow}</p>}
+            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+            {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
+          </div>
+        </div>
+        {aside}
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
   );
 }
 
@@ -38,70 +60,67 @@ function Saved() {
   );
 }
 
-function Row({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: typeof Cpu;
-  label: string;
-  children: React.ReactNode;
-}) {
+function Chip({ tone = "neutral", children }: { tone?: "neutral" | "success" | "primary"; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <dt className="w-24 shrink-0 text-sm text-muted-foreground sm:w-28">{label}</dt>
-      <dd className="min-w-0 text-sm">{children}</dd>
-    </div>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 font-mono text-[11px]",
+        tone === "success" && "border-success/30 bg-success/10 text-success",
+        tone === "primary" && "border-primary/30 bg-primary/10 text-primary",
+        tone === "neutral" && "border-border bg-surface-2 text-muted-foreground"
+      )}
+    >
+      {children}
+    </span>
   );
 }
-
-const DEVICE: Record<string, string> = { cuda: "GPU", cpu: "CPU" };
 
 function MachineSection({ info }: { info: SystemInfo }) {
   const hw = info.hardware;
   return (
     <SettingsSection
-      title="This computer"
-      description="Everything runs here. Videos, captions and models stay on this machine unless you add a Gemini key below."
+      eyebrow="Hardware profile"
+      title="Your computer"
+      icon={Cpu}
+      aside={hw && <Chip tone={hw.cuda ? "success" : "neutral"}>{hw.cuda ? "● CUDA active" : "CPU only"}</Chip>}
     >
       {!hw ? (
         <p className="text-sm text-muted-foreground" role="status">
           Waiting for the processing service to report in. It does so as soon as it has started.
         </p>
       ) : (
-        <dl className="divide-y divide-border">
-          <Row icon={Cpu} label="Processor">
-            {hw.cuda ? (
-              <>
-                {hw.gpu_name ?? "NVIDIA GPU"}
-                {hw.vram_gb ? ` · ${hw.vram_gb} GB` : ""}
-              </>
-            ) : (
-              <>
-                CPU only · {hw.cpu_count} cores
-                <span className="block text-xs text-muted-foreground">
-                  No NVIDIA GPU found. Everything still works; transcription just takes longer.
-                </span>
-              </>
-            )}
-          </Row>
-          <Row icon={MemoryStick} label="Memory">
-            {hw.ram_gb} GB available to the app
-          </Row>
-          {info.whisper && (
-            <Row icon={Mic} label="Speech model">
-              {info.whisper.model} on {DEVICE[info.whisper.device] ?? info.whisper.device}
-              <span className="block text-xs text-muted-foreground">
-                {info.whisper.source === "auto"
-                  ? "Chosen automatically for this hardware."
-                  : info.whisper.source === "user"
-                    ? "Chosen by you below."
-                    : "Set by the WHISPER_MODEL_SIZE environment variable."}
-              </span>
-            </Row>
+        <>
+          <p className="font-mono text-sm text-primary">
+            {hw.cuda ? `${hw.gpu_name ?? "NVIDIA GPU"}${hw.vram_gb ? ` · ${hw.vram_gb} GB VRAM` : ""}` : `CPU · ${hw.cpu_count} cores`}
+            {` · ${hw.ram_gb} GB RAM`}
+          </p>
+          {!hw.cuda && (
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              No NVIDIA GPU found. Everything still works; transcription just takes longer.
+            </p>
           )}
-        </dl>
+          <div className="mt-4 rounded-lg border border-border bg-surface-1 p-4">
+            {info.whisper && (
+              <p className="flex flex-wrap items-center gap-2 text-[13px]">
+                <Sparkles className="size-4 text-primary" aria-hidden="true" />
+                <span className="font-semibold">Speech model in use:</span>
+                <Chip tone="primary">{info.whisper.model}</Chip>
+                <span className="text-muted-foreground">
+                  on {info.whisper.device === "cuda" ? "the GPU" : "the CPU"},{" "}
+                  {info.whisper.source === "auto"
+                    ? "chosen automatically for this hardware."
+                    : info.whisper.source === "user"
+                      ? "chosen by you below."
+                      : "set by the WHISPER_MODEL_SIZE environment variable."}
+                </span>
+              </p>
+            )}
+            {/* The rule the worker applies (backend/app/services/hardware.py). */}
+            <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+              Automatic: GPU ≥ 6 GB VRAM → large-v3 · CPU ≥ 12 GB RAM → large-v3-turbo · otherwise → small
+            </p>
+          </div>
+        </>
       )}
     </SettingsSection>
   );
@@ -109,28 +128,61 @@ function MachineSection({ info }: { info: SystemInfo }) {
 
 function ModelSection({ info }: { info: SystemInfo }) {
   const update = useUpdateSystemSettings();
+  const automatic = info.whisper?.source === "auto" ? info.whisper.model : null;
 
   return (
     <SettingsSection
-      title="Speech recognition"
-      description="Larger models are more accurate and slower. Each one is downloaded once, the first time it's used."
+      title="Speech model"
+      description="Larger models are more accurate and slower. Each one is downloaded once, the first time it's used. Applies to the next video you process."
+      aside={<Chip tone="primary">faster-whisper</Chip>}
     >
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-full sm:w-80">
-          <Select
-            label="Model"
-            name="whisper_model"
-            value={info.whisper_choice}
-            disabled={update.isPending}
-            onChange={(event) => update.mutate({ whisper_model: event.target.value })}
-          >
-            {info.whisper_choices.map((choice) => (
-              <option key={choice.value} value={choice.value}>
-                {choice.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+      <div role="radiogroup" aria-label="Speech model" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {info.whisper_choices.map((choice) => {
+          // "Small · fastest, ~500 MB" → name and what it costs.
+          const [name, detail] = choice.label.split(" · ");
+          const active = info.whisper_choice === choice.value;
+          return (
+            <label
+              key={choice.value}
+              className={cn(
+                "flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition-colors",
+                "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
+                active ? "border-primary/60 bg-primary/10" : "border-border bg-surface-1 hover:bg-surface-2",
+                update.isPending && "pointer-events-none opacity-60"
+              )}
+            >
+              <input
+                type="radio"
+                name="whisper_model"
+                value={choice.value}
+                checked={active}
+                disabled={update.isPending}
+                onChange={() => update.mutate({ whisper_model: choice.value })}
+                className="sr-only"
+              />
+              <span className="flex items-start justify-between gap-2">
+                <span className="text-base font-semibold">{name}</span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full",
+                    active ? "bg-primary text-primary-foreground" : "border border-border bg-card"
+                  )}
+                >
+                  {active && <Check className="size-3" />}
+                </span>
+              </span>
+              {detail && <span className="text-[13px] text-muted-foreground">{detail}</span>}
+              {choice.value !== "auto" && choice.value === automatic && (
+                <span className="self-start">
+                  <Chip tone="primary">Picked for this computer</Chip>
+                </span>
+              )}
+            </label>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex min-h-5 items-center gap-3">
         {update.isSuccess && <Saved />}
         {update.isError && (
           <span role="alert" className="text-sm text-destructive">
@@ -138,43 +190,94 @@ function ModelSection({ info }: { info: SystemInfo }) {
           </span>
         )}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Applies to the next video you process. Videos that already have captions keep them.
-      </p>
     </SettingsSection>
   );
 }
 
-function GeminiSection({ info }: { info: SystemInfo }) {
+function TranslationSection({ info }: { info: SystemInfo }) {
   const update = useUpdateSystemSettings();
   const [key, setKey] = useState("");
+  const gemini = info.translation_engine === "gemini";
 
   function save(event: React.FormEvent) {
     event.preventDefault();
     update.mutate({ gemini_api_key: key.trim() }, { onSuccess: () => setKey("") });
   }
 
-  return (
-    <SettingsSection
-      title="Gemini API key (optional)"
-      description="Not needed: captions are translated on this computer by default. A key lets Google's Gemini translate instead, which often reads more naturally, and adds written answers to Search."
-    >
-      <p className="mb-4 flex items-start gap-2 text-sm">
-        <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        {info.gemini_configured ? (
-          <span>
-            <span className="font-medium text-success">Key set.</span> If Gemini can&apos;t be
-            reached, translation falls back to this computer automatically.
-            {info.gemini_source === "env" && " (Set by the GEMINI_API_KEY environment variable.)"}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">No key. Translating locally with M2M100.</span>
-        )}
-      </p>
+  // Which engine translates is decided by whether a key is set, so these
+  // say which one is in use rather than offering a switch.
+  const engines = [
+    {
+      id: "local",
+      name: `Local (${info.translator_model ?? "M2M100"})`,
+      chips: ["Default", "Private"],
+      body: "Runs on this computer with no network calls.",
+      inUse: !gemini,
+    },
+    {
+      id: "gemini",
+      name: "Gemini",
+      chips: ["Optional", "Online"],
+      body: "Google's Gemini translates the caption text, which often reads more naturally, and adds written answers to Search. Falls back to local if it can't be reached.",
+      inUse: gemini,
+    },
+  ];
 
-      <form onSubmit={save} className="space-y-3">
+  return (
+    <SettingsSection eyebrow="Caption languages" title="Translation" icon={Languages}>
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2">
+        <span className="label-caps mr-1">Languages</span>
+        {["English", "Hindi", "French", "German", "Dutch"].map((language) => (
+          <Chip key={language}>{language}</Chip>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {engines.map((engine) => (
+          <div
+            key={engine.id}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border p-4",
+              engine.inUse ? "border-primary/50 bg-primary/10" : "border-border bg-surface-1"
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2",
+                engine.inUse ? "border-primary" : "border-border"
+              )}
+            >
+              {engine.inUse && <span className="size-1.5 rounded-full bg-primary" />}
+            </span>
+            <div className="min-w-0">
+              <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold">
+                {engine.name}
+                {engine.chips.map((chip) => (
+                  <Chip key={chip}>{chip}</Chip>
+                ))}
+                {engine.inUse && <Chip tone="primary">In use</Chip>}
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">{engine.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={save} className="mt-5 space-y-3">
+        <p className="flex items-start gap-2 text-sm">
+          <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {info.gemini_configured ? (
+            <span>
+              <span className="font-medium text-success">Key set.</span>
+              {info.gemini_source === "env" && " (Set by the GEMINI_API_KEY environment variable.)"}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">No key: translating locally.</span>
+          )}
+        </p>
         <Field
-          label={info.gemini_configured ? "Replace key" : "API key"}
+          label={info.gemini_configured ? "Replace Gemini API key" : "Gemini API key (optional)"}
           name="gemini_api_key"
           type="password"
           autoComplete="off"
@@ -210,7 +313,90 @@ function GeminiSection({ info }: { info: SystemInfo }) {
   );
 }
 
-/** The install's own settings: hardware, speech model, optional Gemini key. */
+function StorageSection() {
+  const { data } = useStats();
+  const { theme, toggleTheme } = useTheme();
+  // The stored theme is only known after mount; see ThemeToggle.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const used = data ? data.disk_total_bytes - data.disk_free_bytes : 0;
+  const percent = data && data.disk_total_bytes > 0 ? Math.round((used / data.disk_total_bytes) * 100) : 0;
+
+  return (
+    <SettingsSection eyebrow="Disk usage" title="Storage & theme" icon={HardDrive}>
+      {data ? (
+        <>
+          <p className="flex flex-wrap items-baseline gap-2">
+            <span className="text-3xl font-semibold tabular-nums">{formatFileSize(used)}</span>
+            <span className="text-[13px] text-muted-foreground">used of {formatFileSize(data.disk_total_bytes)} on this disk</span>
+          </p>
+          <div
+            className="mt-3 h-2 overflow-hidden rounded-full bg-surface-3"
+            role="progressbar"
+            aria-label="Disk usage"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <p className="flex items-center justify-between rounded-md border border-border bg-surface-1 px-3 py-2 text-[13px]">
+              <span className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
+                This app&apos;s videos and exports
+              </span>
+              <span className="font-mono tabular-nums">{formatFileSize(data.storage_bytes)}</span>
+            </p>
+            <p className="flex items-center justify-between rounded-md border border-border bg-surface-1 px-3 py-2 text-[13px]">
+              <span className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-success" aria-hidden="true" />
+                Free
+              </span>
+              <span className="font-mono tabular-nums">{formatFileSize(data.disk_free_bytes)}</span>
+            </p>
+          </div>
+        </>
+      ) : (
+        <Skeleton className="h-20 w-full" />
+      )}
+
+      <div className="mt-6 border-t border-border pt-5">
+        <p className="label-caps">Appearance</p>
+        <p className="mb-3 text-base font-semibold">Interface theme</p>
+        <div role="radiogroup" aria-label="Interface theme" className="inline-flex gap-1 rounded-lg border border-border bg-surface-1 p-1">
+          {(
+            [
+              { value: "light", label: "Light", icon: Sun },
+              { value: "dark", label: "Dark", icon: Moon },
+            ] as const
+          ).map((option) => {
+            const active = mounted && theme === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => !active && toggleTheme()}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-5 py-1.5 text-[13px] transition-colors",
+                  active ? "bg-surface-3 font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <option.icon className="size-4" aria-hidden="true" />
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+/** The install's own settings: hardware, speech model, translation, disk and theme. */
 export function InstallSettings() {
   const system = useSystem();
 
@@ -225,21 +411,22 @@ export function InstallSettings() {
 
   if (system.isError || !system.data) {
     return (
-      <Card className="p-4 sm:p-5" role="alert">
+      <section className="rounded-lg border border-border bg-card p-5" role="alert">
         <p className="text-sm font-medium">Couldn&apos;t load settings.</p>
         <p className="mt-1 text-sm text-muted-foreground">The app&apos;s server didn&apos;t answer.</p>
         <Button className="mt-3" variant="secondary" size="sm" onClick={() => system.refetch()}>
           Try again
         </Button>
-      </Card>
+      </section>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-5">
       <MachineSection info={system.data} />
       <ModelSection info={system.data} />
-      <GeminiSection info={system.data} />
+      <TranslationSection info={system.data} />
+      <StorageSection />
     </div>
   );
 }

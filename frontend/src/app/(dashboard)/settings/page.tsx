@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Check } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -270,16 +269,15 @@ function DangerSection() {
 
 export default function SettingsPage() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
-      <Link
-        href="/dashboard"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Back to your videos
-      </Link>
-
-      <h1 className="mb-6 text-h1">{LOCAL_MODE ? "Settings" : "Account settings"}</h1>
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {LOCAL_MODE ? "Settings & hardware" : "Account settings"}
+      </h1>
+      <p className="mb-6 mt-1 max-w-2xl text-[13px] text-muted-foreground">
+        {LOCAL_MODE
+          ? "What this install runs on, the speech model it uses, translation, and storage."
+          : "Your profile, password and account."}
+      </p>
 
       {/* A local install has no account to manage; it has the machine instead.
           A hosted one keeps the account pages and leaves the install alone. */}
