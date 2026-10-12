@@ -4,14 +4,9 @@ import Link from "next/link";
 import {
   AlertCircle,
   Check,
-  CheckCircle2,
   Clock,
   Download,
-  FileText,
-  Film,
   Info,
-  Loader2,
-  PencilLine,
   RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
@@ -20,14 +15,11 @@ import {
 import { Stepper } from "@/components/flow/stepper";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { useCreateExport, useDownloadExport, useExports } from "@/hooks/use-exports";
 import { useSystem } from "@/hooks/use-system";
-import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
+import { useRetranscribe } from "@/hooks/use-videos";
 import { stageLabel, useEta } from "@/lib/stages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
-import { formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ExportFormat, VideoExport } from "@/types/export";
 import type { Video } from "@/types/video";
 
 function ProgressBar({ percent, label }: { percent: number; label: string }) {
@@ -245,177 +237,52 @@ function Failed({ video }: { video: Video }) {
   );
 }
 
-const latest = (items: VideoExport[], format: ExportFormat) =>
-  items.find((item) => item.format === format) ?? null;
-
-function ExportStep({
-  video,
-  captionCount,
-  onEdit,
-}: {
-  video: Video;
-  captionCount: number;
-  onEdit: () => void;
-}) {
-  const { data: exports } = useExports(video.id);
-  const create = useCreateExport(video.id);
-  const download = useDownloadExport();
-  const { data: languages } = useLanguageOptions();
-
-  const items = exports?.items ?? [];
-  const burn = latest(items, "mp4");
-  const rendering = burn && (burn.status === "pending" || burn.status === "processing");
-  const language =
-    languages?.caption.find((option) => option.code === video.caption_language)?.label ??
-    video.caption_language;
-
-  async function subtitles(format: "srt" | "vtt") {
-    const made = await create.mutateAsync({ format });
-    download.mutate({ exportId: made.id, name: video.title });
-  }
-
+/**
+ * What a finished video still has to say: a non-fatal notice from the job
+ * (e.g. a translation fallback), or that no speech was found at all.
+ */
+function CompletedNotes({ video, captionCount }: { video: Video; captionCount: number }) {
+  if (!video.notice && captionCount > 0) return null;
   return (
-    <div>
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
-        <span className="font-medium">Captions ready</span>
-        <span className="text-muted-foreground">
-          {captionCount} lines · {language === "Same as spoken" ? "in the spoken language" : language}
-        </span>
-      </p>
-
+    <div className="mb-5 flex flex-col gap-2">
       {video.notice && (
-        <p className="mt-2 flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-body-sm text-muted-foreground">
-          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           {video.notice}
         </p>
       )}
-
-      {captionCount === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">
-          No speech was found in this video, so there is nothing to export. If that&apos;s
-          wrong, try a larger speech model in Settings and process it again.
+      {captionCount === 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+          No speech was found in this video, so there is nothing to export. If that&apos;s wrong,
+          try a larger speech model in Settings and process it again.
         </p>
-      ) : (
-        <>
-          {rendering && burn ? (
-            <div className="mt-4" role="status" aria-live="polite">
-              <div className="flex items-baseline justify-between text-sm">
-                <span className="flex items-center gap-2 font-medium">
-                  <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
-                  {burn.status === "pending" ? "Waiting to render" : "Rendering video"}
-                </span>
-                <span className="font-mono tabular-nums text-muted-foreground">{burn.progress}%</span>
-              </div>
-              <div className="mt-2.5">
-                <ProgressBar percent={burn.progress} label="Rendering video" />
-              </div>
-            </div>
-          ) : burn?.status === "completed" ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Button
-                onClick={() => download.mutate({ exportId: burn.id, name: video.title })}
-                loading={download.isPending}
-              >
-                <Download />
-                Download video
-              </Button>
-              <span className="text-body-sm text-muted-foreground">
-                MP4 with captions
-                {burn.size_bytes ? ` · ${formatFileSize(burn.size_bytes)}` : ""}
-                {burn.height ? ` · ${burn.height}p` : ""}
-              </span>
-            </div>
-          ) : (
-            <>
-              {burn?.status === "failed" && (
-                <p role="alert" className="mt-3 text-sm text-destructive">
-                  The last render failed{burn.error_message ? `: ${burn.error_message}` : "."} Try
-                  again.
-                </p>
-              )}
-            </>
-          )}
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {!rendering && (
-              <Button
-                variant={burn?.status === "completed" ? "secondary" : "primary"}
-                onClick={() => create.mutate({ format: "mp4" })}
-                loading={create.isPending && create.variables?.format === "mp4"}
-              >
-                <Film />
-                {burn?.status === "completed" ? "Render again" : "Export video with captions"}
-              </Button>
-            )}
-            <Button
-              variant="secondary"
-              onClick={() => void subtitles("srt")}
-              disabled={create.isPending}
-            >
-              <FileText />
-              Subtitles (.srt)
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => void subtitles("vtt")}
-              disabled={create.isPending}
-            >
-              <FileText />
-              Web subtitles (.vtt)
-            </Button>
-            <Button variant="ghost" onClick={onEdit}>
-              <PencilLine />
-              Edit captions or style
-            </Button>
-          </div>
-          {create.isError && (
-            <p role="alert" className="mt-2 text-sm text-destructive">
-              Couldn&apos;t start the export. Try again.
-            </p>
-          )}
-        </>
       )}
     </div>
   );
 }
 
 /**
- * The top of a video's page: where it is in Upload → Language → Export, and
- * the one action that moves it on.
- *
- * Editing and styling stay on the page below, a step you may take but never
- * have to: a finished video can be exported from here without touching them.
+ * The top of a video's page: while it is on its way to captions, where it is
+ * (step 2 of Upload → Language → Export) and what is running; once it is
+ * there, only what the job had to say. Exporting is the editor bar's Export.
  */
 export function VideoStatus({
   video,
   captionCount,
-  onEdit,
 }: {
   video: Video;
   captionCount: number;
-  onEdit: () => void;
+  onEdit?: () => void;
 }) {
-  const { data: exports } = useExports(video.id);
-  const finished = exports?.items.some(
-    (item) => item.format === "mp4" && item.status === "completed"
-  );
-  const step = video.status === "completed" ? (finished ? 4 : 3) : 2;
+  if (video.status === "completed") return <CompletedNotes video={video} captionCount={captionCount} />;
 
   return (
-    <section aria-label="Captioning progress" className="mb-5 flex flex-col gap-4">
+    <section aria-label="Captioning progress" className="mb-6 flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card px-4 py-3 sm:px-6">
-        <Stepper current={step} />
+        <Stepper current={2} />
       </div>
-      {video.status === "failed" ? (
-        <Failed video={video} />
-      ) : video.status === "completed" ? (
-        <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
-          <ExportStep video={video} captionCount={captionCount} onEdit={onEdit} />
-        </div>
-      ) : (
-        <Processing video={video} />
-      )}
+      {video.status === "failed" ? <Failed video={video} /> : <Processing video={video} />}
     </section>
   );
 }

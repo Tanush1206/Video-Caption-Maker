@@ -79,6 +79,9 @@ export function DashboardHeader() {
 /** Phone navigation, fixed to the bottom edge. The layout pads for it. */
 export function MobileTabBar() {
   const isActive = useIsActive();
+  const pathname = usePathname();
+  // The editor has its own bottom bar (Caption style / Export).
+  if (pathname.startsWith("/editor")) return null;
 
   return (
     <nav
