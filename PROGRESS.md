@@ -344,8 +344,12 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   captions. Cap removed; worker recreated from the v1.0.2 image.
 - Found: every release re-downloads the whole backend image (all layers
   above the OS base changed 1.0.1 → 1.0.2: 765 MB CPU, 2,246 MB CUDA)
-  although no dependency changed. Suspect `ARG VERSION` at the top of the
-  runtime stage; testing with two local builds.
+  although no dependency changed. Cause confirmed with two local builds
+  differing only in VERSION: layers 4-13 changed (`ARG VERSION` at the top
+  of the runtime stage). Moved ARG/LABEL/VCM_VERSION to the end of both
+  Dockerfiles: 14/14 and 9/9 layers identical. CI switched from the Actions
+  cache (10 GB, 7-day eviction) to a GHCR registry cache (`949fe9d`). The
+  update to v1.0.3 is still a full download; the savings start after it.
 
 - R11 (the 08:22 deletions). Ruled out: the app by itself (one delete path,
   two clicks per video, mutations never retry, `request()` retries only on
@@ -359,7 +363,9 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   from other origins, or from a non-local Origin; every DELETE, settings
   change and refusal goes to `storage/audit.log` (persistent; no bodies).
   8 tests; 6 fail with the guard removed. Proxy headers measured with the
-  real frontend image in front of an echo server.
+  real frontend image in front of an echo server. Dev UI in a real browser:
+  0 of 20 API calls refused; rebinding and cross-site probes refused (403)
+  and written to the audit log.
 
 ## Next
 Finish the layer comparison and fix; v1.0.3 (push + tag, with Tanush):
