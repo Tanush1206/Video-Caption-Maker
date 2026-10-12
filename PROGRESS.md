@@ -367,9 +367,31 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   0 of 20 API calls refused; rebinding and cross-site probes refused (403)
   and written to the audit log.
 
+- Port: Tanush's install moved to 3000 with the installer's own setting
+  (`$env:VCM_PORT='3000'` + the README one-liner; `.env` VCM_PORT=3000
+  written by the installer, data and md5 unchanged); a browser lands on
+  "Your videos" at http://localhost:3000. Only one of install and dev can
+  hold 3000: `vcm stop` before `docker compose up`. Dev stack left stopped.
+- Guard hole found before release: production compose never sets
+  CORS_ORIGINS, so the guard's same-site allowance trusted the default
+  http://localhost:3000 on every install, including one moved to 3001.
+  Now, through the proxy, Origin must equal the forwarded host exactly
+  (`72ea1fa`); CORS_ORIGINS only for direct (dev) calls; `null` refused.
+  The dev-app and null cases fail on the previous rule. 325 passed.
+- audit.log is capped: rotates at 5 MB to audit.log.1 (replacing the old
+  one), so at most two files of ~5 MB; tested.
+- Moved-port live test (clean machine, installer moved it to 3001, images
+  built from this code, Chromium inside its network): at localhost:3001
+  and at 127.0.0.1:3001 the UI deleted (204), saved settings twice (200),
+  exported SRT and a burned MP4 (downloaded); 0 requests refused. A probe
+  with Origin http://localhost:3000 and a rebinding Host: 403, recorded
+  with reasons. The clean install keeps these test images until v1.0.3.
+- Test harness: a hard Docker stop left a stale containerd pid in
+  `vcm-clean`; emptying that one file brought it back with data intact.
+
 ## Next
-Finish the layer comparison and fix; v1.0.3 (push + tag, with Tanush):
-02a4576 (OOM take-over), layer order, 491ebee (request guard). Then
+v1.0.3 (push + tag, with Tanush): 02a4576 (OOM take-over), 949fe9d
+(layer order), 491ebee + 72ea1fa (request guard). Then
 `vcm update` both installs, verify the guard and audit log live, finish
 both E2E matrices, DELETE uninstall leaves nothing, final DoD, R10.
 
