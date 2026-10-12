@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthBootstrap } from "@/components/layout/auth-bootstrap";
 import { Providers } from "@/components/layout/providers";
@@ -24,7 +25,16 @@ const themeInitScript = `
 // Exposed as CSS variables rather than class names so Tailwind's fontFamily
 // can reference them, and so a `font-mono` utility anywhere picks the right
 // face without the component knowing which font is loaded.
-const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+// Geist, DESIGN.md's UI face. Next 14's Google list predates it, so the
+// variable file is bundled here (from the `geist` npm package, OFL; licence
+// alongside). Not in public/fonts: that folder is the caption fonts, which
+// the backend image copies for burn-in.
+const sans = localFont({
+  src: "./fonts/Geist-Variable.woff2",
+  variable: "--font-sans",
+  weight: "100 900",
+  display: "swap",
+});
 
 // Timecodes, byte counts and progress percentages sit in columns that must not
 // jitter as their digits change. A proportional face makes 00:11 narrower than

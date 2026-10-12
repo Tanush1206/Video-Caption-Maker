@@ -58,14 +58,23 @@ const config: Config = {
           foreground: withAlpha("--destructive-foreground"),
         },
       },
-      // Stitch's ramp: 4 / 8 / 12. Tighter than before and consistent across
-      // the app, which is most of what makes it read as an instrument rather
-      // than a consumer app.
+      // DESIGN.md: 8px on every component, 4px on micro elements (kbd,
+      // status chips), full only for dots and the scrub thumb. `md` stays the
+      // token so components that ask for it follow --radius.
       borderRadius: {
-        xl: "calc(var(--radius) * 3)",
-        lg: "calc(var(--radius) * 2)",
+        xl: "calc(var(--radius) + 2px)",
+        lg: "var(--radius)",
         md: "var(--radius)",
         sm: "calc(var(--radius) / 2)",
+      },
+      // Indigo text is lighter than the indigo fill in dark (see globals.css),
+      // so text-primary reads its own token while bg-primary keeps the fill.
+      textColor: {
+        primary: {
+          DEFAULT: withAlpha("--primary-text"),
+          foreground: withAlpha("--primary-foreground"),
+          muted: withAlpha("--primary-muted"),
+        },
       },
       // The Stitch type scale. Sizes are fixed px rather than rem: this is a
       // dense tool where an 11px label must stay 11px, and a user's browser

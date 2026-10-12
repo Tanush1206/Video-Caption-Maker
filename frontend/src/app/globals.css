@@ -105,22 +105,19 @@
 }
 
 /*
- * Design tokens, taken from the Stitch design (design.html at the repo root).
- *
- * Stitch produced a Material-3 palette with names like `surface-container-high`
- * and `on-surface-variant`. Those values are adopted verbatim; the *names* are
- * not. Material's scheme carries pairings this app does not use, and renaming
- * every className to match would have churned the whole frontend to say the
- * same thing. So the values land on the semantic names already in use, plus
- * three elevation levels the old palette was missing.
+ * Design tokens, from design/stitch/local_video_studio_engine/DESIGN.md
+ * (v1.0.4): a cold slate base, one indigo accent, emerald only for local
+ * engine health. The screens' own palettes disagree with each other in
+ * places; DESIGN.md is the one source for colour.
  *
  * Every colour is bare HSL channels so Tailwind can wrap them in
  * `hsl(var(--x) / <alpha>)`. A token holding a full `hsl(...)` string silently
  * breaks every opacity modifier like `bg-primary/10`.
  *
- * Stitch only produced a dark theme. The light theme below is derived from it,
- * not inverted: same navy-tinted neutral family and the same violet hue, but
- * the violet is darkened, because #cebdff on white is unreadable.
+ * Two departures from DESIGN.md, both for WCAG AA (axe stays at zero):
+ * white on its #6366F1 is 4.47:1, so filled buttons use #5B5EF0 (dark) and
+ * #4F46E5 (light); and #6366F1 as text on the dark card is 3.97:1, so indigo
+ * text in dark uses #818CF8 through --primary-text.
  */
 
 @layer base {
@@ -137,9 +134,8 @@
      */
     color-scheme: light;
 
-    /* Neutrals carry a hint of the same navy as dark, so the two themes feel
-       related rather than like two different products. */
-    --background: 220 40% 99%;
+    /* Tailwind's slate family, as DESIGN.md's text hierarchy is. */
+    --background: 210 40% 98%;
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -148,35 +144,37 @@
     /* Elevation, low to high. In light these barely separate and the border
        does the work; in dark they are the whole mechanism. Named by level so
        a component asks for depth, not for a colour. */
-    --surface-1: 220 33% 98%;
-    --surface-2: 220 28% 96%;
-    --surface-3: 220 24% 93%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 210 40% 96%;
+    --surface-3: 214 32% 91%;
 
-    --subtle: 220 33% 98%;
-    --muted: 220 20% 95%;
-    --muted-foreground: 262 8% 42%;
+    --subtle: 210 40% 96%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    /* Stitch's violet, darkened for a light background. Its #cebdff is the
-       dark-theme value and fails contrast on white by a wide margin. */
-    --primary: 258 68% 52%;
+    /* indigo-600: DESIGN.md's hover indigo, the darkest of its two, so white
+       on it and it on white both clear AA. */
+    --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
-    --primary-muted: 258 82% 96%;
+    --primary-muted: 226 100% 97%;
+    /* Indigo as text: the fill colour in light, lighter in dark. */
+    --primary-text: 243 75% 59%;
 
-    /* Stitch's cyan, likewise darkened. Used for the gradient pair. */
-    --accent: 190 82% 38%;
+    /* Progress fills are solid in this design; the old second gradient colour
+       is the indigo again, so .bar-fill reads as one colour. */
+    --accent: 243 75% 59%;
 
-    --success: 142 70% 28%; /* 28%, not 34%: AA 4.5:1 for small text on white */
-    --warning: 32 92% 33%; /* 33%, not 42%: it is used for small text, which needs 4.5:1 */
-    --destructive: 0 72% 48%;
+    --success: 163 94% 24%; /* #047857: emerald-700, 5.5:1 on white */
+    --warning: 26 90% 37%; /* #b45309: used for small text, 5:1 on white */
+    --destructive: 347 77% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 258 12% 88%;
-    --input: 258 10% 82%;
-    --ring: 258 68% 52%;
+    --border: 214 32% 91%;
+    --input: 213 27% 84%;
+    --ring: 239 84% 67%;
 
-    /* 4px. Stitch is tighter than the 10px this had before, and it reads as a
-       technical tool rather than a consumer app - which is what this is. */
-    --radius: 0.25rem;
+    /* 8px: DESIGN.md's one radius for buttons, inputs, rows, panels. */
+    --radius: 0.5rem;
 
     /* Shared by the auth glass. em-based so the rim scales with the control
        it is drawn on, clamped so it never vanishes or turns into a frame. */
@@ -196,38 +194,39 @@
   .dark {
     color-scheme: dark;
 
-    /* Straight from Stitch. */
-    --background: 222 55% 10%; /* #0b1326 */
-    --foreground: 226 90% 92%; /* #dae2fd */
+    /* DESIGN.md's layering: canvas, panel, card, overlay. */
+    --background: 230 25% 5%; /* #090a0f */
+    --foreground: 210 40% 98%; /* #f8fafc */
 
-    --card: 223 38% 15%; /* #171f33  surface-container */
-    --card-foreground: 226 90% 92%;
+    --card: 225 22% 11%; /* #151821 */
+    --card-foreground: 210 40% 98%;
 
-    --surface-1: 222 42% 13%; /* #131b2e  container-low  */
-    --surface-2: 222 28% 19%; /* #222a3d  container-high */
-    --surface-3: 225 24% 23%; /* #2d3449  container-highest */
+    --surface-1: 227 24% 7%; /* #0e1017 */
+    --surface-2: 225 22% 14%; /* #1c202c */
+    --surface-3: 225 21% 18%; /* #252a39 */
 
     /* Below the page, for wells and inset areas - the one surface that goes
        darker rather than lighter. */
-    --subtle: 222 68% 7%; /* #060e20  container-lowest */
+    --subtle: 220 23% 3%; /* #050608 */
 
-    --muted: 225 24% 23%; /* #2d3449  surface-variant */
-    --muted-foreground: 262 16% 80%; /* #cac4d4 */
+    --muted: 225 22% 14%; /* #1c202c */
+    --muted-foreground: 215 20% 65%; /* #94a3b8 */
 
-    --primary: 255 92% 76%; /* #a78bfa  primary-container */
-    --primary-foreground: 259 75% 30%; /* #381385 */
-    --primary-muted: 258 30% 22%;
+    --primary: 239 83% 65%; /* #5b5ef0 */
+    --primary-foreground: 0 0% 100%; /* #ffffff */
+    --primary-muted: 235 33% 19%;
+    --primary-text: 234 89% 74%; /* #818cf8 */
 
-    --accent: 188 76% 64%; /* #5ed7e9 */
+    --accent: 239 84% 67%; /* #6366f1 */
 
-    --success: 142 60% 52%;
-    --warning: 32 92% 60%;
-    --destructive: 6 100% 84%; /* #ffb4ab */
-    --destructive-foreground: 0 55% 15%;
+    --success: 160 84% 39%; /* #10b981 */
+    --warning: 38 92% 50%; /* #f59e0b */
+    --destructive: 0 91% 71%; /* #f87171 */
+    --destructive-foreground: 228 17% 6%;
 
-    --border: 258 9% 30%; /* #494552  outline-variant */
-    --input: 258 9% 34%;
-    --ring: 255 100% 87%; /* #cebdff */
+    --border: 227 21% 17%; /* #222634 */
+    --input: 226 19% 27%; /* #373d51 */
+    --ring: 239 84% 67%; /* #6366f1 */
 
     /* Nearly invisible on these surfaces, which is correct - elevation here is
        lightness. Kept so overlays and dropdowns still detach from the page. */
@@ -242,9 +241,6 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    /* Inter's contextual alternates. Without cv11 the lowercase l and
-       uppercase I are hard to tell apart in filenames and error messages. */
-    font-feature-settings: "cv11", "ss01";
   }
 
   h1, h2, h3 {
