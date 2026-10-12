@@ -150,7 +150,9 @@
 
     --subtle: 210 40% 96%;
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    /* slate-600, not DESIGN.md's slate-500: 500 drops under 4.5:1 on the
+       tinted panels (surface-2, the drop zone). */
+    --muted-foreground: 215 19% 35%;
 
     /* indigo-600: DESIGN.md's hover indigo, the darkest of its two, so white
        on it and it on white both clear AA. */

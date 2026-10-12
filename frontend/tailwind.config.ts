@@ -16,6 +16,18 @@ const config: Config = {
     "./src/app/**/*.{ts,tsx}",
   ],
   theme: {
+    // Indigo text is lighter than the indigo fill in dark (see globals.css),
+    // so text-primary reads its own token while bg-primary keeps the fill.
+    // A function over the whole palette, not `extend.textColor`: extended
+    // colours are merged in after it and would win back `primary`.
+    textColor: ({ theme }) => ({
+      ...theme("colors"),
+      primary: {
+        DEFAULT: withAlpha("--primary-text"),
+        foreground: withAlpha("--primary-foreground"),
+        muted: withAlpha("--primary-muted"),
+      },
+    }),
     container: {
       center: true,
       padding: "2rem",
@@ -66,15 +78,6 @@ const config: Config = {
         lg: "var(--radius)",
         md: "var(--radius)",
         sm: "calc(var(--radius) / 2)",
-      },
-      // Indigo text is lighter than the indigo fill in dark (see globals.css),
-      // so text-primary reads its own token while bg-primary keeps the fill.
-      textColor: {
-        primary: {
-          DEFAULT: withAlpha("--primary-text"),
-          foreground: withAlpha("--primary-foreground"),
-          muted: withAlpha("--primary-muted"),
-        },
       },
       // The Stitch type scale. Sizes are fixed px rather than rem: this is a
       // dense tool where an 11px label must stay 11px, and a user's browser
