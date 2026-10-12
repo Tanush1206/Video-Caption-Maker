@@ -323,8 +323,74 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
   writable layer (`docker diff`); `vcm update` recreates the container from
   the new image. Staging copies removed.
 
+- v1.0.2 published (4 jobs green). `vcm update` from the real Release on
+  both installs: SHA256SUMS verified, migration a9d3e6f20b14 → b4e7c2d91a36
+  ran, row counts and caption md5 unchanged (Linux 11/190/27, Windows
+  1/14/3), version 1.0.2, temporary patch gone (`docker diff`). Linux pull
+  took 68 min: nested dind network at ~220 KB/s vs 8.5 MB/s on the host
+  (test-harness path). Windows took ~10 min on Wi-Fi.
+- Windows install: videos 1, 3-7 were deleted at 08:22 UTC on 2026-10-11
+  (6 DELETEs through the frontend proxy, ~2 s apart, after a dashboard load
+  at 08:22:04). Tanush: not him, so treated as a bug. Only 7 videos ever
+  existed; the id sequence at 37 is Postgres's 32-value prefetch after an
+  unclean shutdown. See R11.
+- Real OOM test (clean worker capped at 1 GB, large-v3-turbo forced) found
+  that a job killed mid-run sits in Redis's unacked set, so recovery treated
+  it as held; Redis would redeliver it hourly, outside the counter. Fixed:
+  the starting worker takes over unacked video/export jobs (`02a4576`).
+  Verified live: take over → 3 requeues across 3 OOM kills → failed with
+  the smaller-model message; broker empty; worker stable. Then automatic
+  model (small) + manual retry: attempts reset to 0, completed, 14
+  captions. Cap removed; worker recreated from the v1.0.2 image.
+- Found: every release re-downloads the whole backend image (all layers
+  above the OS base changed 1.0.1 → 1.0.2: 765 MB CPU, 2,246 MB CUDA)
+  although no dependency changed. Suspect `ARG VERSION` at the top of the
+  runtime stage; testing with two local builds.
+
+- R11 (the 08:22 deletions). Ruled out: the app by itself (one delete path,
+  two clicks per video, mutations never retry, `request()` retries only on
+  401), Playwright/test scripts (`shoot.js` screenshots only, `e2e.py`
+  never deletes), any Claude session (transcripts show no port-3001 call
+  then), and cross-site pages (CORS allows only localhost:3000). The actor
+  stays unknown: uvicorn logs no User-Agent/Origin, and `vcm update`
+  replaced the container. Fixed what made it possible and unrecordable
+  (`491ebee`): in local mode the API refuses non-local hosts (DNS
+  rebinding, reads too) and state changes that are cross-site, same-site
+  from other origins, or from a non-local Origin; every DELETE, settings
+  change and refusal goes to `storage/audit.log` (persistent; no bodies).
+  8 tests; 6 fail with the guard removed. Proxy headers measured with the
+  real frontend image in front of an echo server.
+
 ## Next
-v1.0.2 (push + tag, with Tanush); `vcm update` both installs from the real
-Release (tests update + checksums + migration b4e7c2d91a36); confirm the
-patch is gone (`docker diff`); real OOM loop test (worker capped at 1 GB);
-finish both E2E matrices; DELETE uninstall leaves nothing; final DoD; R10.
+Finish the layer comparison and fix; v1.0.3 (push + tag, with Tanush):
+02a4576 (OOM take-over), layer order, 491ebee (request guard). Then
+`vcm update` both installs, verify the guard and audit log live, finish
+both E2E matrices, DELETE uninstall leaves nothing, final DoD, R10.
+
+## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
+## v1.0.3 is released and verified)
+Source: `design/stitch/` (gitignored). Use ONLY these folders; ignore every
+other version there. Where a screen.png and its code.html disagree, follow
+code.html.
+
+| Folder | Screen |
+|---|---|
+| dashboard_projects_2 | Dashboard (desktop, dark) |
+| dashboard_first_use_empty_state_2 | First-use empty state |
+| language_configuration_2 | Language step |
+| processing_2 | Processing |
+| processing_failed_2 | Processing failed |
+| video_caption_editor_3 | Caption editor |
+| export_modal_formats_3 | Export modal |
+| cross_video_semantic_search_4 | Search |
+| settings_hardware_4 | Settings |
+| dashboard_light_theme_2 | Dashboard (light) |
+| video_caption_editor_light_theme_2 | Editor (light) |
+| mobile_dashboard_2 | Mobile dashboard (375px) |
+| mobile_language_step_2 | Mobile language step (375px) |
+| mobile_settings_2 | Mobile settings (375px) |
+| mobile_video_caption_editor_2 | Mobile caption editor (375px) |
+| local_video_studio_engine/DESIGN.md | Design tokens |
+
+All 15 folders (code.html + screen.png each) and DESIGN.md verified present
+on 2026-10-12.
