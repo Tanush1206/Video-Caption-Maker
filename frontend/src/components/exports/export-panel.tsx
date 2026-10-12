@@ -2,15 +2,20 @@
 
 import {
   AlertTriangle,
+  Captions,
+  Check,
+  Clapperboard,
   Download,
   FileCode,
   FileText,
-  Film,
+  Info,
   Loader2,
+  PencilLine,
   Trash2,
   Video,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useCreateExport,
@@ -39,15 +44,18 @@ type Choice = ExportFormat | "original";
 const FORMATS: {
   key: Choice;
   label: string;
+  ext: string;
   hint: string;
   icon: typeof FileText;
 }[] = [
-  { key: "mp4", label: "MP4", hint: "Captions burned in", icon: Film },
-  { key: "original", label: "Original", hint: "As uploaded", icon: Video },
-  { key: "srt", label: "SRT", hint: "Subtitle file", icon: FileText },
-  { key: "vtt", label: "VTT", hint: "For the web", icon: FileText },
-  { key: "json", label: "JSON", hint: "With timings", icon: FileCode },
+  { key: "mp4", label: "Burned-in video", ext: ".mp4", hint: "The captions drawn into the video frames, in the style you set.", icon: Clapperboard },
+  { key: "srt", label: "Subtitle file", ext: ".srt", hint: "Standard SubRip timed subtitles, for video editors and players.", icon: FileText },
+  { key: "vtt", label: "Web subtitles", ext: ".vtt", hint: "WebVTT, for the <track> element of web players.", icon: Captions },
+  { key: "original", label: "Original video", ext: "", hint: "The file you uploaded, untouched, with no captions.", icon: Video },
+  { key: "json", label: "Transcript data", ext: ".json", hint: "Every caption with its timings, for scripts and other tools.", icon: FileCode },
 ];
+
+const ICONS: Record<string, typeof FileText> = { mp4: Clapperboard, srt: FileText, vtt: Captions, json: FileCode };
 
 function StatusLine({ item }: { item: VideoExport }) {
   if (item.status === "failed") {
@@ -81,11 +89,14 @@ export function ExportPanel({
   videoId,
   hasCaptions,
   defaultName,
+  onCancel,
 }: {
   videoId: number;
   hasCaptions: boolean;
   /** The video's title, as the starting point for the saved filename. */
   defaultName: string;
+  /** Closes the dialog this sits in. */
+  onCancel?: () => void;
 }) {
   const { data, isLoading } = useExports(videoId);
   const { data: options } = useExportOptions(videoId);
@@ -115,6 +126,8 @@ export function ExportPanel({
    * that contradicts the button.
    */
   const [name, setName] = useState("");
+  /** The target picked in the cards; Export runs it. */
+  const [choice, setChoice] = useState<Choice>(hasCaptions ? "mp4" : "original");
   const savedAs = name.trim();
   const resolutions = options?.resolutions ?? [];
   const recommended = options?.recommended_height ?? null;
@@ -130,80 +143,104 @@ export function ExportPanel({
 
   const failed = createExport.error ?? downloadOriginal.error;
 
-  return (
-    // No dividing border any more: this is a tab of its own rather than the
-    // lower half of the rail, so there is nothing above it to be divided from.
-    <section>
-      {(createExport.isPending || downloadOriginal.isPending) && (
-        <div className="mb-3 flex justify-end">
-          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-        </div>
-      )}
+  const needsCaptions = choice !== "original";
+  const canRun = !(needsCaptions && !hasCaptions) && !(choice === "mp4" && rendering);
+  const busy = createExport.isPending || downloadOriginal.isPending;
+  const burn = items.find((item) => item.format === "mp4" && item.status === "processing");
 
-      {/* Says what is unavailable, not that nothing is. This used to read
-          "Nothing to export until this video has captions", which was wrong the
-          moment the original moved in here — and was wrong before that too, it
-          just pointed at a control on the other side of the screen. */}
+  function run() {
+    if (choice === "original") downloadOriginal.mutate(savedAs || undefined);
+    else
+      createExport.mutate({
+        format: choice,
+        // Only a burn has a frame size; the server drops it for the
+        // sidecars anyway, but not sending it is clearer.
+        height: choice === "mp4" && chosen ? chosen : undefined,
+      });
+  }
+
+  return (
+    // Its own scroll area above a footer that stays put; the dialog hands
+    // over its body (bodyClassName) for this.
+    <section className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5 sm:px-7">
+      {/* Says what is unavailable, not that nothing is. */}
       {!hasCaptions && (
-        <p className="mb-3 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+        <p className="rounded-md border border-border bg-surface-1 px-3 py-2 text-[13px] text-muted-foreground">
           Captions aren&apos;t ready yet. You can still download the original.
         </p>
       )}
 
-      {/* Only shown once the server has said what it can do. It applies to the
-          MP4 tile alone, so it sits directly above the grid rather than inside
-          it — a tile that changed shape when selected would be worse. */}
-      {resolutions.length > 0 && (
-        <div className="mb-2 rounded-md border border-border/70 bg-background/30 px-2.5 py-2">
-          <label
-            htmlFor="export-resolution"
-            className="flex items-center justify-between gap-2"
-          >
-            <span className="text-[11px] font-semibold">MP4 resolution</span>
-            <select
-              id="export-resolution"
-              value={chosen ?? ""}
-              onChange={(event) => setHeight(Number(event.target.value))}
-              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] tabular-nums"
-            >
-              {resolutions.map((resolution) => (
-                <option key={resolution.height} value={resolution.height}>
-                  {resolution.label}
-                  {resolution.height === recommended
-                    ? " · recommended"
-                    : resolution.native
-                      ? " · source"
-                      : resolution.upscaled
-                        ? " · upscaled"
-                        : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* Said plainly, because "1080p" on a 144p source promises something
-              it cannot deliver. Upscaling buys sharp captions and nothing else
-              — the picture has no extra detail to recover — and that is worth
-              having when the alternative is a 6px caption, but only if the
-              trade is stated rather than implied. */}
-          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-            {chosenOption?.upscaled
-              ? `Upscaled from ${options?.source_height}p — captions are drawn sharp at ${chosenOption.label}, the picture gains no detail. At ${options?.source_height}p they would render too small to read.`
-              : chosenOption?.native
-                ? "The source's own size — nothing is resampled."
-                : `Rendered at ${chosenOption?.label ?? ""}.`}
-            {options?.hardware_encoder ? " GPU encoding." : ""}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="label-caps" id="export-target">
+            Export target
           </p>
+          <span className="font-mono text-xs text-muted-foreground">{FORMATS.length} formats</span>
         </div>
-      )}
+        <div role="radiogroup" aria-labelledby="export-target" className="grid gap-3 sm:grid-cols-3">
+          {FORMATS.map(({ key, label, ext, hint, icon: Icon }) => {
+            const selected = choice === key;
+            const unavailable = key !== "original" && !hasCaptions;
+            return (
+              <label
+                key={key}
+                className={cn(
+                  "relative flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition-colors",
+                  "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
+                  selected ? "border-primary/60 bg-primary/10" : "border-border bg-surface-1 hover:bg-surface-2",
+                  unavailable && "pointer-events-none opacity-40"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="export-format"
+                  value={key}
+                  checked={selected}
+                  disabled={unavailable}
+                  onChange={() => setChoice(key)}
+                  className="sr-only"
+                />
+                <span className="flex items-start justify-between">
+                  <span className="flex size-8 items-center justify-center rounded-md border border-border bg-card text-primary">
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "flex size-5 items-center justify-center rounded-full",
+                      selected ? "bg-primary text-primary-foreground" : "border border-border bg-card"
+                    )}
+                  >
+                    {selected && <Check className="size-3" />}
+                  </span>
+                </span>
+                <span className="flex flex-wrap items-baseline gap-1.5 text-[15px] font-semibold">
+                  {label}
+                  {ext && (
+                    <span className="rounded-sm bg-surface-2 px-1 font-mono text-[11px] font-normal text-muted-foreground">
+                      {ext}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[13px] leading-snug text-muted-foreground">{hint}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
 
-      {/* Directly above the format buttons, because it applies to whichever
-          one gets pressed — including the download buttons further down the
-          list of finished exports. Below the resolution picker, since that
-          only concerns the MP4 and this concerns everything. */}
-      <div className="mb-2 rounded-md border border-border/70 bg-background/30 px-2.5 py-2">
-        <label htmlFor="export-name" className="flex items-center gap-2">
-          <span className="shrink-0 text-[11px] font-semibold">Save as</span>
+      <div className="rounded-lg border border-border bg-surface-1 p-4 sm:p-5">
+        <p className="label-caps">Output</p>
+
+        {/* Applies to whichever format is exported, and to the downloads in
+            the list below. The extension is never typed: the format decides
+            it. */}
+        <label htmlFor="export-name" className="mt-4 block text-[13px] font-medium">
+          File name
+        </label>
+        <div className="relative mt-1.5">
+          <PencilLine className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <input
             id="export-name"
             type="text"
@@ -214,134 +251,168 @@ export function ExportPanel({
             // maxLength matches the server's cap, so the field cannot accept
             // something the download will then silently shorten.
             maxLength={120}
-            className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
+            className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 font-mono text-[13px] focus:border-ring focus:outline-none"
           />
-        </label>
-        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
           {savedAs
-            ? `Downloads as "${savedAs}", with the extension for the format you pick.`
+            ? `Downloads as "${savedAs}", with the extension for the format.`
             : "Leave blank to use the video's own filename."}
         </p>
-      </div>
 
-      <div className="grid grid-cols-2 gap-1.5">
-        {FORMATS.map(({ key, label, hint, icon: Icon }) => {
-          const original = key === "original";
-          const disabled = original
-            ? downloadOriginal.isPending
-            : !hasCaptions || createExport.isPending || (key === "mp4" && rendering);
-
-          return (
-            <button
-              key={key}
-              type="button"
-              disabled={disabled}
-              onClick={() =>
-                original
-                  ? downloadOriginal.mutate(savedAs || undefined)
-                  : createExport.mutate({
-                      format: key,
-                      // Only a burn has a frame size; the server drops it for
-                      // the sidecars anyway, but not sending it is clearer.
-                      height: key === "mp4" && chosen ? chosen : undefined,
-                    })
-              }
-              title={
-                original
-                  ? "The file you uploaded, untouched — no captions"
-                  : key === "mp4"
-                    ? "Captions drawn into the video itself"
-                    : hint
-              }
-              className={cn(
-                "group flex items-center gap-2.5 rounded-md border border-border/70 bg-background/30 px-2.5 py-2 text-left transition-colors",
-                "hover:border-primary/50 hover:bg-primary/10",
-                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border/70 disabled:hover:bg-background/30",
-                // Five tiles in a two-column grid. The odd one out is the last,
-                // and it is the transcript format that matters least, so JSON
-                // takes the full width rather than leaving a hole.
-                key === "json" && "col-span-2"
+        {/* Only for a burn, and only once the server has said what it can do. */}
+        {choice === "mp4" && resolutions.length > 0 && (
+          <div className="mt-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[13px] font-medium" id="export-resolution">
+                Resolution
+              </p>
+              {options?.source_height && (
+                <span className="font-mono text-xs text-muted-foreground">Source: {options.source_height}p</span>
               )}
+            </div>
+            <div
+              role="radiogroup"
+              aria-labelledby="export-resolution"
+              className="mt-1.5 inline-flex flex-wrap gap-1 rounded-lg border border-border bg-background p-1"
             >
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary group-disabled:bg-muted group-disabled:text-muted-foreground">
-                <Icon className="size-3.5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-semibold">{label}</span>
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {hint}
-                </span>
-              </span>
-            </button>
-          );
-        })}
+              {resolutions.map((resolution) => (
+                <button
+                  key={resolution.height}
+                  type="button"
+                  role="radio"
+                  aria-checked={chosen === resolution.height}
+                  onClick={() => setHeight(resolution.height)}
+                  className={cn(
+                    "rounded-md px-4 py-1.5 text-[13px] tabular-nums transition-colors",
+                    chosen === resolution.height
+                      ? "bg-surface-3 font-medium text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {resolution.label}
+                  {resolution.height === recommended && (
+                    <span className="ml-1.5 text-[11px] text-muted-foreground">recommended</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {/* Said plainly, because "1080p" on a 144p source promises
+                something it cannot deliver. */}
+            <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
+              {chosenOption?.upscaled
+                ? `Upscaled from ${options?.source_height}p: captions are drawn sharp at ${chosenOption.label}, the picture gains no detail. At ${options?.source_height}p they would render too small to read.`
+                : chosenOption?.native
+                  ? "The source's own size: nothing is resampled."
+                  : `Rendered at ${chosenOption?.label ?? ""}.`}
+              {options?.hardware_encoder ? " GPU encoding." : ""}
+            </p>
+          </div>
+        )}
       </div>
+
+      {burn && (
+        <div className="rounded-lg border border-border bg-surface-2 p-4" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 text-[15px]">
+            <span className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-success" aria-hidden="true" />
+              Rendering the video with captions
+            </span>
+            <span className="font-mono text-[13px] font-semibold tabular-nums text-success">{burn.progress}%</span>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-background">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+              style={{ width: `${burn.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {failed && (
-        <p role="alert" className="mt-2 text-xs text-destructive">
+        <p role="alert" className="text-[13px] text-destructive">
           {(failed as Error).message}
         </p>
       )}
 
-      {/* Rendering a long video takes minutes, so say so rather than leaving
-          someone watching a spinner wondering if it's stuck. */}
-      {rendering && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Burning captions in re-encodes the video — this can take a few minutes.
-        </p>
-      )}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="label-caps">Previous exports for this video</p>
+          <span className="font-mono text-xs text-muted-foreground">
+            {items.length} file{items.length === 1 ? "" : "s"}
+          </span>
+        </div>
 
-      <div className="mt-3 space-y-1.5">
-        {isLoading && <Skeleton className="h-10" />}
+        <div className="flex flex-col gap-2">
+          {isLoading && <Skeleton className="h-14" />}
 
-        {!isLoading && items.length === 0 && (
-          <p className="py-2 text-center text-xs text-muted-foreground">
-            No exports yet.
-          </p>
-        )}
+          {!isLoading && items.length === 0 && (
+            <p className="rounded-lg border border-dashed border-border py-4 text-center text-[13px] text-muted-foreground">
+              No exports yet.
+            </p>
+          )}
 
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-center gap-2 rounded-md border border-border/60 bg-background/30 px-2.5 py-2"
-          >
-            <span className="w-9 shrink-0 rounded bg-muted py-0.5 text-center font-mono text-[10px] font-semibold uppercase text-muted-foreground">
-              {item.format}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              <StatusLine item={item} />
-              {item.status === "processing" && (
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-[width] duration-500 ease-out"
-                    style={{ width: `${item.progress}%` }}
-                  />
+          {items.map((item) => {
+            const Icon = ICONS[item.format] ?? FileText;
+            return (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-lg border border-border bg-surface-1 px-3 py-2.5"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground">
+                  <Icon className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[13px] font-medium uppercase">
+                    {item.format}
+                    {item.height ? <span className="normal-case"> · {item.height}p</span> : null}
+                  </p>
+                  <StatusLine item={item} />
                 </div>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => download.mutate({ exportId: item.id, name: savedAs || undefined })}
+                  disabled={item.status !== "completed" || download.isPending}
+                  aria-label={`Download ${item.format}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-2 px-3 text-[13px] transition-colors hover:bg-surface-3 disabled:opacity-40"
+                >
+                  <Download className="size-3.5" aria-hidden="true" />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteExport.mutate(item.id)}
+                  title="Delete this export"
+                  aria-label={`Delete ${item.format} export`}
+                  className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-            <button
-              type="button"
-              onClick={() => download.mutate({ exportId: item.id, name: savedAs || undefined })}
-              disabled={item.status !== "completed" || download.isPending}
-              title="Download"
-              aria-label={`Download ${item.format}`}
-              className="rounded p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-30"
-            >
-              <Download className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => deleteExport.mutate(item.id)}
-              title="Delete this export"
-              aria-label={`Delete ${item.format} export`}
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+      </div>
+
+      <div className="flex shrink-0 items-center justify-end gap-3 border-t border-border px-5 py-4 sm:px-7">
+        <p className="hidden min-w-0 flex-1 items-center gap-2 text-[13px] text-muted-foreground sm:flex">
+          <Info className="size-4 shrink-0" aria-hidden="true" />
+          {rendering
+            ? "Burning captions in re-encodes the video. Download appears when it finishes."
+            : choice === "original"
+              ? "Downloads straight away."
+              : "Appears in the list above; download it from there."}
+        </p>
+        {onCancel && (
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+        <Button onClick={run} disabled={!canRun || busy} loading={busy}>
+          {choice === "mp4" && rendering ? "Exporting…" : `Export ${FORMATS.find((f) => f.key === choice)?.ext || "original"}`}
+        </Button>
       </div>
     </section>
   );

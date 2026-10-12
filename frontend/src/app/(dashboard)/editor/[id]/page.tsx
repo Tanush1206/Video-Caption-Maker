@@ -305,8 +305,14 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
         title="Export video & captions"
         icon={<Share className="size-5" />}
         description={<ExportSubtitle video={video} />}
+        bodyClassName="flex flex-col overflow-hidden"
       >
-        <ExportPanel videoId={videoId} hasCaptions={captions.length > 0} defaultName={video.title} />
+        <ExportPanel
+          videoId={videoId}
+          hasCaptions={captions.length > 0}
+          defaultName={video.title}
+          onCancel={() => setExporting(false)}
+        />
       </Dialog>
     </>
   );

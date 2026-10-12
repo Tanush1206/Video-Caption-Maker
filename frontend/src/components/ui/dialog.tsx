@@ -20,6 +20,7 @@ export function Dialog({
   children,
   footer,
   className,
+  bodyClassName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -29,6 +30,8 @@ export function Dialog({
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  /** Replaces the body's padding and scrolling, for content with its own. */
+  bodyClassName?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -78,7 +81,9 @@ export function Dialog({
               <X className="size-5" />
             </button>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">{children}</div>
+          <div className={cn("min-h-0 flex-1", bodyClassName ?? "overflow-y-auto px-5 py-5 sm:px-7")}>
+            {children}
+          </div>
           {footer && (
             <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-7">
               {footer}
