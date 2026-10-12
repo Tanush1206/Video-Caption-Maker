@@ -389,11 +389,69 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - Test harness: a hard Docker stop left a stale containerd pid in
   `vcm-clean`; emptying that one file brought it back with data intact.
 
+- v1.0.3 released (tag on 0360f47; release run 38248686342, 10 min, all
+  4 jobs green; 6 image tags on GHCR; `buildcache-*` tags now exist; the 7
+  assets from `releases/latest/download/` match SHA256SUMS).
+- `vcm update` 1.0.2 -> 1.0.3 on both installs, from the real Release:
+  - Windows (CUDA, port 3000): exit 0, 308 s. 1 video before and after.
+  - Clean machine (CPU, port 3001, was on 1.0.3-test images): exit 0,
+    2177 s (nested Docker pulls at ~0.3-0.6 MB/s). 8 videos before and
+    after; test images gone, only the GHCR 1.0.3 images left.
+  - Both: VCM_VERSION=1.0.3, alembic head b4e7c2d91a36. Live guard, at
+    localhost and 127.0.0.1: another port's Origin, cross-site, and a
+    rebinding Host -> 403 with reasons in audit.log; the app's own origin
+    passes (404 on a missing id). The clean install's audit.log kept its
+    entries from before the update (it lives on the media volume).
+
+### Update download baseline (v1.0.3), for the v1.0.4 comparison
+Measured with `scripts/update_layers.py`: snapshot of the daemon's layer
+chains just before `vcm update`, then each published layer checked
+against it. Sizes are compressed (bytes on the wire). This update was a
+near-full download on purpose: 949fe9d moved the version ARG, so every
+layer after the base changed once. Layer map (runtime stages): backend
+1-4 python base, 5 apt, 6 venv, 7 `frontend/public/fonts`, 8 fc-cache,
+9 WORKDIR, 10-13 alembic/app/entrypoint, 14 chmod; frontend 1-4 node base,
+5 WORKDIR, 6 user, 7 standalone build, 8 static, 9 public. Expectation
+for v1.0.4 (UI redesign): backend 0 layers downloaded if no backend code
+and no `frontend/public/fonts` change (a code change: only 10-14, about
+1.3 MB); frontend only 7-9 (about 6 MB).
+
+| Install | Image | Layers downloaded | Bytes (manifest) | NIC received |
+|---|---|---|---|---|
+| Windows | backend 1.0.3-cuda | 10 / 14 | 2245.7 of 2291.2 MB | 2272.1 MB (all of `vcm update`) |
+| Windows | frontend 1.0.3 | 5 / 9 | 6.2 of 54.6 MB | (included above) |
+| Clean | backend 1.0.3-cpu | 10 / 14 | 764.6 of 810.1 MB | 931 MB (all of `vcm update`) |
+| Clean | frontend 1.0.3 | 5 / 9 | 6.2 of 54.6 MB | (included above) |
+
+Image config digests: backend-cuda `sha256:83042c9bcf74…`, backend-cpu
+`sha256:abdd82c18c25…`, frontend `sha256:e635ffd239ff…`. Local image IDs
+(containerd store, index digest): cuda `9ba8497ee560`, cpu `f4491def0782`,
+frontend `716d0ebd7d44` (same on both machines).
+
+Backend 1.0.3-cuda layers (compressed digest, size):
+1 `26c307b5e35a` 29.8 MB · 2 `2835c5519717` 1.3 MB · 3 `bbaff5426d0f`
+14.4 MB · 4 `0fc9203b193a` 0 · 5 `8eeae217effa` 193.9 MB · 6
+`5b4ed3e42bdc` 2050.5 MB · 7 `463b461ba131` 1.1 MB · 8 `43b73cf49b01` ·
+9 `4cacf3397e6c` · 10 `a485bbfb8685` · 11 `ded38dd01917` · 12
+`3a9f86e1e2c7` 0.2 MB · 13 `09ae2f1fda64` · 14 `54dfedd601ca` (8-14
+under 0.1 MB unless shown).
+
+Backend 1.0.3-cpu layers: 1-4 as cuda · 5 `1c1a0c2bbdfb` 193.9 MB · 6
+`074e6e2cb3b8` 569.5 MB · 7 `ceb906971249` 1.1 MB · 8 `0032217a802d` ·
+9 `249182d00ee7` · 10 `5d06b2a71cf1` · 11 `6dca60be5b98` · 12
+`06f7640e4b05` 0.2 MB · 13 `4f603ad95c5a` · 14 `17214be8faea`.
+
+Frontend 1.0.3 layers: 1 `6a0ac1617861` 3.9 MB · 2 `4feea04c1543` 43.2 MB
+· 3 `b2cbbfe903b0` 1.3 MB · 4 `fff4e2c1b189` · 5 `ef6304ff3eec` · 6
+`1d472a580365` · 7 `c0f67c7d715e` 4.5 MB · 8 `116e639e8321` 0.7 MB · 9
+`a2b2c22027ec` 1.1 MB.
+
+The NIC figure includes TLS, the compose/script downloads and (clean
+machine) retries; compare manifest bytes release to release.
+
 ## Next
-v1.0.3 (push + tag, with Tanush): 02a4576 (OOM take-over), 949fe9d
-(layer order), 491ebee + 72ea1fa (request guard). Then
-`vcm update` both installs, verify the guard and audit log live, finish
-both E2E matrices, DELETE uninstall leaves nothing, final DoD, R10.
+Finish both E2E matrices, DELETE uninstall leaves nothing (clean machine),
+final DoD, R10.
 
 ## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
 ## v1.0.3 is released and verified)
