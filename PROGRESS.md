@@ -449,9 +449,32 @@ Frontend 1.0.3 layers: 1 `6a0ac1617861` 3.9 MB · 2 `4feea04c1543` 43.2 MB
 The NIC figure includes TLS, the compose/script downloads and (clean
 machine) retries; compare manifest bytes release to release.
 
+- v1.0.3 E2E, Linux CPU install (large-v3-turbo int8, M2M100-1.2B): 3
+  clips (en, hi, fr) × 6 targets = 18 jobs, each SRT/VTT/MP4: ALL PASSED.
+- Tanush: postpone the DELETE uninstall test until after v1.0.4; the clean
+  machine is the only CPU install and measures the v1.0.4 update.
+
+### v1.0.4 redesign log
+Rules: restyle only, all logic kept, no mock data (every figure comes from
+the API), one screen at a time; each: screenshots 375/1440 × light/dark,
+axe WCAG A/AA, tsc + lint, production build (docker `--target build`, so
+the dev server's .next is untouched), interaction check, commit.
+Preview: host `next dev -p 3100`, read-only against the install's backend
+through a 127.0.0.1:8001 relay container (`vcm-redesign-relay`).
+- Tokens (`e0eae23`): DESIGN.md palette/Geist/8px. Geist bundled via
+  next/font/local, not public/fonts (that folder ships in the backend
+  image). AA adjustments: fill #5B5EF0/#4F46E5, dark indigo text #818CF8,
+  light muted slate-600.
+- Dashboard (`022a396`, `60b07cb`, `87fa9ae`): shell (segmented nav, host +
+  worker-hardware chips, footer, phone tab bar), stepper bar, hero drop
+  zone, project cards grid + list view, first-run step cards. Not shown:
+  the app version (the API doesn't expose it; adding it would be logic),
+  "inference speed" tiles (no real figure). axe 0.
+
 ## Next
-Finish both E2E matrices, DELETE uninstall leaves nothing (clean machine),
-final DoD, R10.
+Finish the Windows E2E matrix; v1.0.4 screens; release; update both
+installs; measure with scripts/update_layers.py; DELETE uninstall (clean
+machine); final DoD; R10.
 
 ## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
 ## v1.0.3 is released and verified)
