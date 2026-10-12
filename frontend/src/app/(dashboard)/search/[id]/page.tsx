@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { WIDE_CONTAINER } from "@/components/layout/page-frame";
 import { SearchWorkspace } from "@/components/search/search-workspace";
+import { cn } from "@/lib/utils";
 import { useVideo } from "@/hooks/use-videos";
 
 export default function VideoSearchPage({ params }: { params: { id: string } }) {
@@ -20,7 +22,7 @@ function VideoSearch({ videoId }: { videoId: number }) {
   const { data: video } = useVideo(videoId);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+    <main className={cn(WIDE_CONTAINER, "py-6")}>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
         <Link
           href={`/editor/${videoId}`}
@@ -37,7 +39,7 @@ function VideoSearch({ videoId }: { videoId: number }) {
       <SearchWorkspace
         videoId={videoId}
         heading={video?.title ?? "Search"}
-        subheading="Searches by meaning, not by keyword — the words you type don't have to appear in the transcript."
+        subheading="Searches by meaning, not by keyword: the words you type don't have to appear in the transcript."
       />
     </main>
   );
