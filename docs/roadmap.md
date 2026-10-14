@@ -1,5 +1,11 @@
 # Roadmap
 
+> **Historical.** This is the original plan, written before the work was done,
+> and parts of it describe intentions that changed (for example passlib and
+> Authlib, a CUDA-only worker, and SSE/websocket progress). For what the code
+> does today, see [PRD.md](PRD.md), [ARCHITECTURE.md](ARCHITECTURE.md) and
+> [DECISIONS.md](DECISIONS.md).
+
 Ten milestones from empty repo to finished app. Each one ends in something
 you can actually open and use — no milestone is pure plumbing.
 
@@ -43,7 +49,7 @@ The first milestone with real database rows.
 - bcrypt password hashing via passlib. Never log or return the hash.
 - JWT access token (~30 min) + refresh token (~7 days).
 - Refresh token in an **httpOnly cookie**, never localStorage — see
-  [architecture.md](architecture.md) for why.
+  [SECURITY.md](SECURITY.md) for why.
 - `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `GET /me`.
 - Google OAuth via Authlib. Needs `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET`,
   currently blank in `.env`.

@@ -564,6 +564,27 @@ v1.0.4 is released, both installs were on it and verified; the clean
 machine is uninstalled and removed. Reminder: the install and the dev
 stack both use port 3000: `vcm stop` before `docker compose up`.
 
+### Documentation (2026-10-14)
+Docs only; no code, config or test changed. All content is taken from the
+code, the config, the tests, git history, this file and the technical parts of
+learning-guide.md.
+- New in `docs/`: PRD, DATABASE (schema from `\d` on the v1.0.4 install),
+  API (generated from `app.openapi()` in the v1.0.4 backend), SECURITY,
+  ENVIRONMENT, DESIGN_SYSTEM, CODE_STYLE, TESTING, DECISIONS.
+- `architecture.md` rewritten as ARCHITECTURE.md; roadmap.md marked
+  historical.
+- New at the repo root: CHANGELOG.md (v1.0.0–v1.0.4), AGENTS.md, and
+  CLAUDE.md (which points to AGENTS.md). README has a Documentation section.
+- Mismatches found while writing are listed under each doc's
+  "Open questions", not fixed. The main ones:
+  - `translation_available` disables hi/fr/de/nl in the editor's Redo when
+    no env Gemini key is set;
+  - deleting a video leaves its export files;
+  - Celery's 35 min hard limit vs the 3 h render timeout;
+  - `STORAGE_BACKEND`, `MODEL_CACHE_DIR` and the `S3_*` variables are
+    unused;
+  - the dev compose defaults to the CUDA variant.
+
 ## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
 ## v1.0.3 is released and verified)
 Source: `design/stitch/` (gitignored). Use ONLY these folders; ignore every
