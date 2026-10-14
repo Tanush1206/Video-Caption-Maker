@@ -1,9 +1,9 @@
 # Product requirements: VideoCaptionMaker
 
-Status: describes the shipped product as of **v1.0.4** (tag on `2e84748`).
-Everything here is taken from the code, the config, the tests and
-[PROGRESS.md](../PROGRESS.md). Anything the code does not settle is listed
-under [Open questions](#open-questions).
+Status: describes the product as of **v1.0.5** (committed on `main`, not yet
+tagged; v1.0.4 is the latest release). Everything here is taken from the code,
+the config, the tests and [PROGRESS.md](../PROGRESS.md). Product questions are
+answered by the maintainer and recorded in [Decisions recorded](#decisions-recorded).
 
 ## 1. Product overview
 
@@ -34,7 +34,9 @@ From the README and the decisions in PROGRESS.md:
 
 ## 3. Target users
 
-What the shipped product implies (see Open questions):
+**Individual creators, students and small teams** who want private, offline
+captions and translation on their own computer, **especially Hindi ↔ English**.
+In practice that means:
 
 - **A single person on their own computer**: Windows 10/11 with WSL 2, Linux,
   or (untested) macOS, with Docker installed. Local mode has exactly one user
@@ -45,8 +47,9 @@ What the shipped product implies (see Open questions):
   assume no programming knowledge, and error messages are written as sentences
   (`friendly_error` in `backend/app/workers/transcription.py`).
 
-A hosted multi-user mode (`AUTH_MODE=accounts`) still exists in the code but
-is not what ships (see Non-goals).
+A hosted multi-user mode (`AUTH_MODE=accounts`) still exists in the code. It
+is not an active direction: it is kept, tested, and documented as an optional
+future hosted mode ([ROADMAP.md](ROADMAP.md)), and is not shipped.
 
 ## 4. User stories
 
@@ -62,6 +65,8 @@ is not what ships (see Non-goals).
 | US8 | change the speech model, or paste a Gemini key, in Settings | I don't have to edit config files | `PATCH /api/system/settings` |
 | US9 | update to a new version without losing my videos | updates are safe | `vcm update` (migrations run on start) |
 | US10 | uninstall, choosing whether my videos are deleted | nothing is deleted by surprise | `vcm uninstall` (asks for `DELETE`) |
+| US11 | retry a failed video with the smallest speech model in one click | a video that ran out of memory can still be captioned | "Retry with small model" on the failed screen |
+| US12 | have the app follow my system's light or dark theme | it matches the rest of my desktop | Settings → Interface theme → System |
 
 ## 5. Core flow
 
@@ -88,7 +93,8 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
    allows one (`useEta`).
 5. **Edit** (optional): caption text, timing on the waveform timeline,
    split/merge/add/delete, the style studio, and a Redo with another
-   spoken/caption language.
+   spoken/caption language. The Redo offers all five caption languages, with
+   or without a Gemini key, as the language step does.
 6. **Export** (step 3): MP4 (burned in, at a chosen resolution), SRT, VTT or
    JSON, then a download with an optional file name.
 
@@ -135,7 +141,7 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 | Unknown `caption_language` | 422 `Unsupported caption language: …` |
 | Content type or extension not allowed | 415 |
 | Empty file | 400 `Uploaded file is empty` |
-| Over `MAX_UPLOAD_SIZE_MB` (counted while streaming, not from `Content-Length`) | 413, partial file deleted |
+| Over `MAX_UPLOAD_SIZE_MB` (4096 MB by default; counted while streaming, not from `Content-Length`) | 413, partial file deleted |
 | Disk full while writing | 507 `The disk is full…`, partial file deleted |
 | Queue unreachable after upload | Upload still succeeds; the user retries from the UI |
 
@@ -168,6 +174,14 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 | Model download blocked by TLS interception | "…put its root certificate (.crt) in the certs folder… run 'vcm restart'" |
 | Worker restarted mid-job | Requeued on start, up to 3 times, then failed with the smaller-model advice (§8 of [ARCHITECTURE.md](ARCHITECTURE.md)) |
 | Retranscribe while processing | 409 |
+| A long job (hours of CPU transcription, a 3 h render) | Never cut off by Celery: no Celery time limit is set, and the worker's `--pool=solo` enforces none. A render is bounded by FFmpeg's own 3 h timeout |
+
+**Failed screen.** Shows the worker's sentence, **Try again**, **Retry with
+small model** (only when the model in use isn't already `small`) and **Open
+Settings**. Retry with small model makes the two existing calls in order:
+`PATCH /api/system/settings {"whisper_model": "small"}`, then
+`POST /api/videos/{id}/transcribe`. A note under the buttons says it changes
+the speech model for every video until changed back.
 
 ### F4. Caption editing
 
@@ -206,6 +220,7 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 - A download needs a short-lived token (15 min) bound to one export.
 - Sidecars are named exactly after the video (`movie.srt`). A burn gets
   `-captions.mp4`. A name the user types replaces both.
+- Deleting a video deletes its export files as well as their rows.
 
 **Edge cases**: export with no captions → 409. Download of an export that
 isn't finished → 409. Render queue unreachable → 503, and the export row is
@@ -219,9 +234,11 @@ removed.
 - Results carry timestamps, and clicking one jumps there.
 - Hits with a cosine distance over 0.75 are dropped (`MAX_DISTANCE`).
 - **Retrieval-only by default.** `POST /api/ask` writes an answer only when a
-  Gemini key is set. Without one it returns the passages and
-  "Add a Gemini API key in Settings to get written answers…".
-- A question the video doesn't answer must return
+  Gemini key is set. Without one it **always** says so ("Written answers need
+  a Gemini API key, which you can add in Settings. The matching moments are
+  below."), whether or not anything matched. It never claims the video has no
+  answer when no model was asked.
+- With a key, a question the video doesn't answer must return
   "I couldn't find an answer to that in this video." rather than an invention
   (`backend/app/services/rag.py`).
 
@@ -231,10 +248,15 @@ removed.
 - Shows the hardware the worker detected, the speech model in use and its
   source (`user`/`env`/`auto`), the translation engine, the disk and the
   theme.
+- Interface theme: **Light**, **Dark** or **System** (the default). System
+  follows the OS, including a change while the app is open. The header's
+  theme button flips to an explicit Light or Dark.
 - The speech model can be `auto`, `small`, `medium`, `large-v3-turbo` or
   `large-v3`. Anything else is rejected with 422.
-- The Gemini key can be set or cleared. It is stored server-side, and **it is
-  never returned**: only `gemini_configured` and `gemini_source` are.
+- The Gemini key can be set or cleared, **only here** on an install. It is
+  stored server-side, **never returned** by any response (only
+  `gemini_configured` and `gemini_source` are), and **never logged**
+  (database statements are logged without their values).
 - Install settings can only be changed in local mode (403 in accounts mode).
 
 ### F9. Update and uninstall
@@ -267,8 +289,8 @@ removed.
 ### Input formats
 `.mp4 .mov .mkv .webm .avi .m4v`, with content types `video/mp4`,
 `video/quicktime`, `video/x-matroska`, `video/webm`, `video/x-msvideo` and
-`video/x-m4v`. Upload limit: `MAX_UPLOAD_SIZE_MB`. The production compose
-default is 4096; the code default is 2048.
+`video/x-m4v`. Upload limit: `MAX_UPLOAD_SIZE_MB`, **4096 MB** (the code and
+the production compose agree).
 
 ### Output formats
 | Format | How | Media type |
@@ -307,18 +329,19 @@ What the code deliberately does not do:
   account) is kept for a hosted build (`AUTH_MODE=accounts` plus
   `NEXT_PUBLIC_AUTH_MODE=accounts`). It isn't shipped or offered.
 - **No LLM rewriting of transcripts.** Captions stay what Whisper heard. Gemini
-  only translates (when asked) and answers questions (docs/roadmap.md, "Where
+  only translates (when asked) and answers questions (docs/MILESTONES.md, "Where
   Gemini fits").
 - **No network exposure.** Only the UI port is published, and only on
   `127.0.0.1` (`docker-compose.prod.yml`).
-- **No caption languages beyond the five targets.** "Same as spoken" is the
-  only route to other languages.
+- **No caption languages beyond the five targets.** Out of scope for now,
+  possible in future ([ROADMAP.md](ROADMAP.md)). "Same as spoken" is the only
+  route to other languages.
 - **No term highlighting in search.** Semantic matches have no matched words
   (PROGRESS.md, v1.0.4).
 - **No features without data behind them.** The v1.0.4 redesign left out the
   design's app-version chip, live transcript, cancel button, memory figures,
-  cache clearing, "System" theme and inference-speed tiles, because no API
-  supplies them (PROGRESS.md, v1.0.4 redesign log).
+  cache clearing and inference-speed tiles, because no API supplies them
+  (PROGRESS.md, v1.0.4 redesign log). The "System" theme was added in v1.0.5.
 - **No re-encoding of the source.** The upload is stored and streamed byte for
   byte. Only the MP4 export is an encode.
 
@@ -342,8 +365,9 @@ What the code deliberately does not do:
 
 From the README "Known limitations" and PROGRESS.md:
 
-- **macOS is untested.** The installer and images are meant to work with
-  Docker Desktop for Mac, but no one has run them there. On a Mac everything
+- **macOS is untested, and stays so** until a Mac is available. The installer
+  and images are meant to work with Docker Desktop for Mac, but no one has run
+  them there. On a Mac everything
   runs on the CPU, and Apple Silicon runs the amd64 images under emulation,
   which is slow.
 - **The small speech model is weak on fast non-English speech, especially
@@ -365,9 +389,6 @@ From the README "Known limitations" and PROGRESS.md:
   the style panel (the Google Fonts library has some, e.g. the Nanum and Zen
   families), libass draws empty boxes in the MP4. SRT/VTT/JSON exports are
   unaffected.
-- **No custom 404 page for unknown URLs.** `(dashboard)/not-found.tsx` covers
-  `notFound()` inside the dashboard. Any other unmatched URL shows Next's
-  default page.
 - **CPU transcription is slow:** roughly real time with the default model
   (README, Troubleshooting).
 
@@ -378,15 +399,18 @@ PROGRESS.md and [AGENTS.md](../AGENTS.md)):
 
 1. **Scope.** It does only what was asked. UI work restyles without changing
    logic, and shows no mock data: every figure comes from the API.
-2. **Backend.** `docker compose exec backend python -m pytest` passes in the
-   dev stack (it uses the dev database; see [TESTING.md](TESTING.md)).
+2. **Backend.** `ruff check app tests alembic scripts` and
+   `docker compose exec backend python -m pytest` pass (the suite uses its own
+   `_test` database, never the dev one; see [TESTING.md](TESTING.md)). Both
+   also run in CI.
 3. **Frontend.** `npm run lint`, `npm run type-check` and `npm run build`
    pass. These also run in CI (`.github/workflows/ci.yml`).
 4. **Scripts.** `bash -n` and `shellcheck -S warning` pass for
    `install/install.sh` and `install/vcm`, and both compose files pass
    `docker compose config -q` (CI).
 5. **UI changes.**
-   - Screenshots at 375 px and 1440 px in light and dark.
+   - Screenshots at 375 px and 1440 px in light and dark
+     (`scripts/ui-check`).
    - axe-core reports 0 WCAG 2 A/AA violations.
    - Every keyboard stop shows a visible focus ring.
    - No horizontal overflow at 375 px.
@@ -397,23 +421,15 @@ PROGRESS.md and [AGENTS.md](../AGENTS.md)):
 8. **Commit.** It is committed in small groups (at most ~5 files), with no
    secrets, no `.env`, no certificates and nothing from `design/stitch/`.
 
-## Open questions
+## Decisions recorded
 
-1. **Target users.** The code implies "one person, own computer, five caption
-   languages", but no document names the intended audience (for example
-   creators, educators, or Hindi-language publishers). Who is the product
-   for?
-2. **Why these five languages?** `languages.py` says they are five "that can
-   be checked". Is adding more caption targets in or out of scope?
-3. **`translation_available` is wrong for local translation.**
-   `GET /api/videos/languages` sets it from the environment's
-   `GEMINI_API_KEY` only (`backend/app/api/videos.py`), with a comment saying
-   the other four languages "go through Gemini". The editor's Redo dropdown
-   uses it to **disable Hindi, French, German and Dutch** when no env key is
-   set (`caption-editor.tsx`), although local M2M100 translates them. The
-   dashboard's language step doesn't use the flag and offers all five. Which
-   behaviour is intended?
-4. **Is macOS support a goal for a future release, or will it stay
-   "untested"?**
-5. **Accounts mode.** Is the hosted (`accounts`) mode still a product
-   direction, or kept only so the code isn't lost?
+Answers from the maintainer (2026-10-14) to the questions this document used
+to list:
+
+| Question | Answer |
+|---|---|
+| Who is the product for? | Individual creators, students and small teams who want private, offline captions and translation, especially Hindi ↔ English (§3). |
+| More caption languages? | Out of scope for now; possible in future ([ROADMAP.md](ROADMAP.md)). |
+| Hindi/French/German/Dutch disabled in the editor's Redo without an env key | A bug, fixed in v1.0.5: all five are offered offline, as on the language step. `translation_available` is always true. |
+| macOS | Stays "untested" (no Mac available). |
+| Accounts mode | Not an active direction; kept and documented as an optional future hosted mode. |
