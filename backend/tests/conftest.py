@@ -1,13 +1,91 @@
+import asyncio
 import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import uuid
+from pathlib import Path
 
 # The suite exercises the full account flow (registration, JWT, refresh), so it
 # runs in accounts mode. Local mode has its own tests that switch it on.
 # Set before anything imports the cached settings.
 os.environ["AUTH_MODE"] = "accounts"
 
-import shutil
-import subprocess
-import uuid
+# ── Isolation ────────────────────────────────────────────────────────────────
+# The suite never touches the database, queue, vectors or media of the stack it
+# runs in. Everything below is redirected before the app reads its settings:
+#
+#   Postgres  <name>_test, dropped and migrated from empty on every run
+#   Redis     database 14 (the worker listens on 0, so nothing here is consumed;
+#             test_recovery uses 15)
+#   ChromaDB  collection captions_test
+#   Storage   a temporary directory
+TEST_DB_SUFFIX = "_test"
+TEST_REDIS_DB = 14
+TEST_COLLECTION = "captions_test"
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+
+def _isolate() -> None:
+    from sqlalchemy.engine import make_url
+
+    from app.config import Settings
+
+    configured = Settings()
+    url = make_url(configured.database_url)
+    if not url.database.endswith(TEST_DB_SUFFIX):
+        url = url.set(database=f"{url.database}{TEST_DB_SUFFIX}")
+    os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
+    os.environ["REDIS_URL"] = f"{configured.redis_url.rsplit('/', 1)[0]}/{TEST_REDIS_DB}"
+    os.environ["CHROMA_COLLECTION"] = TEST_COLLECTION
+    os.environ["STORAGE_LOCAL_PATH"] = str(Path(tempfile.gettempdir()) / "vcm-test-storage")
+    shutil.rmtree(os.environ["STORAGE_LOCAL_PATH"], ignore_errors=True)
+
+    asyncio.run(_recreate_database(url))
+    # A subprocess, so Alembic reads the environment set above, and so every
+    # run also proves the migrations still build the schema from nothing.
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=BACKEND_DIR,
+        env=os.environ.copy(),
+        check=True,
+        capture_output=True,
+    )
+
+    import redis
+
+    redis.Redis.from_url(os.environ["REDIS_URL"]).flushdb()
+    try:
+        from app.services import embeddings
+
+        embeddings.get_client().delete_collection(TEST_COLLECTION)
+    except Exception:  # noqa: BLE001 - absent on a first run, or Chroma is down
+        pass
+
+
+async def _recreate_database(url) -> None:
+    import asyncpg
+
+    # The one guard that matters: whatever the configuration says, the suite
+    # only ever drops a database whose name says it belongs to the tests.
+    if not url.database.endswith(TEST_DB_SUFFIX):
+        raise RuntimeError(f"Refusing to use {url.database!r} for tests")
+    connection = await asyncpg.connect(
+        user=url.username,
+        password=url.password,
+        host=url.host,
+        port=url.port or 5432,
+        database="postgres",
+    )
+    try:
+        await connection.execute(f'DROP DATABASE IF EXISTS "{url.database}" WITH (FORCE)')
+        await connection.execute(f'CREATE DATABASE "{url.database}"')
+    finally:
+        await connection.close()
+
+
+_isolate()
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -99,7 +177,7 @@ def unique_email() -> str:
 @pytest.fixture(autouse=True)
 async def cleanup_test_users():
     """
-    Remove rows this suite created, leaving the dev database as it was.
+    Remove rows each test created, so tests don't see each other's data.
 
     Deleting the user cascades to their videos, but not to the files on disk,
     so afterwards any storage directory without a matching user is swept up.
