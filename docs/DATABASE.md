@@ -1,6 +1,6 @@
 # Database
 
-Data model as of Alembic head **`b4e7c2d91a36`** (v1.0.4). The column lists
+Data model as of Alembic head **`b4e7c2d91a36`** (v1.0.4; unchanged in v1.0.5). The column lists
 below come from `\d` on a running v1.0.4 install's Postgres, cross-checked
 against `backend/app/models/*.py`.
 
@@ -27,8 +27,12 @@ Rules:
 - **ChromaDB has no owners.** Every query must filter by video IDs already
   proven to belong to the caller in Postgres (`services/search.py`).
 - **Postgres cascades don't reach the files.** Deleting a row does not delete
-  files or vectors. The service must remove them (`services/video.delete_video`,
-  `services/export.delete_export`, `storage.delete_user_files`).
+  files or vectors. The service must remove them:
+  - `services/video.delete_video` removes the source, thumbnail, waveform,
+    vectors **and every export file** of the video (export files since v1.0.5;
+    it reads their paths before the rows cascade away);
+  - `services/export.delete_export` removes one export's file;
+  - `storage.delete_user_files` removes a whole user's folder.
 
 ### Media volume layout
 
@@ -278,7 +282,7 @@ Keys in use (`backend/app/services/app_settings.py`):
 
 | Key | Written by | Value |
 |---|---|---|
-| `gemini_api_key` | `PATCH /api/system/settings` | the key, **plain text**; never returned by the API; blank clears it (row deleted) |
+| `gemini_api_key` | `PATCH /api/system/settings` | the key, **plain text** (acceptable: single-user, and Postgres is reachable only on the compose network); never returned by any response; never logged (both engines use `hide_parameters=True`); blank clears it (row deleted) |
 | `whisper_model` | `PATCH /api/system/settings` | `small`/`medium`/`large-v3-turbo`/`large-v3`; absent = automatic |
 | `worker_hardware` | worker at `worker_ready` | JSON: `cuda`, `gpu_name`, `vram_gb`, `ram_gb`, `cpu_count`, `whisper_default`, `translator` |
 
@@ -357,13 +361,30 @@ date is the commit that introduced the file.
 8. **Test the update path.** Roll the dev or test install back one revision,
    run the upgrade, then compare row counts and a checksum of caption text
    (the R5 procedure in [TESTING.md](TESTING.md)).
+9. **Every test run builds the schema from empty.** `backend/tests/conftest.py`
+   drops and recreates `<db>_test`, then runs `alembic upgrade head`, so a
+   migration that can't build a fresh database fails the suite (locally and
+   in CI). `tests/test_isolation.py` checks it reached the head revision.
 
 ## 7. Backup and restore
 
-**`vcm` has no backup command.** Nothing in the product backs up data
-automatically. The procedure below uses the real container and volume names of
-an install (compose project `vcm`). It is a manual procedure and has not been
-run end to end as written (see Open questions).
+**`vcm` has no backup command yet** (`vcm backup`/`vcm restore` are on the
+[ROADMAP](ROADMAP.md)). Nothing in the product backs up data automatically.
+The procedure below uses the real container and volume names of an install
+(compose project `vcm`).
+
+**Tested on 2026-10-14**, exactly as written:
+- backed up the Windows install (31 videos, 505 captions, 93 exports,
+  114 MB of media); downtime 15 s;
+- restored into a throwaway install (compose project `vcmbk`, fresh secrets,
+  the same images);
+- result: identical row counts, an identical md5 of all caption text, the
+  same Alembic head, and an identical checksum over all 179 media files;
+- the restored app served the UI and streamed a video, and was then removed
+  with `docker compose -p vcmbk down -v`.
+
+For another project name, replace the `vcm` prefix in the container and volume
+names.
 
 What has to be saved together:
 - the Postgres database;
@@ -385,7 +406,7 @@ docker run --rm -v vcm_media:/data -v "$PWD":/backup busybox \
   tar czf /backup/vcm-media.tgz -C /data .
 
 # 4. Start again
-vcm start
+docker start vcm-backend-1 vcm-worker-1 vcm-frontend-1
 ```
 
 Restore into an install (same or newer version):
@@ -395,31 +416,27 @@ docker stop vcm-frontend-1 vcm-worker-1 vcm-backend-1
 docker exec -i vcm-postgres-1 pg_restore -U vcm -d vcm --clean --if-exists < vcm.dump
 docker run --rm -v vcm_media:/data -v "$PWD":/backup busybox \
   sh -c "rm -rf /data/* && tar xzf /backup/vcm-media.tgz -C /data"
-vcm start   # the API runs any newer migrations on start
+docker start vcm-backend-1 vcm-worker-1 vcm-frontend-1   # the API runs newer migrations on start
 ```
 
-After a restore the search index is stale. Use **Redo** on a video, or edit a
-caption, to queue its re-index.
+After a restore into a fresh install the search index is empty. Use **Redo**
+on a video, or edit a caption, to queue its re-index (a library-wide re-index
+command is on the [ROADMAP](ROADMAP.md)).
 
 **Never** restore a dump from a *newer* schema into an older install.
 
 **Never** copy `vcm-*.dump` files into the repository: `*.dump` is gitignored
 because it holds user data.
 
-## Open questions
+## Decisions recorded
 
-1. **The backup/restore procedure is untested.** It is derived from the
-   compose names, not from a tested script. Should `vcm backup` and
-   `vcm restore` exist? Should someone run this procedure once and record it
-   in PROGRESS.md?
-2. **No re-index command.** There is no way to rebuild ChromaDB for a whole
-   library after a restore or a lost `vectors` volume, other than a
-   per-video Redo or edit.
-3. **The Gemini key is stored in plain text** in `app_settings`. Is that
-   acceptable for a single-user local install, or should it be encrypted with
-   a key from `.env`?
-4. **Export files are orphaned when a video is deleted** (see
-   ARCHITECTURE.md, Open questions 4): `exports` rows cascade, but the files
-   under `user_N/exports/` stay.
-5. **ORM vs DB defaults.** Most `caption_styles` defaults exist only in the
-   ORM, while `font_key` has a DB default. Is that difference intended?
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| Backup/restore untested | Tested once and marked tested (§7). `vcm backup`/`vcm restore` → [ROADMAP](ROADMAP.md). |
+| Library-wide re-index command | → [ROADMAP](ROADMAP.md). |
+| Gemini key in plain text | Acceptable for a local single-user app; Postgres is not exposed outside Docker. Confirmed never returned and never logged (fixed in v1.0.5: SQL echo used to print bound values in dev). |
+| Export files orphaned on video delete | Fixed in v1.0.5. |
+| Style defaults in the ORM vs the DB | Noted, minor: only `font_key` has a DB default, the rest are ORM defaults. No change now. |
