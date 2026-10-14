@@ -141,16 +141,15 @@ class Settings(BaseSettings):
     # Local M2M100 (CTranslate2 int8) unless a Gemini key is set. "auto"
     # picks 1.2B with >= 12GB RAM and 418M below that; or name one outright.
     translation_model: str = "auto"
-    # Where downloaded model weights live — the shared volume, so the worker
-    # and a restarted container both find them.
-    model_cache_dir: str = "/root/.cache/huggingface"
+    # Model weights live wherever HF_HOME points (the models volume, set in
+    # the Dockerfile); there is no setting for it here.
 
     # ── Embeddings / vector search ───────────────────────
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_collection: str = "captions"
 
     # ── Storage ──────────────────────────────────────────
-    storage_backend: str = "local"
+    # Local disk only. There is no other storage backend, and none is planned.
     storage_local_path: str = "/app/storage"
     max_upload_size_mb: int = 2048
 

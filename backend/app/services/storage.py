@@ -7,8 +7,7 @@ attack, and the defence is not to sanitise the user's string but to refuse to
 use it as a path at all: the stored name is a UUID, and the original is kept
 in the database purely as a label.
 
-Milestone 3 stores files locally. STORAGE_BACKEND in .env is the seam where
-an S3 implementation slots in later.
+Files are stored on the local disk (the media volume), and only there.
 """
 
 import shutil
