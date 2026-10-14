@@ -230,3 +230,37 @@ def test_tls_interception_gets_its_own_instructions(monkeypatch):
     with pytest.raises(model_store.ModelDownloadError) as raised:
         model_store.ensure("org/model", allow_patterns=["model.bin"])
     assert "certs folder" in str(raised.value)
+
+
+@pytest.mark.asyncio
+async def test_the_gemini_key_is_never_logged_or_returned_anywhere(
+    client, local_mode, preserved_settings, monkeypatch, caplog
+):
+    """
+    Not by the API, and not by the logs: in development SQLAlchemy echoes
+    every statement, and with bound parameters shown, saving the key printed
+    it in the backend's log.
+    """
+    import logging
+
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "")
+    secret = "AIza-never-logged-0123456789"
+    caplog.set_level(logging.DEBUG)
+
+    saved = await client.patch("/api/system/settings", json={"gemini_api_key": secret})
+    assert saved.status_code == 200
+    responses = [saved.text]
+    for path in (
+        "/api/system",
+        "/api/videos/languages",
+        "/api/videos",
+        "/api/stats",
+        "/api/auth/me",
+        "/api/styles/options",
+    ):
+        response = await client.get(path)
+        assert response.status_code == 200, path
+        responses.append(response.text)
+
+    assert not any(secret in text for text in responses)
+    assert secret not in caplog.text

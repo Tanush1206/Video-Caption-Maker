@@ -26,7 +26,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def worker_session() -> AsyncGenerator[AsyncSession, None]:
-    engine = create_async_engine(settings.database_url, echo=False, poolclass=NullPool)
+    # hide_parameters: no bound value (the Gemini key is one) in an error message.
+    engine = create_async_engine(
+        settings.database_url, echo=False, poolclass=NullPool, hide_parameters=True
+    )
     factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
     try:

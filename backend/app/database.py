@@ -11,6 +11,10 @@ engine = create_async_engine(
     settings.database_url,
     echo=not settings.is_production,  # log SQL in dev, silent in prod
     pool_pre_ping=True,               # avoids stale-connection errors
+    # Statements are logged, their values never are. app_settings holds the
+    # Gemini key, and with values shown, saving it printed it in the dev log;
+    # a database error would carry it into the production log too.
+    hide_parameters=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
