@@ -612,3 +612,41 @@ code.html.
 
 All 15 folders (code.html + screen.png each) and DESIGN.md verified present
 on 2026-10-12.
+
+## v1.0.5 (2026-10-14, committed, not tagged)
+Tanush answered the docs' open questions; the docs now record the answers
+("Decisions recorded" in each), and later items are in docs/ROADMAP.md.
+One commit per fix, each with tests:
+- Isolated tests (`62bf07a`): `<db>_test` rebuilt from migrations every run,
+  Redis db 14, `captions_test`, temp storage. Dev DB untouched (0 `test-%`).
+- CI runs ruff + the backend suite (`6f1fe9d`); `backend/ruff.toml`, not
+  pyproject (pyproject is in the deps layer: editing it = full update).
+- Editor offers all five languages offline (`160781f`).
+- Celery limits removed (`17367ff`): measured, `--pool=solo` never enforced
+  them (6 s task under a 3 s hard limit completed).
+- Dev compose CPU by default (`2089492`). Tanush: if your dev `.env` has no
+  `VCM_VARIANT`, add `VCM_VARIANT=cuda` to keep building the GPU image.
+- Video delete removes export files (`3fd56b2`; test fails without it).
+- Gemini key: never returned (all GETs checked) but WAS logged by dev SQL
+  echo; `hide_parameters=True` on both engines (`f2e9ca6`).
+- `/api/ask` without a key says a key is needed (`bde0889`).
+- API version = VCM_VERSION (`369a30e`).
+- Forwarded headers trusted only from `frontend` (`3a418bf`); live check on
+  the dev network: aliased container believed, other container not.
+- Google Fonts pinned to `83831d6` (all 1832 entries' paths and sizes match;
+  6 had moved on main and 404'd) (`2aabf29`).
+- Unused settings removed, .env.example matches installer (`d270caf`);
+  upload limit 4096 (`b63ed42`, `7e7ed6f`).
+- System theme (`2c0f020`), custom 404 (`fc402f7`), Retry with small model
+  (`87aa211`), light destructive rose-700 for AA (`eb1c345`, found by axe on
+  the failed state). Harness in scripts/ui-check (`73be0c8`, `3206d9f`,
+  `13b9403`): theme 9/9, not-found 4/4, retry-small 2/2, editor-languages
+  2/2, axe 0 on dashboard/search/settings/404/failed state.
+- Backend: 350 passed, 1 skipped; ruff clean; production frontend build OK.
+- Backup/restore (DATABASE.md §7) tested: Windows install backed up (15 s
+  downtime), restored into throwaway project `vcmbk`: counts, caption md5,
+  head and media checksum identical; `vcmbk` removed (`down -v`), backups
+  deleted.
+- To do by Tanush: enable GitHub private vulnerability reporting (Settings →
+  Code security → Private vulnerability reporting); push; tag v1.0.5 when
+  ready (then the release checklist in docs/TESTING.md).
