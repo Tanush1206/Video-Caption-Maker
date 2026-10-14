@@ -1,8 +1,13 @@
 # Development stack: source bind-mounted, hot reload, ports on 127.0.0.1.
 # The installed app uses docker-compose.prod.yml instead.
 #
-#   docker compose up                                   # CPU
-#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up   # NVIDIA GPU
+#   docker compose up                                   # CPU (the default build)
+#   VCM_VARIANT=cuda docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#                                                       # NVIDIA GPU
+#
+# As in the installed app, the CPU image is the default and the GPU is an
+# override: VCM_VARIANT=cuda (in the shell or in .env) builds the CUDA image,
+# and docker-compose.gpu.yml hands the GPU to the worker.
 #
 services:
   postgres:
@@ -54,7 +59,7 @@ services:
       dockerfile: backend/Dockerfile
       target: dev
       args:
-        VARIANT: ${VCM_VARIANT:-cuda}
+        VARIANT: ${VCM_VARIANT:-cpu}
     container_name: vcm_backend
     restart: unless-stopped
     env_file: .env
@@ -102,7 +107,7 @@ services:
       dockerfile: backend/Dockerfile
       target: dev
       args:
-        VARIANT: ${VCM_VARIANT:-cuda}
+        VARIANT: ${VCM_VARIANT:-cpu}
     container_name: vcm_worker
     restart: unless-stopped
     env_file: .env

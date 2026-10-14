@@ -39,6 +39,12 @@ jobs:
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml config -q
+      - name: Dev stack builds the CPU image unless the GPU is asked for
+        run: |
+          touch .env
+          docker compose -f docker-compose.yml config | grep -q 'VARIANT: cpu'
+          if docker compose -f docker-compose.yml config | grep -q 'VARIANT: cuda'; then exit 1; fi
+          VCM_VARIANT=cuda docker compose -f docker-compose.yml -f docker-compose.gpu.yml config | grep -q 'VARIANT: cuda'
 
   backend:
     runs-on: ubuntu-latest

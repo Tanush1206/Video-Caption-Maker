@@ -173,8 +173,8 @@ The dev stack bind-mounts the source with hot reload:
 
 ```bash
 cp .env.example .env            # dev settings; never commit .env
-docker compose up               # CPU
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up   # NVIDIA GPU
+docker compose up               # CPU (default)
+VCM_VARIANT=cuda docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build   # NVIDIA GPU
 docker compose exec backend alembic upgrade head
 docker compose exec backend python -m pytest      # uses the dev database
 docker compose exec frontend npm run lint
