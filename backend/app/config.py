@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # ── App ──────────────────────────────────────────────
+    # The release this image was built as. Set by the Dockerfile from the tag
+    # (`VCM_VERSION`, e.g. "1.0.5"); "dev" for a local build.
+    vcm_version: str = "dev"
     environment: str = "development"
     cors_origins: str = "http://localhost:3000"
 

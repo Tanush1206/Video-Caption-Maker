@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="VideoCaptionMaker API",
     description="AI-powered video captioning & transcript search",
-    version="0.1.0",
+    # The release, not a separate API number: there is one thing to version.
+    version=settings.vcm_version,
     lifespan=lifespan,
 )
 
