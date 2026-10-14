@@ -1,11 +1,15 @@
 # API reference
 
 The HTTP API served by the FastAPI backend (`backend/app/main.py`), as of
-v1.0.4. The endpoint list, parameters and schemas below are **generated from
-the app's own OpenAPI spec** (`app.openapi()` run inside the v1.0.4 backend
-container). The backend code is unchanged since the v1.0.4 tag. Error codes
-come from the `HTTPException`s in `backend/app/api/*.py`, because OpenAPI only
-lists the 422 that FastAPI adds itself.
+v1.0.5 (on `main`). The endpoint list, parameters and schemas below are
+**generated from the app's own OpenAPI spec** (`app.openapi()`). They were
+regenerated for v1.0.5 and are identical to v1.0.4's; only the behaviour
+notes changed. Error codes come from the `HTTPException`s in
+`backend/app/api/*.py`, because OpenAPI only lists the 422 that FastAPI adds
+itself.
+
+**Version.** The spec's `info.version` (and `app.version`) is the release the
+image was built as: `VCM_VERSION` (e.g. `1.0.5`), or `dev` for a local build.
 
 To regenerate the spec from a running dev stack:
 
@@ -111,10 +115,10 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 |---|---|---|---|---|
 | POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi fr de nl`) | `201` [VideoRead](#videoread); transcription is queued | 400 no filename / empty file · 413 too large · 415 type or extension · 422 unknown language · 507 disk full |
 | GET* | `/api/videos` | query `limit` 1–100 (50), `offset` ≥ 0 (0), `status` [VideoStatus](#videostatus) | `200` [VideoList](#videolist) (newest first; `total` counts all matches) | 422 |
-| GET* | `/api/videos/languages` | — | `200` [LanguageOptions](#languageoptions) | — |
+| GET* | `/api/videos/languages` | — | `200` [LanguageOptions](#languageoptions). `translation_available` is **always `true`**: English comes from Whisper, and hi/fr/de/nl from local M2M100, with no key needed | — |
 | GET* | `/api/videos/{video_id}` | — | `200` [VideoRead](#videoread) | 404 `Video not found` |
 | PATCH* | `/api/videos/{video_id}` | [VideoUpdate](#videoupdate) | `200` [VideoRead](#videoread) | 404 · 422 |
-| DELETE* | `/api/videos/{video_id}` | — | `204`; row, file, thumbnail, waveform and vectors removed | 404 |
+| DELETE* | `/api/videos/{video_id}` | — | `204`; row, file, thumbnail, waveform, vectors and every export file removed | 404 |
 | POST* | `/api/videos/{video_id}/transcribe` | optional [TranscribeRequest](#transcriberequest) | `200` [VideoRead](#videoread) (`pending`); captions are replaced when it runs | 404 · 409 `This video is already being transcribed` · 503 queue unreachable |
 | GET* | `/api/videos/{video_id}/captions` | — | `200` [CaptionList](#captionlist) (by `sequence`) | 404 |
 | POST* | `/api/videos/{video_id}/captions` | [CaptionCreate](#captioncreate) | `201` [CaptionRead](#captionread); queues re-index | 404 · 422 |
@@ -166,7 +170,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
 | GET* | `/api/search` | query `q` (2–500, required), `video_id` (optional), `limit` 1–50 (10) | `200` [SearchResponse](#searchresponse); hits with cosine distance > 0.75 dropped | 404 `video_id` not yours · 422 |
-| POST* | `/api/ask` | [AskRequest](#askrequest) | `200` [AskResponse](#askresponse). Without a Gemini key `answer` is the "add a key" sentence and `grounded=false`; `results` are always returned | 404 · 422 |
+| POST* | `/api/ask` | [AskRequest](#askrequest) | `200` [AskResponse](#askresponse). **Without a Gemini key**, `answer` is always "Written answers need a Gemini API key, which you can add in Settings. The matching moments are below.", with `grounded=false`, whether or not anything matched. With a key and no relevant hits, it is the refusal "I couldn't find an answer to that in this video." `results` are always returned | 404 · 422 |
 
 ### Stats (`backend/app/api/stats.py`)
 
@@ -178,7 +182,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| GET* | `/api/system` | — | `200` [SystemInfo](#systeminfo). `hardware`/`whisper` are null until the worker has reported. **The Gemini key is never returned**, only `gemini_configured` and `gemini_source` (`settings`, `env` or null) | — |
+| GET* | `/api/system` | — | `200` [SystemInfo](#systeminfo). `hardware`/`whisper` are null until the worker has reported. **The Gemini key is never returned** by this or any other response, only `gemini_configured` and `gemini_source` (`settings`, `env` or null) | — |
 | PATCH* | `/api/system/settings` | [SystemSettingsUpdate](#systemsettingsupdate): only keys sent are changed. `whisper_model`: `auto`/null, `small`, `medium`, `large-v3-turbo`, `large-v3`. `gemini_api_key`: a key, or `""`/null to clear | `200` [SystemInfo](#systeminfo). Audited in `audit.log` (without the value) | 403 in accounts mode · 422 `Unknown speech model` |
 
 ### Auth (`backend/app/api/auth.py`)
@@ -683,16 +687,13 @@ Enum: `pending`, `processing`, `completed`, `failed`
 | `compute_type` | string | yes |  |
 | `source` | string | yes |  |
 
-## Open questions
+## Decisions recorded
 
-1. **`translation_available`** (`GET /api/videos/languages`) is true only
-   when `GEMINI_API_KEY` is set in the environment. It ignores both a key set
-   in Settings and local M2M100, which can translate all four non-English
-   targets. See PRD.md, Open questions 3.
-2. **Ask with no hits but no key.** `POST /api/ask` with no relevant hits
-   returns the refusal sentence even when no key is set, while with hits and
-   no key it returns the "add a key" sentence. Is that order intended?
-3. **API version.** The FastAPI app reports `version="0.1.0"`, but the
-   product is 1.0.4. Should the OpenAPI version track releases? (`VCM_VERSION`
-   is set in the image but not exposed by any endpoint; the v1.0.4 redesign
-   left the version chip out for that reason.)
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| `translation_available` ignored local translation | Fixed in v1.0.5: always `true`. |
+| `/api/ask` without a key refused when nothing matched | Fixed in v1.0.5: without a key it always says a key is needed. |
+| API version `0.1.0` | Fixed in v1.0.5: reports `VCM_VERSION`. |
