@@ -271,9 +271,12 @@ async def language_options(user: CurrentUser) -> LanguageOptions:
             LanguageOption(code=code, label=languages.label(code))
             for code in (languages.SAME, *languages.LANGUAGES)
         ],
-        # English needs no key — Whisper translates into it directly. The other
-        # four go through Gemini, so without a key they cannot be delivered.
-        translation_available=bool(settings.gemini_api_key),
+        # Always true. English comes from Whisper's own translate pass, and the
+        # other four from M2M100, which runs on this machine with no key. A
+        # Gemini key only changes which engine translates, never whether one
+        # can. This used to read the env key alone, and the editor disabled
+        # four of the five languages on every install without one.
+        translation_available=True,
     )
 
 

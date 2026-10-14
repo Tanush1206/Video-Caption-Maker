@@ -308,18 +308,9 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
               className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
             >
               {languageOptions.caption.map((option) => (
-                <option
-                  key={option.code}
-                  value={option.code}
-                  // English is always available — Whisper translates into it
-                  // itself. The rest need the translation service, so they are
-                  // disabled rather than offered and then quietly ignored.
-                  disabled={
-                    !languageOptions.translation_available &&
-                    option.code !== "same" &&
-                    option.code !== "en"
-                  }
-                >
+                // Every language is offered, as on the dashboard's language
+                // step: translation runs locally, so none of them needs a key.
+                <option key={option.code} value={option.code}>
                   {option.label}
                 </option>
               ))}

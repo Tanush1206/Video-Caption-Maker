@@ -497,3 +497,18 @@ def test_storage_paths_are_generated_not_user_supplied():
     assert relative.startswith("user_7/")
     assert ".." not in relative
     assert "evil" not in relative  # the name is a UUID, not theirs
+
+
+async def test_every_caption_language_is_available_without_a_gemini_key(
+    client, auth_headers, monkeypatch
+):
+    # Local M2M100 translates hi/fr/de/nl, so no key is needed for any target.
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "")
+    response = await client.get("/api/videos/languages", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["translation_available"] is True
+    assert [o["code"] for o in body["caption"]] == ["same", "en", "hi", "fr", "de", "nl"]

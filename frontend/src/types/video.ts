@@ -61,9 +61,8 @@ export interface LanguageOptions {
   spoken: LanguageOption[];
   caption: LanguageOption[];
   /**
-   * English never needs this — Whisper translates into it directly, in the
-   * same pass that does the transcription. The other four go through a
-   * translation service, so without it they cannot be delivered.
+   * Always true: English comes from Whisper itself and the other four from
+   * the local M2M100 translator, so no key is needed for any of them.
    */
   translation_available: boolean;
 }

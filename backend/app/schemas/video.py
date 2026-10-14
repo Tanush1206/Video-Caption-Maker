@@ -114,6 +114,6 @@ class LanguageOptions(BaseModel):
 
     spoken: list[LanguageOption]
     caption: list[LanguageOption]
-    #: False when no translation key is configured, so the client can say why
-    #: the non-English targets are unavailable instead of failing silently.
+    #: Whether the non-English targets can be delivered. Always true since local
+    #: translation (M2M100) ships with the app; kept so clients need not change.
     translation_available: bool
