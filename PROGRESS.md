@@ -107,8 +107,8 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - [x] M11 Failing test `test_instancing_produces_a_real_static_bold` — stale
       image, fixed by the rebuild; verify.
 - [x] M12 End-to-end: real video, GPU and CPU, all 5 languages, export.
-- [ ] M13 Fresh-install test from scratch in a clean environment (local
-      stand-ins pass; the real one is R6).
+- [x] M13 Fresh-install test from scratch in a clean environment (done as
+      R6, from the real Release, in the clean machine).
 
 ### Added by Tanush (2026-10-08)
 - [x] R1 Prove no Norton/local CA is in any committed file, in a built image
@@ -121,7 +121,7 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
 - [x] R4 Test the low-RAM CPU tier (< 12 GB → small + M2M100-418M) with a
       memory-limited worker.
 - [x] R5 `vcm update` keeps videos, captions and the DB, and runs migrations.
-- [ ] R6 Final install test from the published GitHub Release + GHCR images.
+- [x] R6 Final install test from the published GitHub Release + GHCR images.
       Tell Tanush when to make the repo and packages public. Wait for his
       confirmation after each publishing step.
 - [x] R7 macOS untested: a known limitation in the README and final report.
@@ -132,7 +132,7 @@ functionality; MINOR = quality or cleanup; UI = visual/UX.
       only the keep-data path.
 - [x] R9 Answer: what the R5 downgrade dropped, which stack was rolled back and
       whether a backup existed; whether secrets can contain `$`.
-- [ ] R10 Remove `vcm-test-registry` and `vcm-clean` after testing.
+- [x] R10 Remove `vcm-test-registry` and `vcm-clean` after testing (2026-10-14).
 
 ### UI
 - [x] U1 3-step flow (Upload → Language → Export) with a stepper; editor,
@@ -533,8 +533,36 @@ through a 127.0.0.1:8001 relay container (`vcm-redesign-relay`).
   and back (200, 200), SRT and burned MP4 exported through the dialog and
   downloaded, 0 refused. 14/14 PASS.
 
-## Next
-DELETE uninstall (clean machine) leaves nothing; final DoD; R10.
+### DELETE uninstall (clean machine, v1.0.4)
+`vcm uninstall`, answered DELETE at the terminal prompt: exit 0. After it,
+inside the clean machine: 0 containers, 0 volumes (the five vcm_* and
+redis's anonymous one), no vcm_default network, no app images,
+~/.videocaptionmaker and the vcm command gone. Kept by design: the shared
+postgres/redis/chroma base images. Host untouched: the Windows install and
+the dev stack's videocaptionmaker_* volumes are all still there.
+
+### Secrets (final)
+No .env, key, cert, dump or storage file is tracked or ever was in git
+history; .env, */certs, backend/storage, *.dump and design/stitch are
+ignored. Release assets are the 7 scripts/compose files + SHA256SUMS. In
+the 1.0.4 images: no .env/key files (the frontend's one .pem is Alpine's
+public CA bundle), the extra-CA dir is empty, NODE_EXTRA_CA_CERTS unset,
+the Norton root is not in the backend's CA bundle; the backend builds from
+an allow-list (backend/Dockerfile.dockerignore).
+
+### R10 cleanup (by name only)
+Removed: containers vcm-clean and vcm-test-registry with their own
+anonymous volumes; images docker:29-dind, registry:2, the Playwright image,
+localhost:5000/* test images, vcm-redesign-build, and the backend -cpu
+images (only the clean machine used them). Left in place because they may
+be yours: busybox, shellcheck, actionlint, python/node base images, older
+ghcr 1.0.1/1.0.2 tags, three unnamed volumes, llm-utility-lab,
+chromadb:latest.
+
+## Done
+v1.0.4 is released, both installs were on it and verified; the clean
+machine is uninstalled and removed. Reminder: the install and the dev
+stack both use port 3000: `vcm stop` before `docker compose up`.
 
 ## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
 ## v1.0.3 is released and verified)
