@@ -28,10 +28,16 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    # Video processing tasks are long-running — don't let Celery silently
-    # kill them via the default time limits.
-    task_soft_time_limit=60 * 30,  # 30 min
-    task_time_limit=60 * 35,
+    # No Celery time limits. They used to be 30/35 minutes, which would kill
+    # a long CPU transcription or a multi-hour render partway through, except
+    # that the worker runs `--pool=solo`, which never enforces them (measured:
+    # a 6 s task under a 3 s hard limit ran to completion). The numbers
+    # promised a cut-off that didn't exist, and would have started cutting off
+    # real work the day the pool changed. What bounds a job is the step that
+    # could hang: FFmpeg renders time out after RENDER_TIMEOUT_SECONDS (3 h),
+    # and every probe and extraction subprocess has its own timeout.
+    task_soft_time_limit=None,
+    task_time_limit=None,
     # Only take a job when actually free. The default prefetches several, so
     # one worker would sit on queued videos it can't start while another idles.
     worker_prefetch_multiplier=1,
