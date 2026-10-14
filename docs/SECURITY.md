@@ -1,6 +1,6 @@
 # Security
 
-The security design of VideoCaptionMaker as shipped (v1.0.4): a single-user
+The security design of VideoCaptionMaker as of v1.0.5 (on `main`): a single-user
 app that runs on the user's own computer. Every rule names the file that
 enforces it.
 
@@ -169,7 +169,7 @@ Written by `audit()` in `backend/app/request_guard.py`.
 |---|---|
 | **Where** | `<storage root>/audit.log`, i.e. `/app/storage/audit.log` on the `media` volume. It survives updates and container replacement. |
 | **What is recorded** | every **refused** request (403); every **DELETE** (any status); every **POST/PUT/PATCH to `/api/system/settings`** |
-| **Fields** (one JSON object per line) | `time` (UTC), `method`, `path`, `status`, `user_agent`, `origin`, `referer`, `sec_fetch_site`, `host` (forwarded or direct), `client` (peer IP), and `refused` (the reason) on refusals |
+| **Fields** (one JSON object per line) | `time` (UTC), `method`, `path`, `status`, `user_agent`, `origin`, `referer`, `sec_fetch_site`, `host` (forwarded or direct), `client` (the browser's address when the request came through the frontend, otherwise the peer's own; see §4a), and `refused` (the reason) on refusals |
 | **Never recorded** | **request bodies**. A settings body can hold the Gemini key. Tested by `test_a_settings_change_is_recorded_without_its_value`. Query strings aren't recorded either; only `path` is. |
 | **Rotation** | before a write, if `audit.log` is over **5 MB** it is renamed to `audit.log.1`, replacing the previous `.1`. At most two files of about 5 MB each (`AUDIT_MAX_BYTES`; `test_the_audit_log_cannot_grow_without_bound`). |
 | **Also** | each entry is logged through Python logging (`logger.info("audit …")`), so it appears in `vcm logs backend` too. A failed write is logged and never fails the request. |
@@ -178,13 +178,38 @@ Written by `audit()` in `backend/app/request_guard.py`.
 To read it on an install:
 `docker exec vcm-backend-1 cat /app/storage/audit.log`.
 
+### 4a. Forwarded headers
+
+Until v1.0.5 uvicorn ran with `--forwarded-allow-ips='*'`, so any caller that
+could reach the API could put any address into `X-Forwarded-For`, and with it
+into `audit.log`. Now:
+
+- uvicorn runs with `--no-proxy-headers` (`backend/docker-entrypoint.sh`);
+- the `TrustedProxyHeaders` middleware (`backend/app/proxy_headers.py`)
+  applies `X-Forwarded-For`/`-Proto` **only** when the peer's address is one
+  that `TRUSTED_PROXIES` (default `frontend`, the compose service name)
+  resolves to;
+- it re-resolves at most every 5 s, so a recreated frontend is recognised and
+  its old address stops being trusted;
+- if the name doesn't resolve, nobody is trusted.
+
+A service name was needed because uvicorn only trusts IPs or networks, and
+the frontend's IP is assigned at start (after the API's). Verified live on the
+dev network: a container aliased `frontend` had its forwarded address
+recorded, while another container sending the same header had its own
+address recorded. Tests: `backend/tests/test_proxy_headers.py`.
+
+The request guard's `X-Forwarded-Host` rule (§3) is unchanged: only the
+frontend can reach the API in an install, and a direct caller is a script,
+which the guard already lets through.
+
 ## 5. Secrets
 
 | Secret | Created by | Stored | Rules |
 |---|---|---|---|
 | `POSTGRES_PASSWORD` | installer, first run | install `.env` | 64 hex chars from 32 random bytes (`openssl rand -hex 32` or `/dev/urandom`; `RandomNumberGenerator` on Windows). Never contains `$`. Kept on reinstall. |
 | `JWT_SECRET_KEY` | installer, first run | install `.env` | same generation. Signs stream and download tokens even in local mode |
-| Gemini API key | the user, in Settings | Postgres `app_settings`, **plain text** | write-only through the API. `GET /api/system` returns only `gemini_configured` and `gemini_source`. Never logged: `app_settings.py` logs no values and the audit log has no bodies. Tested by `test_the_gemini_key_is_stored_but_never_returned`. |
+| Gemini API key | the user, **in Settings only** (an install's `.env` doesn't pass it on) | Postgres `app_settings`, **plain text**: accepted for a local single-user app, since Postgres is reachable only on the compose network | write-only through the API: no response returns it, only `gemini_configured` and `gemini_source`. **Never logged**: `app_settings.py` logs no values, the audit log has no bodies, and both database engines use `hide_parameters=True`. Until v1.0.5 the dev SQL echo printed the key when it was saved. Tested by `test_the_gemini_key_is_never_logged_or_returned_anywhere`. |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | operator (accounts mode only) | env | not used by the installed app |
 
 **Rules:**
@@ -192,8 +217,9 @@ To read it on an install:
 - **The install's `.env`:**
   - is created with `umask 077` and `chmod 600` on macOS/Linux
     (`install/install.sh`);
-  - on Windows it lives under `%LOCALAPPDATA%\VideoCaptionMaker` and the
-    installer sets no explicit ACL (see Open questions);
+  - on Windows it lives under `%LOCALAPPDATA%\VideoCaptionMaker`. The
+    installer sets no ACL of its own, and that is accepted: the folder is in
+    the per-user profile and inherits its user-only permissions;
   - is **never** overwritten on reinstall. Uninstall keeps it unless the user
     typed `DELETE`, because the kept data is locked with its password.
 - **The repository:**
@@ -234,7 +260,7 @@ transcribe, translate, export, search) makes **no outbound requests**.
 | `github.com` (release assets) | install, `vcm update` | nothing about the user | `install/*`, `vcm` |
 | `ghcr.io` | install, `vcm update` (image pulls) | nothing about the user | compose |
 | `huggingface.co` | first use of each model (Whisper size, M2M100 size, MiniLM) | model repo requests | `services/model_store.py`, `transcription.py`, `translation.py`, `embeddings.py` |
-| `raw.githubusercontent.com/google/fonts` | the first time a Google Font from the library is used | the font path | `services/font_library.py` |
+| `raw.githubusercontent.com/google/fonts/<commit>/` | the first time a Google Font from the library is used | the font path, at the commit pinned in `app/data/google_fonts.json` | `services/font_library.py` |
 | Gemini API (`google-genai`) | **only with a key**: translating to hi/fr/de/nl, and `POST /api/ask` | **caption text only**: up to 25 lines per translation batch, up to 6 retrieved captions plus the question for answers. **Never the video or audio.** | `services/translation.py`, `services/rag.py` |
 | Google OAuth | accounts mode only | OAuth exchange | `api/auth.py` |
 
@@ -305,41 +331,44 @@ in `install/vcm` and `install/vcm.ps1`):
   `irm … install.ps1 | iex` run whatever GitHub serves over TLS.
 - **Images are pulled by tag, not digest** (`…:latest-cpu`, `…:1.0.4-cuda`),
   and are not signed. Their integrity rests on GHCR and TLS, and image
-  content isn't covered by `SHA256SUMS`.
+  content isn't covered by `SHA256SUMS`. Digest pinning and signing are on
+  the [ROADMAP](ROADMAP.md).
 - **Model weights:** Whisper repositories are fetched by name; only the
   M2M100 conversions are pinned to a commit. CTranslate2's `model.bin` is a
   weights format, not a pickle, so loading it cannot execute code
   (`translation.py`).
-- **Google Fonts** come from the `main` branch of `google/fonts`, not a
-  pinned commit.
+- **Google Fonts** are pinned (v1.0.5): every download comes from the commit
+  of `google/fonts` the catalogue was built at (`83831d6f…`, checked: all
+  1832 entries' paths and sizes match). The catalogue builder records the
+  commit it read. On `main`, six of the catalogue's files had since moved.
 
 ## 9. Reporting a vulnerability
 
-There is no `SECURITY.md` policy, security contact or private reporting
-channel in the repository (see Open questions). Until one is set up:
+Use **GitHub private vulnerability reporting**:
+`https://github.com/Tanush1206/Video-Caption-Maker/security/advisories/new`
+(the repository's **Security** tab → **Report a vulnerability**). Reports
+there are visible only to the maintainer until an advisory is published.
 
 - **Never** post exploit details, secrets, `.env` contents or `audit.log`
   excerpts in a public issue.
-- Contact the repository owner privately through GitHub
-  (`github.com/Tanush1206`).
+- Include the version you run (`VCM_VERSION` in the install's `.env`; `latest`
+  means the newest release at your last install or update) and the steps to
+  reproduce.
 
-## Open questions
+The channel must be switched on in the repository settings (Settings → Code
+security → Private vulnerability reporting → Enable). Until it is, the link
+above does not accept reports.
 
-1. **Reporting channel.** Should GitHub private vulnerability reporting be
-   enabled, or a contact address published?
-2. **Windows `.env` permissions.** `install.ps1` writes `.env` without setting
-   an ACL, relying on the inherited permissions of `%LOCALAPPDATA%`. Is that
-   acceptable, or should it restrict the file to the current user, as
-   `chmod 600` does on Linux/macOS?
-3. **The Gemini key is stored in plain text** in Postgres. Acceptable for
-   local mode?
-4. **Image pinning.** Should installs pin images by digest, and should
-   releases be signed (for example with cosign), given the limits in §8?
-5. **`--forwarded-allow-ips='*'`.** uvicorn trusts `X-Forwarded-*` from any
-   peer (`docker-entrypoint.sh`). This is safe only because the backend isn't
-   published in the production compose. Should it be limited to the
-   frontend's address?
-6. **Google Fonts are not pinned to a commit.** `google_fonts.json` uses
-   `…/google/fonts/main/`, while `api/fonts.py` says the catalogue "pins a
-   specific path". A path on `main` can change. Is pinning to a commit
-   wanted?
+## Decisions recorded
+
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| Reporting channel | GitHub private vulnerability reporting (§9). |
+| Windows `.env` ACL | Acceptable: it's under the per-user `%LOCALAPPDATA%` (§5). |
+| Gemini key in plain text | Acceptable for a local single-user app; confirmed never returned and never logged (fixed in v1.0.5). |
+| Image digest pinning / signing | → [ROADMAP](ROADMAP.md). |
+| `--forwarded-allow-ips='*'` | Fixed in v1.0.5: trusted only from the frontend container (§4a). |
+| Google Fonts from `main` | Fixed in v1.0.5: pinned to a commit (§8). |
