@@ -32,6 +32,13 @@ settings = get_settings()
 
 NOT_FOUND = "I couldn't find an answer to that in this video."
 
+# Without a key nothing is asked, so nothing can be "not found": saying the
+# video lacks an answer would be a claim nobody checked.
+NEEDS_KEY = (
+    "Written answers need a Gemini API key, which you can add in Settings. "
+    "The matching moments are below."
+)
+
 # Enough context to answer from, few enough that the model isn't picking a
 # needle out of a haystack — precision falls off as irrelevant passages pile up.
 CONTEXT_CHUNKS = 6
@@ -126,20 +133,18 @@ def answer_question(question: str, hits: list[SearchHit], api_key: str | None = 
 
     Blocking — the caller runs it off the event loop.
     """
+    # The local default comes first: search works fully offline, and writing
+    # an answer is an optional extra that needs a key. Checked before
+    # retrieval's result, so a question with no matches says that a key is
+    # what's missing rather than claiming the video has no answer.
+    api_key = api_key or settings.gemini_api_key
+    if not api_key:
+        return Answer(text=NEEDS_KEY, cited=[], grounded=False)
+
     # Layer one: nothing relevant was retrieved, so there is nothing to answer
     # from. Calling the model here would be paying for a guess.
     if not hits:
         return Answer(text=NOT_FOUND, cited=[], grounded=False)
-
-    api_key = api_key or settings.gemini_api_key
-    if not api_key:
-        # The local default: search works fully offline, and writing an answer
-        # is an optional extra that needs a key.
-        return Answer(
-            text="Add a Gemini API key in Settings to get written answers. The matching moments are below.",
-            cited=[],
-            grounded=False,
-        )
 
     context = build_context(hits)
     prompt = PROMPT.format(not_found=NOT_FOUND, context=context, question=question)

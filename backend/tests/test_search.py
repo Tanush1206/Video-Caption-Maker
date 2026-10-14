@@ -173,7 +173,7 @@ def test_no_retrieval_refuses_without_calling_the_model(monkeypatch):
 
     monkeypatch.setattr(rag, "get_client", explode)
 
-    answer = rag.answer_question("what is the refund policy", [])
+    answer = rag.answer_question("what is the refund policy", [], api_key="a-key")
 
     assert answer.text == rag.NOT_FOUND
     assert answer.grounded is False
@@ -262,3 +262,24 @@ class _FakeClient:
                 return Response()
 
         return Models()
+
+
+# ── Without a Gemini key ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("with_hits", [True, False])
+def test_without_a_key_the_answer_says_a_key_is_needed_not_that_nothing_was_found(
+    monkeypatch, with_hits
+):
+    def explode(*_args):
+        raise AssertionError("no key: the model must not be called")
+
+    monkeypatch.setattr(rag, "get_client", explode)
+    monkeypatch.setattr(rag.settings, "gemini_api_key", "")
+    hits = [a_hit()] if with_hits else []
+
+    answer = rag.answer_question("what is the refund policy", hits, api_key=None)
+
+    assert answer.text == rag.NEEDS_KEY
+    assert answer.grounded is False
+    assert answer.cited == []
