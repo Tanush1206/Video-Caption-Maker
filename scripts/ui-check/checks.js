@@ -105,6 +105,39 @@ const CHECKS = {
     );
     await page.close();
   },
+
+  // The editor's caption-language select (used by Redo) offers all five
+  // languages, enabled, with or without a Gemini key: translation is local.
+  async "editor-languages"(browser, base) {
+    const page = await browser.newPage();
+    const listing = await (await page.request.get(`${base}/api/videos?limit=1`)).json();
+    const video = listing.items[0];
+    if (!video) throw new Error("needs at least one video");
+    // Shown as completed whatever its real state, so any install will do.
+    await page.route(`**/api/videos/${video.id}`, async (route) => {
+      const body = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...body, status: "completed", stage: null, error_message: null } });
+    });
+    // The select sits in the caption list, which needs a caption to render.
+    await page.route(`**/api/videos/${video.id}/captions`, (route) =>
+      route.fulfill({
+        json: {
+          total: 1,
+          items: [{
+            id: 1, video_id: video.id, sequence: 0, start_ms: 0, end_ms: 1000, text: "Hello",
+            confidence: -0.2, override_color: null, override_bold: null, override_scale: null,
+          }],
+        },
+      })
+    );
+    await page.goto(`${base}/editor/${video.id}`, { waitUntil: "networkidle" });
+    const select = page.locator("label", { hasText: "Captions" }).locator("select").first();
+    const options = await select.locator("option").evaluateAll((els) => els.map((o) => [o.value, o.disabled]));
+    const values = options.map(([value]) => value).join(",");
+    ok("editor-languages: all six choices", values === "same,en,hi,fr,de,nl", values);
+    ok("editor-languages: none disabled", options.every(([, disabled]) => !disabled));
+    await page.close();
+  },
 };
 
 (async () => {
