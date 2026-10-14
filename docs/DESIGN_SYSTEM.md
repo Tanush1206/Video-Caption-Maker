@@ -9,22 +9,30 @@ files win: fix the doc.
 
 From the v1.0.4 redesign (PROGRESS.md, "v1.0.4 redesign log"):
 
-- **Source:** the Stitch design in `design/stitch/` (gitignored, never
-  committed). Only the folders listed in PROGRESS.md are used, with
-  `local_video_studio_engine/DESIGN.md` for tokens. Where a `screen.png` and
-  its `code.html` disagree, **`code.html` wins**.
+- **Source:** the Stitch design in `design/stitch/` stays **private**
+  (gitignored, never committed), including its DESIGN.md. **This document is
+  the public source of truth** for the design; everything it says is taken
+  from the code. When the private design was used (v1.0.4), only the folders
+  listed in PROGRESS.md counted, and where a `screen.png` and its `code.html`
+  disagreed, `code.html` won.
 - **Look:** a cold slate base, **one indigo accent**, and emerald only for
   "local engine healthy". It is a dense tool UI: the 8 px radius everywhere,
   fixed-px type, and tonal elevation.
 - **Restyle, never re-logic.** The redesign changed no behaviour, and **no
   mock data**: every figure on screen comes from the API. Design elements
   with no data behind them were left out rather than faked: app version
-  chip, live transcript, cancel, memory figures, cache clearing, System
-  theme, inference-speed tiles, term highlighting.
-- **Two themes**, light and dark, chosen by a `.dark` class on `<html>`. The
-  choice is stored in `localStorage["vcm-theme"]`; without one the OS
-  preference applies. An inline script in `app/layout.tsx` applies it before
-  first paint, so the wrong theme never flashes.
+  chip, live transcript, cancel, memory figures, cache clearing,
+  inference-speed tiles, term highlighting.
+- **Two themes**, light and dark, chosen by a `.dark` class on `<html>`, and
+  **three choices** in Settings → Interface theme: Light, Dark and **System**
+  (the default, added in v1.0.5):
+  - Light or Dark is stored in `localStorage["vcm-theme"]`;
+  - System stores **nothing**, so the OS preference applies, and the theme
+    follows an OS change live (`ThemeProvider` listens to
+    `prefers-color-scheme`);
+  - an inline script in `app/layout.tsx` applies the stored choice, or the OS
+    preference, before first paint, so the wrong theme never flashes;
+  - the header's theme button flips to an explicit Light or Dark.
 - **Contrast beats the source palette.** Where DESIGN.md's colours fail WCAG
   AA, the tokens are adjusted (§2), and axe-core must stay at 0 violations.
 
@@ -55,7 +63,7 @@ would silently emit nothing.
 | `--accent` | `243 75% 59%` | `239 84% 67%` (#6366f1) | progress fills (`.bar-fill`) |
 | `--success` | `163 94% 24%` (#047857) | `160 84% 39%` (#10b981) | done states, local-engine health |
 | `--warning` | `26 90% 37%` (#b45309) | `38 92% 50%` (#f59e0b) | notices |
-| `--destructive` / `-foreground` | `347 77% 50%` / white | `0 91% 71%` (#f87171) / `228 17% 6%` | delete, errors |
+| `--destructive` / `-foreground` | `345 83% 41%` (#be123c, rose-700) / white | `0 91% 71%` (#f87171) / `228 17% 6%` | delete, errors, failed badges |
 | `--border` | `214 32% 91%` | `227 21% 17%` (#222634) | hairlines |
 | `--input` | `213 27% 84%` | `226 19% 27%` (#373d51) | input borders |
 | `--ring` | `239 84% 67%` | `239 84% 67%` | focus ring |
@@ -69,6 +77,9 @@ would silently emit nothing.
 - Light muted text is slate-600, not slate-500, because 500 falls under 4.5:1
   on `surface-2`.
 - Light success and warning are emerald-700 (5.5:1) and amber-700 (5:1).
+- Light destructive is rose-700 (v1.0.5). Rose-600 was 3.82:1 on its own 10 %
+  tint, so the "Failed" badge failed AA. Now 5.1–5.3:1 on the tint and 6.3:1
+  under white text.
 
 **`text-primary` ≠ `bg-primary`.** `tailwind.config.ts` defines `textColor` as
 a function over the whole palette, so `text-primary` reads `--primary-text`
@@ -285,12 +296,12 @@ dumps.
 | **Filtered empty** | `video-library.tsx` | "No videos are in this state right now." Kept separate from first run: "no videos" invites an upload, "none match" doesn't |
 | **Loading** | `Skeleton` in the library, stats strip, editor, export panel, settings | content-shaped placeholders; previous page kept while paging (`keepPreviousData`) |
 | **Processing** | `flow/video-status.tsx` | `role="status" aria-live="polite"`; the stage list (done/active/queued), % and ETA, plus a one-time model-download card only for a real download |
-| **Failed job** | `video-status.tsx` `Failed` | `role="alert"`, the worker's sentence, **Try again** |
+| **Failed job** | `video-status.tsx` `Failed` | `role="alert"`, the worker's sentence, **Try again**, **Retry with small model** (secondary; only when the model in use isn't `small`; a note says it changes the setting for every video) and **Open Settings** |
 | **Notices** on finished jobs | `videos.notice` | shown on the video page (fallbacks, low confidence) |
 | **Server unreachable / starting** | `layout/server-unavailable.tsx` | "Can't reach the app yet", retries every 3 s, **Try now**, points at `vcm start` |
 | **Render error in a page** | `(dashboard)/error.tsx` | "Something went wrong", digest reference, **Try again** / **Back to your videos** |
 | **`notFound()` in the dashboard** | `(dashboard)/not-found.tsx` | "Page not found" + back link |
-| **Unknown URL outside it** | Next's default 404 | no custom page (known limitation) |
+| **Unknown URL outside it** | `app/not-found.tsx` (v1.0.5) | status 404, the wordmark, "Error 404 · Page not found", **Back to your videos** |
 | **API errors** | `lib/api.ts` `extractError` | the server's `detail`; for 5xx (except 507) a fixed sentence |
 
 ## 8. Breakpoints and layout
@@ -341,15 +352,21 @@ and search, in both themes (PROGRESS.md U6, re-checked for v1.0.4).
   icon buttons.
 - `color-scheme` follows the theme, so native scrollbars and pickers match.
 
-## Open questions
+## Animations kept for accounts mode
 
-1. **The design source is private and outside git.** `design/stitch/` is
-   gitignored, so these docs can't link to it. Should DESIGN.md's tokens be
-   committed (they are now reflected in `globals.css`), or stay private?
-2. **Unused animations.** `marquee`, `drift-a`/`drift-b` and `fade-slide-in`
-   are described as being for the landing page and the auth backdrop. In
-   local mode the landing page is never shown. Are they kept only for
-   accounts mode?
-3. **A "System" theme option** was in the design but left out (there is no
-   setting behind it, although the OS preference is the fallback when nothing
-   is stored). Should Settings offer it?
+`marquee`, `drift-a`/`drift-b` and `fade-slide-in` (`tailwind.config.ts`), and
+the `.glass-surface`/`.glass-sheen` rules, belong to the landing page and the
+login/register screens. Local mode never shows those screens. They are kept
+for the optional hosted (accounts) mode and must not be used in local-mode
+UI.
+
+## Decisions recorded
+
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| Commit the Stitch DESIGN.md? | No: it stays private, and this document is the public source. |
+| Landing/auth animations | Kept, documented as accounts-mode only (above). |
+| A "System" theme option | Added in v1.0.5 (§1). |
