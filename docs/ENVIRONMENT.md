@@ -39,14 +39,14 @@ Written by the installer next to `docker-compose.prod.yml` and read by
 
 | Variable | Purpose | Set by | Secret |
 |---|---|---|---|
-| `POSTGRES_PASSWORD` | database password; also embedded in the backend's `DATABASE_URL` | installer, first run: 64 hex chars from 32 random bytes | **yes** |
+| `POSTGRES_PASSWORD` | database password; also embedded in the backend's `DATABASE_URL` | installer, first run: **64 hex characters** from 32 random bytes (`openssl rand -hex 32`, or `/dev/urandom`; .NET's `RandomNumberGenerator` on Windows). Never contains `$` | **yes** |
 | `JWT_SECRET_KEY` | signs access, refresh, stream and download tokens | installer, first run: same generation | **yes** |
 | `VCM_PORT` | host port for the UI (`127.0.0.1:${VCM_PORT}:3000`) | installer | no |
 | `VCM_VARIANT` | `cpu` or `cuda`: image suffix, and whether `vcm` adds `docker-compose.gpu.yml` | installer | no |
 | `VCM_VERSION` | image tag (`latest` → `latest-cpu`/`latest-cuda`) | installer | no |
 | `VCM_REGISTRY` | only if overridden | installer | no |
 | `WHISPER_MODEL_SIZE` | optional; passed to the backend and worker (see §3) | the user, by hand | no |
-| `MAX_UPLOAD_SIZE_MB` | optional; prod compose default **4096** | the user, by hand | no |
+| `MAX_UPLOAD_SIZE_MB` | optional; default **4096** (code and prod compose agree) | the user, by hand | no |
 
 `docker-compose.prod.yml` refuses to start without `POSTGRES_PASSWORD` and
 `JWT_SECRET_KEY`: `${…:?run the installer to generate .env}`.
@@ -54,9 +54,11 @@ Written by the installer next to `docker-compose.prod.yml` and read by
 **The production compose passes only these to the backend and worker:**
 `ENVIRONMENT=production`, `AUTH_MODE=local`, `DATABASE_URL`, `REDIS_URL`,
 `CHROMADB_URL`, `JWT_SECRET_KEY`, `WHISPER_MODEL_SIZE`, `MAX_UPLOAD_SIZE_MB`.
-Every other backend setting in an install is the code default. In particular,
-**`GEMINI_API_KEY` in the install's `.env` has no effect**: on an install the
-key is set in Settings.
+Every other backend setting in an install is the code default.
+
+**On an install, Settings is the only way to set the Gemini key.** The
+installer never writes `GEMINI_API_KEY`, no template offers it, and the
+production compose doesn't pass it on, so a hand-added line has no effect.
 
 ## 3. Backend settings (`backend/app/config.py`)
 
@@ -70,8 +72,10 @@ directory). Prod: only what §2 lists.
 |---|---|---|---|
 | `ENVIRONMENT` | `production` turns off SQL echo and sets the cookie `Secure` flag | `development` (prod compose: `production`) | no |
 | `CORS_ORIGINS` | comma-separated origins for CORS, and for the request guard's **direct** (non-proxied) calls | `http://localhost:3000` | no |
+| `TRUSTED_PROXIES` | comma-separated host names or IPs whose `X-Forwarded-For`/`-Proto` are believed (`app/proxy_headers.py`) | `frontend` | no |
+| `VCM_VERSION` | the release, reported as the API's OpenAPI version | `dev` (set by the image; see §4) | no |
 | `AUTH_MODE` | `local` = one user, no login, request guard on; `accounts` = registration/JWT/Google | `local` | no |
-| `MAX_UPLOAD_SIZE_MB` | upload cap, enforced while streaming | `2048` (prod compose: `4096`) | no |
+| `MAX_UPLOAD_SIZE_MB` | upload cap, enforced while streaming | `4096` | no |
 
 ### Connections
 
@@ -85,7 +89,7 @@ directory). Prod: only what §2 lists.
 
 | Variable | Purpose | Default | Secret |
 |---|---|---|---|
-| `JWT_SECRET_KEY` | HMAC key for every token | `dev-only-insecure-secret-change-me` (**must** be overridden; the installer does) | **yes** |
+| `JWT_SECRET_KEY` | HMAC key for every token | `dev-only-insecure-secret-change-me` (**must** be overridden). Format: **64 hex characters**, as the installer generates (`openssl rand -hex 32`); `.env.example` says the same | **yes** |
 | `JWT_ALGORITHM` | | `HS256` | no |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | | `30` | no |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | | `7` | no |
@@ -103,7 +107,7 @@ directory). Prod: only what §2 lists.
 
 | Variable | Purpose | Default | Secret |
 |---|---|---|---|
-| `GEMINI_API_KEY` | fallback key when none is set in Settings (Settings wins) | empty | **yes** |
+| `GEMINI_API_KEY` | fallback key when none is set in Settings (Settings wins). Kept for a hosted deployment; **not** in `.env.example`, and not passed by the production compose. On an install, use Settings | empty | **yes** |
 | `GEMINI_MODEL` | model alias for translation and answers | `gemini-flash-latest` | no |
 
 ### Speech (Whisper)
@@ -128,8 +132,6 @@ directory). Prod: only what §2 lists.
 | `CHROMA_COLLECTION` | | `captions` | no |
 | `STORAGE_LOCAL_PATH` | storage root (uploads, exports, `audit.log`) | `/app/storage` | no |
 | `FONT_CACHE_DIR` | Google Fonts download cache | `/usr/share/fonts/truetype/vcm-cache` | no |
-| `STORAGE_BACKEND` | declared, **not read by any code** | `local` | no |
-| `MODEL_CACHE_DIR` | declared, **not read by any code** (`HF_HOME` decides) | `/root/.cache/huggingface` | no |
 
 ## 4. Set inside the images
 
@@ -137,7 +139,7 @@ directory). Prod: only what §2 lists.
 
 | Variable | Value | Why |
 |---|---|---|
-| `VCM_VERSION` | build arg `VERSION` (`dev` locally; the tag without `v` in CI) | identifies the build. Set **last** in the Dockerfile so it doesn't invalidate layers. No code reads it |
+| `VCM_VERSION` | build arg `VERSION` (`dev` locally; the tag without `v` in CI) | identifies the build; read by `config.py` and reported as the API version. Set **last** in the Dockerfile so it doesn't invalidate layers |
 | `VCM_VARIANT` | `cpu` or `cuda` | identifies the variant; no code reads it |
 | `HF_HOME` | `/root/.cache/huggingface` | the models volume |
 | `HF_HUB_DISABLE_XET` | `1` | plain HTTP downloads: visible progress, resumable |
@@ -165,7 +167,7 @@ directory). Prod: only what §2 lists.
 |---|---|---|
 | `POSTGRES_USER`, `POSTGRES_DB` | dev compose (`${…:-vcm}`) | dev database user and name. Prod hardcodes `vcm`/`vcm` |
 | `POSTGRES_PASSWORD` | both | dev default `vcm_dev_password`; prod required from `.env` |
-| `VCM_VARIANT` | dev compose | backend build arg, default **`cuda`** |
+| `VCM_VARIANT` | dev compose | backend build arg, default **`cpu`**. `cuda` (in the shell or the dev `.env`, with `-f docker-compose.gpu.yml`) builds the GPU image |
 | `WATCHFILES_FORCE_POLLING` | dev compose (backend) | `uvicorn --reload` on Windows bind mounts |
 | `WATCHPACK_POLLING` | dev compose (frontend) | Next dev file watching on Windows bind mounts |
 | `NVIDIA_DRIVER_CAPABILITIES` | `docker-compose.gpu.yml`, dev worker | `compute,utility,video`. **`video` is required for NVENC** |
@@ -181,21 +183,28 @@ directory). Prod: only what §2 lists.
 ## 7. `.env.example` (development template)
 
 `cp .env.example .env` creates the dev settings. It lists the database,
-Redis, Chroma, auth, Gemini, Whisper and storage variables above, all with
-placeholder or default values. It also lists **`S3_BUCKET`, `S3_REGION`,
-`S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, which no code reads.**
+Redis, Chroma, auth, Gemini model, Whisper, storage, `VCM_VARIANT` and upload
+variables above, with placeholder or default values:
 
-## Open questions
+- `JWT_SECRET_KEY` asks for **64 hex characters** (`openssl rand -hex 32`),
+  the installer's format;
+- **no `GEMINI_API_KEY`**: the key is pasted into Settings;
+- `MAX_UPLOAD_SIZE_MB=4096`;
+- `VCM_VARIANT=cpu`.
 
-1. **Unused variables.** `STORAGE_BACKEND`, `MODEL_CACHE_DIR` and the four
-   `S3_*` entries are declared but never read. Should they be removed from
-   `config.py` and `.env.example`, or is S3 storage planned?
-2. **`.env.example` suggests a different secret format.** It suggests
-   `secrets.token_urlsafe(64)` for `JWT_SECRET_KEY`, while the installer
-   generates 64 hex characters. Both work; should the docs recommend one?
-3. **The upload limit has two defaults:** 2048 MB in `config.py` and 4096 MB
-   in the production compose. The README and the Next proxy comment mention
-   2 GB. Which is the intended product limit?
-4. **`GEMINI_API_KEY` in an install's `.env` is silently ignored,** because
-   the production compose doesn't pass it through. Is that intended, with
-   Settings as the only supported way to set a key on an install?
+Removed in v1.0.5 because no code read them: `STORAGE_BACKEND`,
+`MODEL_CACHE_DIR`, and `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY`. A stale entry in an existing `.env` is ignored
+(`extra="ignore"`).
+
+## Decisions recorded
+
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| Unused `STORAGE_BACKEND`, `MODEL_CACHE_DIR`, `S3_*` | Removed in v1.0.5; no S3 storage is planned. |
+| JWT secret format | 64 hex characters, as the installer generates; `.env.example` matches. |
+| Upload limit | 4096 MB, as installs enforce; the code default and comments match since v1.0.5. |
+| `GEMINI_API_KEY` in an install's `.env` | Settings is the only way to set it on an install; removed from the template. |
