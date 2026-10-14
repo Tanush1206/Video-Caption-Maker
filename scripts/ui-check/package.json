@@ -1,0 +1,15 @@
+{
+  "name": "vcm-ui-check",
+  "private": true,
+  "description": "Screenshots, axe-core and UI flow checks against a running VideoCaptionMaker",
+  "scripts": {
+    "shoot": "node shoot.js",
+    "axe": "node axe.js",
+    "flow": "node flow.js",
+    "checks": "node checks.js"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "playwright": "1.63.0"
+  }
+}
