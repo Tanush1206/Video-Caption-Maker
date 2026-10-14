@@ -168,7 +168,9 @@
 
     --success: 163 94% 24%; /* #047857: emerald-700, 5.5:1 on white */
     --warning: 26 90% 37%; /* #b45309: used for small text, 5:1 on white */
-    --destructive: 347 77% 50%;
+    /* rose-700 (#be123c): 5.1-5.3:1 on its own 10% tint (badges) and 6.3:1 under
+       white text. rose-600 was 3.82:1 on the tint, which failed AA. */
+    --destructive: 345 83% 41%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 214 32% 91%;
