@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     vcm_version: str = "dev"
     environment: str = "development"
     cors_origins: str = "http://localhost:3000"
+    # Hosts whose X-Forwarded-For/-Proto are believed: the Next proxy, by its
+    # compose service name. Comma-separated names or IPs; see proxy_headers.py.
+    trusted_proxies: str = "frontend"
 
     # ── Database ─────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://vcm:vcm_dev_password@postgres:5432/vcm"
@@ -163,6 +166,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_proxies_list(self) -> list[str]:
+        return [host.strip() for host in self.trusted_proxies.split(",") if host.strip()]
 
     @property
     def is_local_mode(self) -> bool:

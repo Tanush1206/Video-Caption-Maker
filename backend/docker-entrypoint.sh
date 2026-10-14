@@ -22,8 +22,11 @@ fi
 case "$1" in
     api)
         alembic upgrade head
-        exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers \
-            --forwarded-allow-ips='*' --timeout-keep-alive 75
+        # --no-proxy-headers: forwarded headers are believed only from the
+        # frontend container, by app/proxy_headers.py. uvicorn can trust IPs
+        # but not a service name, and the frontend's IP isn't known up front.
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-proxy-headers \
+            --timeout-keep-alive 75
         ;;
     worker)
         # --pool=solo: one job at a time. Whisper holds gigabytes of RAM or

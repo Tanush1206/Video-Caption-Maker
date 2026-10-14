@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import request_guard
+from app.proxy_headers import TrustedProxyHeaders
 from app.api.router import api_router
 from app.config import get_settings
 
@@ -45,6 +46,10 @@ app.add_middleware(
 # Local mode has no login; this decides who may use the API anyway, and
 # records what changed. See app/request_guard.py.
 app.middleware("http")(request_guard.guard)
+
+# Added last, so it runs first: the guard and the audit log see the real
+# client address, taken from X-Forwarded-For only when the frontend sent it.
+app.add_middleware(TrustedProxyHeaders, proxies=settings.trusted_proxies_list)
 
 app.include_router(api_router)
 
