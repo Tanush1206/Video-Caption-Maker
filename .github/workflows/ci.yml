@@ -1,6 +1,5 @@
-# Fast checks on every push and pull request. The backend suite needs
-# Postgres, Redis, ChromaDB and FFmpeg; it runs in the dev compose stack
-# (see README → Development) rather than here.
+# Checks on every push and pull request: frontend lint/types/build, the
+# installer scripts, and the backend's lint and test suite.
 name: ci
 
 on:
@@ -40,3 +39,51 @@ jobs:
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml config -q
+
+  backend:
+    runs-on: ubuntu-latest
+    # The suite talks to real Postgres, Redis and ChromaDB, and renders with
+    # FFmpeg and the caption fonts, so it runs in the backend's own dev image
+    # against service containers rather than on the bare runner.
+    services:
+      postgres:
+        image: postgres:16.14-alpine
+        env:
+          POSTGRES_USER: vcm
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: vcm
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vcm" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7.4.10-alpine
+        ports: ["6379:6379"]
+      chromadb:
+        image: chromadb/chroma:1.0.0
+        ports: ["8000:8000"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the dev image (CPU)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          target: dev
+          load: true
+          tags: vcm-backend-dev:ci
+          build-args: VARIANT=cpu
+          # Reuses the release's layers when nothing below the app changed.
+          cache-from: type=registry,ref=ghcr.io/tanush1206/video-caption-maker-backend:buildcache-cpu
+      - name: Lint (ruff)
+        run: docker run --rm -v "$PWD/backend:/app" vcm-backend-dev:ci ruff check app tests alembic scripts
+      - name: Tests (pytest)
+        # conftest.py redirects to vcm_test, Redis db 14 and a temp dir;
+        # the URLs here only say where the services are.
+        run: |
+          docker run --rm --network host -v "$PWD/backend:/app" \
+            -e DATABASE_URL=postgresql+asyncpg://vcm:ci-only-password@localhost:5432/vcm \
+            -e REDIS_URL=redis://localhost:6379/0 \
+            -e CHROMADB_URL=http://localhost:8000 \
+            vcm-backend-dev:ci python -m pytest -q -p no:cacheprovider

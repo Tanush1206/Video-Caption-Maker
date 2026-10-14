@@ -7,7 +7,6 @@ import pytest
 
 from app.database import AsyncSessionLocal
 from app.models.caption import Caption
-from app.models.caption_style import Alignment, CaptionStyle, VerticalPosition
 from app.models.export import ExportStatus
 from app.services import subtitles
 from tests.conftest import a_style

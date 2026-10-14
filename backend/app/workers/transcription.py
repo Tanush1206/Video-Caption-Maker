@@ -14,7 +14,6 @@ and safe to run with task_acks_late.
 
 import asyncio
 import logging
-from pathlib import Path
 
 from sqlalchemy import delete, select
 

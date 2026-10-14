@@ -1,0 +1,18 @@
+# Lint config for `ruff check app tests alembic scripts` (run in CI).
+#
+# Its own file rather than [tool.ruff] in pyproject.toml: pyproject.toml is
+# copied into the image's dependency stage, so editing it would rebuild the
+# venv layer and turn the next update into a full re-download.
+target-version = "py311"
+line-length = 100
+extend-exclude = ["alembic/versions"]
+
+[lint]
+# Pyflakes and the error-level pycodestyle rules: real mistakes (unused or
+# undefined names, bad syntax), not style. Ruff's wider defaults would restyle
+# working code across the codebase, which no change has asked for.
+select = ["E4", "E7", "E9", "F"]
+
+[lint.per-file-ignores]
+# Settings are redirected before the app is imported; see conftest.py.
+"tests/conftest.py" = ["E402"]
