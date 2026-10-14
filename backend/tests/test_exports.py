@@ -738,3 +738,29 @@ def test_a_larger_caption_needs_less_upscaling():
     assert rendering.recommended_height(144, font_size=90, reference_height=1080) <= (
         rendering.recommended_height(144, font_size=48, reference_height=1080)
     )
+
+
+@pytest.mark.asyncio
+async def test_deleting_the_video_deletes_its_export_files(client, auth_headers, exportable):
+    """The rows cascade in Postgres; the files on disk must go with them."""
+    from app.models.export import Export
+    from app.services import storage
+
+    paths = []
+    for export_format in ("srt", "vtt"):
+        created = (
+            await client.post(
+                f"/api/videos/{exportable}/exports",
+                headers=auth_headers,
+                json={"format": export_format},
+            )
+        ).json()
+        async with AsyncSessionLocal() as session:
+            paths.append(storage.resolve((await session.get(Export, created["id"])).storage_path))
+    assert all(path.exists() for path in paths)
+
+    assert (
+        await client.delete(f"/api/videos/{exportable}", headers=auth_headers)
+    ).status_code == 204
+
+    assert not any(path.exists() for path in paths)

@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.caption import Caption
+from app.models.export import Export
 from app.models.video import Video, VideoStatus
 from app.services import storage
 
@@ -139,6 +140,18 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
     """
     video_id = video.id
     stored, thumbnail = video.storage_path, video.thumbnail_path
+    # Read before the delete: the export rows cascade away with the video in
+    # Postgres, but their files are on disk, where nothing cascades. Without
+    # this every rendered MP4 outlived its video for good.
+    export_files = list(
+        (
+            await db.execute(
+                select(Export.storage_path).where(
+                    Export.video_id == video_id, Export.storage_path.is_not(None)
+                )
+            )
+        ).scalars()
+    )
 
     await db.delete(video)
     await db.commit()
@@ -146,6 +159,8 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
     storage.delete(stored)
     storage.delete(thumbnail)
     storage.delete(storage.waveform_cache_path(stored))
+    for path in export_files:
+        storage.delete(path)
 
     # Caption rows go with the video via ON DELETE CASCADE, but ChromaDB is a
     # separate store with no foreign keys — its vectors must be removed here
