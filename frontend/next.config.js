@@ -16,7 +16,7 @@ const nextConfig = {
   compress: false,
   experimental: {
     // The default is 30 seconds, and the proxy below carries uploads of up to
-    // 2 GB plus the server's probing afterwards. A slow disk would cut the
+    // 4 GB plus the server's probing afterwards. A slow disk would cut the
     // response off and the upload would appear to fail after succeeding.
     proxyTimeout: 30 * 60 * 1000,
   },

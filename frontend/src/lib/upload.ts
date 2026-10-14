@@ -3,7 +3,7 @@
  *
  * Uses XMLHttpRequest rather than fetch, which still cannot report *upload*
  * progress — fetch's streaming support covers responses, not request bodies.
- * For a 2GB video, a progress bar isn't a nicety, so XHR it is.
+ * For a 4 GB video, a progress bar isn't a nicety, so XHR it is.
  */
 
 import { refreshSession } from "@/lib/api";
