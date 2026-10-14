@@ -151,7 +151,9 @@ class Settings(BaseSettings):
     # ── Storage ──────────────────────────────────────────
     # Local disk only. There is no other storage backend, and none is planned.
     storage_local_path: str = "/app/storage"
-    max_upload_size_mb: int = 2048
+    # 4 GB, the limit installs enforce (docker-compose.prod.yml passes the same
+    # default). Counted while streaming; see api/videos.py.
+    max_upload_size_mb: int = 4096
 
     # Where Google Fonts downloaded on demand are kept. A shared volume rather
     # than a per-container directory: the backend writes it, the worker reads

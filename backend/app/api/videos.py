@@ -106,7 +106,7 @@ async def _stream_to_disk(upload: UploadFile, destination: Path) -> int:
 
     The cap cannot be trusted to Content-Length: it is client-supplied and a
     malicious client can understate it. Counting real bytes and aborting mid
-    stream is the only enforcement that holds. Chunking also keeps a 2 GB file
+    stream is the only enforcement that holds. Chunking also keeps a 4 GB file
     from being buffered in memory.
     """
     total = 0

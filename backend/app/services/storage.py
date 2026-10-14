@@ -30,7 +30,7 @@ ALLOWED_CONTENT_TYPES = {
     "video/x-m4v",
 }
 
-# Read/write in 1 MiB chunks so a 2 GB upload never sits in memory.
+# Read/write in 1 MiB chunks so a 4 GB upload never sits in memory.
 CHUNK_SIZE = 1024 * 1024
 
 
