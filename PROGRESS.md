@@ -502,10 +502,39 @@ through a 127.0.0.1:8001 relay container (`vcm-redesign-relay`).
   frontend/public changed, so the v1.0.4 backend image should be
   layer-identical and the update should download only frontend layers.
 
+### v1.0.4 released and measured (2026-10-14)
+- Tag v1.0.4 on 2e84748; CI run 38266875126 green; release run
+  38267107963 green in 2 min (registry cache hit: backend jobs 27 s and
+  1 m 48 s vs 5 and 10 min for 1.0.3). 8 assets match SHA256SUMS.
+- Docker Desktop had been quit (no reboot); on start, the Windows install
+  came back healthy by itself; `vcm-clean` exited 255 once and started on
+  the next `docker start`.
+- `vcm update` 1.0.3 → 1.0.4 from the real release:
+
+| Install | Image | Layers downloaded | Bytes (manifest) | NIC received | Time |
+|---|---|---|---|---|---|
+| Windows | backend 1.0.4-cuda | 0 / 14 | 0 of 2291.2 MB | 89.6 MB* | 23 s |
+| Windows | frontend 1.0.4 | 3 / 9 (#7-#9) | 6.1 of 54.4 MB | (incl.) | |
+| Clean | backend 1.0.4-cpu | 0 / 14 | 0 of 810.1 MB | 9.6 MB | 20 s |
+| Clean | frontend 1.0.4 | 3 / 9 (#7-#9) | 6.1 of 54.4 MB | (incl.) | |
+
+  \*the Windows adapter counts everything the PC received in those 23 s;
+  the isolated clean machine's 9.6 MB is the update alone (layers, scripts,
+  manifests, TLS). vs 1.0.3: 2245.7 MB / 764.6 MB of backend downloaded.
+- Every backend layer digest (cuda and cpu, all 14) is identical to the
+  1.0.3 baseline; only the image config changed (version label/env), as
+  the layer-order fix intended. Frontend: base layers 1-6 identical; new
+  #7 `d2123e280126` 4.5 MB, #8 `b26ca41c2544` 0.5 MB, #9 `72ee9e46f9ee`
+  1.1 MB. Pull logs agree: only those three "Pull complete".
+- After: VCM_VERSION=1.0.4 and alembic head on both; video lists identical
+  to before (Windows 31, clean 26); Windows guard 403/404/403 live; axe 0.
+- New UI through the guard on the clean install, Chromium in its network,
+  at localhost:3001 and 127.0.0.1:3001: delete (204), speech model change
+  and back (200, 200), SRT and burned MP4 exported through the dialog and
+  downloaded, 0 refused. 14/14 PASS.
+
 ## Next
-Push, CI, tag v1.0.4; update both installs; measure with
-scripts/update_layers.py against the v1.0.3 baseline above; UI checks on
-both installs; DELETE uninstall (clean machine); final DoD; R10.
+DELETE uninstall (clean machine) leaves nothing; final DoD; R10.
 
 ## v1.0.4: UI redesign (do NOT start until Tanush says so; only after
 ## v1.0.3 is released and verified)
