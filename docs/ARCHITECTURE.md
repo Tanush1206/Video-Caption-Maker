@@ -1,6 +1,6 @@
 # Architecture
 
-How VideoCaptionMaker is built, as of v1.0.4. Every statement points at the
+How VideoCaptionMaker is built, as of v1.0.5 (on `main`, not yet tagged). Every statement points at the
 file it comes from. Auth and the request guard are in
 [SECURITY.md](SECURITY.md); tables are in [DATABASE.md](DATABASE.md); endpoints
 are in [API.md](API.md).
@@ -59,6 +59,17 @@ flowchart LR
   - exports every 1.5 s while one is rendering (`use-exports.ts`);
   - transcription alerts every 3 s (`use-transcription-alerts.ts`).
 
+  Polling stays: progress changes a few times a minute ([DECISIONS.md](DECISIONS.md) D10).
+- **Forwarded headers are believed only from the frontend.** uvicorn runs with
+  `--no-proxy-headers` (`backend/docker-entrypoint.sh`). The
+  `TrustedProxyHeaders` middleware (`backend/app/proxy_headers.py`, the
+  outermost layer in `main.py`) applies `X-Forwarded-For`/`-Proto` only when
+  the peer is an address that `TRUSTED_PROXIES` (default `frontend`)
+  resolves to. It re-resolves at most every 5 s, because a recreated frontend
+  container gets a new IP and Docker can hand the old one to another
+  container. The request guard then sees the real client address for
+  `audit.log`.
+
   Polling was chosen over SSE or websockets (see [DECISIONS.md](DECISIONS.md)).
 - Only the worker sees the GPU. At `worker_ready` it writes a hardware report
   to `app_settings.worker_hardware`; the API reads that rather than probing its
@@ -87,6 +98,7 @@ flowchart LR
 │   │   ├── database.py          async engine + Base + get_db
 │   │   ├── dependencies.py      CurrentUser / DbSession (local mode → the one user)
 │   │   ├── request_guard.py     local-mode host/origin guard + audit.log
+│   │   ├── proxy_headers.py     X-Forwarded-* believed only from the frontend
 │   │   ├── api/                 routers, one per resource; thin, call services
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── models/              SQLAlchemy ORM models (one table per file)
@@ -101,7 +113,7 @@ flowchart LR
 │   ├── Dockerfile               targets: deps → runtime → dev; VARIANT=cpu|cuda
 │   ├── Dockerfile.dockerignore  allow-list for the root build context
 │   ├── docker-entrypoint.sh     api | worker | exec
-│   ├── pyproject.toml, constraints.txt, pytest.ini, alembic.ini
+│   ├── pyproject.toml, constraints.txt, pytest.ini, alembic.ini, ruff.toml
 ├── frontend/
 │   ├── src/app/                 App Router: (dashboard)/{dashboard,editor/[id],search,search/[id],settings},
 │   │                            (auth)/{login,register} (accounts mode only), healthz/
@@ -115,7 +127,7 @@ flowchart LR
 │   ├── public/fonts/            caption fonts (also copied into the backend image)
 │   ├── tailwind.config.ts, next.config.js, Dockerfile
 ├── install/                     install.sh, install.ps1, vcm, vcm.ps1, vcm.cmd
-├── scripts/                     e2e.py, update_layers.py
+├── scripts/                     e2e.py, update_layers.py, ui-check/ (Playwright + axe)
 ├── docker-compose.yml           dev stack (bind mounts, hot reload)
 ├── docker-compose.prod.yml      installed app (project `vcm`)
 ├── docker-compose.gpu.yml       NVIDIA override for either
@@ -194,8 +206,14 @@ logged and never surfaced to the user.
   4. write the progress from FFmpeg's `out_time_us`.
 - The output goes to `user_N/exports/<uuid>.<fmt>`. A retry writes a new
   file, never resuming a partial one.
-- Render timeout: 3 h (`RENDER_TIMEOUT_SECONDS`). The Celery task limits are
-  30 min soft / 35 min hard (`celery_app.py`); see Open questions.
+- Render timeout: 3 h (`RENDER_TIMEOUT_SECONDS`), enforced by the FFmpeg
+  subprocess itself.
+- **No Celery time limits** (`task_soft_time_limit`/`task_time_limit` are
+  `None` in `celery_app.py`). Until v1.0.5 they were 30/35 min, which would
+  have killed long CPU transcriptions and multi-hour renders, except that
+  `--pool=solo` never enforces Celery limits. (Measured: a 6 s task under a
+  3 s hard limit ran to completion.) A job is bounded by the timeouts of the
+  steps that can hang, listed in §8. `tests/test_worker_config.py` pins this.
 
 ## 5. Hardware detection and model choice
 
@@ -319,7 +337,7 @@ Other retry limits in the code:
 |---|---|
 | Gemini translation batch | 3 attempts, backoff 2 s, 4 s |
 | Gemini answer | 60 s timeout, no retry |
-| Celery task | soft 30 min, hard 35 min |
+| Celery task | none (solo pool enforces none; see §4.3) |
 | FFmpeg render | 3 h timeout |
 | Probe / thumbnail / waveform | 30 s / 60 s / 300 s |
 | Install health wait | 120 × 3 s |
@@ -331,9 +349,9 @@ Other retry limits in the code:
 | | `docker-compose.yml` (dev) | `docker-compose.prod.yml` (installed) |
 |---|---|---|
 | Project name | directory name (`videocaptionmaker`) | `vcm` (so `--remove-orphans` can never touch dev) |
-| Images | built locally, `target: dev`; backend `VARIANT` defaults to **cuda** | pulled from GHCR, `VCM_VERSION`-`VCM_VARIANT` |
+| Images | built locally, `target: dev`; backend `VARIANT` defaults to **cpu**, `VCM_VARIANT=cuda` for the GPU | pulled from GHCR, `VCM_VERSION`-`VCM_VARIANT` (`cpu` unless the installer found a GPU) |
 | Source | bind-mounted (`./backend:/app`, `./frontend:/app`) | baked into the image |
-| Backend command | `uvicorn --reload` (no automatic migration) | entrypoint `api`: `alembic upgrade head` then uvicorn |
+| Backend command | `uvicorn --reload`; **migrations are run by hand**: `docker compose exec backend alembic upgrade head` | entrypoint `api`: `alembic upgrade head`, then uvicorn `--no-proxy-headers` |
 | Worker command | `watchfiles … celery … --pool=solo` (restarts on code change) | entrypoint `worker` |
 | Frontend | `npm run dev`, `NEXT_PUBLIC_API_URL=http://localhost:8000` | standalone `node server.js`, same-origin `/api` proxy |
 | Ports on 127.0.0.1 | 3000, 8000, 5432, 6379, 8100 | `${VCM_PORT:-3000}` only |
@@ -346,6 +364,12 @@ Other retry limits in the code:
 
 **Both stacks default to port 3000.** Only one can hold it: run `vcm stop`
 before `docker compose up` (PROGRESS.md).
+
+**The CPU image is the default in both stacks, and the GPU is an override.**
+For a GPU dev stack:
+`VCM_VARIANT=cuda docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build`
+(or `VCM_VARIANT=cuda` in the dev `.env`). CI checks the default with
+`docker compose config`.
 
 `docker-compose.gpu.yml` can be layered over either file. It reserves one
 NVIDIA GPU for the worker and sets
@@ -386,6 +410,8 @@ NVENC.
 | Google font fetch fails | 502 for that font file | `api/fonts.py` |
 | Source file missing | Stream/waveform 404; worker "The uploaded file is missing…"; render fails | various |
 | Request from a non-local host or another origin (local mode) | 403 + `audit.log` line | `request_guard.py` |
+| A caller other than the frontend sends `X-Forwarded-For` | Ignored; its own address is recorded | `proxy_headers.py` |
+| A video is deleted | Row, source, thumbnail, waveform, vectors **and export files** removed | `services/video.delete_video` |
 | Downloaded install file altered | Install or update aborts; nothing replaced | `install.sh`, `vcm`, `.ps1` |
 
 ## 11. Dependency rules
@@ -431,20 +457,14 @@ These are the rules the code follows today. Keep them:
    - Change a pin only after verifying it on the hardware listed in
      PROGRESS.md ("Pinned GPU stack").
 
-## Open questions
+## Decisions recorded
 
-1. **Celery's time limits may stop long renders and transcriptions.**
-   `task_soft_time_limit` is 30 min and `task_time_limit` is 35 min, while
-   `RENDER_TIMEOUT_SECONDS` is 3 h, and a 2 GB upload on a CPU can transcribe
-   for longer than 35 min. Is a hard kill at 35 min intended? It would leave
-   the row `processing` until the next worker start.
-2. **The dev compose defaults the backend `VARIANT` to `cuda`**
-   (`${VCM_VARIANT:-cuda}`), while the README says plain `docker compose up`
-   is the CPU path. Should the dev default be `cpu`?
-3. **Dev migrations.** The dev backend runs `uvicorn --reload`, not the
-   entrypoint, so migrations are not applied automatically. The README tells
-   you to run `alembic upgrade head` by hand. Confirm this is intended.
-4. **Deleting a video leaves its export files.**
-   `services/video.delete_video` removes the source, thumbnail, waveform and
-   vectors. The `exports` rows cascade in Postgres, but the files under
-   `user_N/exports/` are not deleted. Bug or intended?
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| Celery's 35 min hard limit vs long jobs | Fixed in v1.0.5: no Celery limit (§4.3). |
+| Dev compose defaulted to the CUDA build | Fixed in v1.0.5: CPU by default, GPU as an override (§9). |
+| Dev migrations are manual | Acceptable; the command is in §9 and [TESTING.md](TESTING.md). |
+| Deleting a video left its export files | Fixed in v1.0.5. |
