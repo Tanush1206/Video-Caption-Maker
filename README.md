@@ -199,6 +199,26 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). History:
   [docs/roadmap.md](docs/roadmap.md).
 
+## Documentation
+
+`docs/` describes the code as it is and is the source of truth for changes.
+
+| Document | What it covers |
+|---|---|
+| [docs/PRD.md](docs/PRD.md) | Product overview, users, core flow, features with acceptance criteria, supported languages, formats, models and hardware tiers, non-goals, known limitations, definition of done |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Services and how they communicate, project structure, the job pipeline, hardware detection, translation fallback, startup recovery, dev vs production compose, failure scenarios, dependency rules |
+| [docs/DATABASE.md](docs/DATABASE.md) | Tables, indexes and relationships, Postgres vs ChromaDB vs the media volume, migration history and rules, backup and restore |
+| [docs/API.md](docs/API.md) | Every endpoint, request, response and error, from the app's OpenAPI spec |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, the request guard, `audit.log`, secrets, network use, upload validation, installer checksums, reporting a vulnerability |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Every environment variable: purpose, default, who sets it, whether it is secret |
+| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Colour tokens, typography, spacing, components and states, breakpoints, accessibility rules |
+| [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | Python and TypeScript conventions, error handling, logging, lint commands, commit format |
+| [docs/TESTING.md](docs/TESTING.md) | Test layout and commands, `e2e.py`, `update_layers.py`, CPU/GPU tiers, clean-machine tests, release checklist |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Key decisions with context, alternatives and trade-offs |
+| [CHANGELOG.md](CHANGELOG.md) | Changes in each release, v1.0.0–v1.0.4 |
+| [AGENTS.md](AGENTS.md) | Rules for anyone (or any agent) changing the code |
+| [docs/roadmap.md](docs/roadmap.md) | The original 10-milestone plan (historical) |
+
 ## Licences of the models
 
 | Model | Licence |
