@@ -196,7 +196,7 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 - `AUTH_MODE=accounts` (backend) with `NEXT_PUBLIC_AUTH_MODE=accounts`
   (frontend build) turns registration, login and Google sign-in back on for
   a hosted deployment.
-- Architecture: [docs/architecture.md](docs/architecture.md). History:
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). History:
   [docs/roadmap.md](docs/roadmap.md).
 
 ## Licences of the models
