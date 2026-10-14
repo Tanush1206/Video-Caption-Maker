@@ -1,0 +1,419 @@
+# Product requirements: VideoCaptionMaker
+
+Status: describes the shipped product as of **v1.0.4** (tag on `2e84748`).
+Everything here is taken from the code, the config, the tests and
+[PROGRESS.md](../PROGRESS.md). Anything the code does not settle is listed
+under [Open questions](#open-questions).
+
+## 1. Product overview
+
+VideoCaptionMaker makes captions for a video **on the user's own computer**.
+The user uploads a video and picks a caption language. The app then
+transcribes the speech locally (Whisper, via faster-whisper), translates it
+locally if needed (M2M100, via CTranslate2), and exports the result as a video
+with the captions burned in (MP4) or as subtitle files (SRT, VTT, JSON).
+
+It installs with one command (Docker Compose under the hood), runs as a
+single-user app with **no login**, and serves its UI only on `127.0.0.1`.
+Gemini is optional. With a key pasted into Settings it translates captions and
+writes answers to search questions. Without one, everything runs offline once
+the models are downloaded.
+
+## 2. Problem
+
+From the README and the decisions in PROGRESS.md:
+
+- Captioning tools usually send the video to a cloud service, need an account
+  and charge per minute. Here the video never leaves the machine and there is
+  no account.
+- The person installing it may have a gaming PC with an NVIDIA GPU, or a
+  laptop with 8 GB of RAM and no GPU. The app has to pick models that fit the
+  machine it finds (`backend/app/services/hardware.py`).
+- Installing a multi-service ML stack by hand is not realistic for an end
+  user. Everything has to come from one command, with no `.env` to edit.
+
+## 3. Target users
+
+What the shipped product implies (see Open questions):
+
+- **A single person on their own computer**: Windows 10/11 with WSL 2, Linux,
+  or (untested) macOS, with Docker installed. Local mode has exactly one user
+  (`get_or_create_local_user`, `backend/app/services/auth.py`).
+- **People who need captions in English, Hindi, French, German or Dutch**: the
+  five caption languages in `backend/app/services/languages.py`.
+- **Non-developers**: the README's install, use and troubleshooting sections
+  assume no programming knowledge, and error messages are written as sentences
+  (`friendly_error` in `backend/app/workers/transcription.py`).
+
+A hosted multi-user mode (`AUTH_MODE=accounts`) still exists in the code but
+is not what ships (see Non-goals).
+
+## 4. User stories
+
+| # | As a user, I want to… | So that… | Implemented by |
+|---|---|---|---|
+| US1 | install the app with one command | I don't have to set up Python, models or databases | `install/install.sh`, `install/install.ps1` |
+| US2 | drop a video and choose the caption language before it uploads | the one transcription produces the captions I asked for | `video-upload.tsx`, `language-step.tsx`, `POST /api/videos` (`caption_language`) |
+| US3 | see what the app is doing while it works (download, extract, transcribe, translate, index) | a long job doesn't look like a hang | `videos.stage`, `stage_detail`, `progress`; `lib/stages.ts` |
+| US4 | download the video with captions burned in, or SRT/VTT | I can publish it or load the subtitles in a player | `POST /api/videos/{id}/exports`, Export dialog |
+| US5 | fix a wrong word, retime a caption on the waveform, split or merge lines | the captions match what was said | `PATCH /api/captions/{id}`, `/split`, `/merge-next`, timeline |
+| US6 | style the captions (font, size, colours, outline, box, position) and see the result before exporting | the burn-in looks the way the preview showed | `caption_styles` table, style studio, ASS renderer |
+| US7 | find the moment in my videos where something was said, by meaning | I don't need the exact words | `GET /api/search` |
+| US8 | change the speech model, or paste a Gemini key, in Settings | I don't have to edit config files | `PATCH /api/system/settings` |
+| US9 | update to a new version without losing my videos | updates are safe | `vcm update` (migrations run on start) |
+| US10 | uninstall, choosing whether my videos are deleted | nothing is deleted by surprise | `vcm uninstall` (asks for `DELETE`) |
+
+## 5. Core flow
+
+```
+Install ──► Upload ──► Language ──► (processing) ──► Edit (optional) ──► Export
+```
+
+1. **Install.** `curl … install.sh | bash` (macOS/Linux) or
+   `irm … install.ps1 | iex` (Windows). The installer:
+   - checks Docker, the GPU and free disk space;
+   - verifies the downloaded files against `SHA256SUMS`;
+   - generates secrets;
+   - pulls the images and starts the stack;
+   - waits for `/api/health`, then opens `http://localhost:<VCM_PORT>`.
+2. **Upload** (stepper step 1): drag a file onto the drop zone or pick one.
+   The client accepts `.mp4 .mov .mkv .webm .avi .m4v`.
+3. **Language** (step 2, before anything is sent): "Same as spoken" (the
+   default) or one of English, Hindi, French, German, Dutch. The spoken
+   language is always auto-detected on upload. The file is then uploaded with
+   `caption_language`, and the browser goes to `/editor/{id}`.
+4. **Processing** (on the video page): the worker runs
+   download model → extract audio → transcribe → translate (if needed) → embed.
+   Each stage shows its progress, and an ETA appears once the observed rate
+   allows one (`useEta`).
+5. **Edit** (optional): caption text, timing on the waveform timeline,
+   split/merge/add/delete, the style studio, and a Redo with another
+   spoken/caption language.
+6. **Export** (step 3): MP4 (burned in, at a chosen resolution), SRT, VTT or
+   JSON, then a download with an optional file name.
+
+## 6. Features, acceptance criteria and edge cases
+
+### F1. One-command install and the `vcm` command
+
+**Acceptance criteria**
+- Running the README one-liner on a machine with Docker running installs and
+  starts the app, and opens it. Verified from the published release on a clean
+  Linux machine (CPU) and on Windows (GPU) (PROGRESS.md, R6/M13).
+- Every downloaded script and compose file must match the release's
+  `SHA256SUMS` before anything is replaced; otherwise nothing is installed.
+- Running the installer again keeps existing data and secrets.
+- `vcm start | stop | restart | status | logs [svc] | update | open | uninstall`
+  work as described in `install/vcm` and `install/vcm.ps1`.
+
+**Edge cases (handled in the installers)**
+- Docker missing, not running, or (Linux) permission denied: a specific
+  message with the fix.
+- An NVIDIA driver is present but Docker can't pass the GPU through: a
+  warning, then the CPU variant.
+- Not enough disk (8 GB for CPU, 12 GB for GPU): the installer stops.
+- Port 3000 taken by something else: it tries 3001–3005, 3080 and 8080 in
+  turn and says which port it chose. `VCM_PORT` overrides this.
+- A file doesn't match `SHA256SUMS`: `*.tmp` files are removed and nothing is
+  installed.
+
+### F2. Upload
+
+**Acceptance criteria**
+- `POST /api/videos` (multipart: `file`, optional `caption_language`) returns
+  `201` with the video, then queues transcription.
+- Both the content type and the extension must be on the allow-lists in
+  `backend/app/services/storage.py`.
+- The stored filename is a UUID, and the user's filename is kept only as a
+  label (`build_storage_path`).
+- Duration and a thumbnail are probed with FFmpeg. If probing fails, the
+  upload is kept without that metadata.
+
+**Edge cases**
+| Case | Result |
+|---|---|
+| Unknown `caption_language` | 422 `Unsupported caption language: …` |
+| Content type or extension not allowed | 415 |
+| Empty file | 400 `Uploaded file is empty` |
+| Over `MAX_UPLOAD_SIZE_MB` (counted while streaming, not from `Content-Length`) | 413, partial file deleted |
+| Disk full while writing | 507 `The disk is full…`, partial file deleted |
+| Queue unreachable after upload | Upload still succeeds; the user retries from the UI |
+
+### F3. Transcription and translation
+
+**Acceptance criteria**
+- The Whisper model is chosen by hardware tier unless overridden (see
+  [§7](#7-supported-languages-formats-models-and-hardware-tiers)).
+- English captions for non-English audio come from Whisper's own `translate`
+  task in the same pass.
+- Other targets are transcribed first, then translated by Gemini if a key is
+  set, and by local M2M100 otherwise.
+- Caption timings are never changed by translation.
+- Whisper and the translator are never in memory together.
+- Long Whisper segments are split into captions of at most 84 characters or
+  6 seconds (`_split_long`).
+- Verified end to end on GPU (5 spoken languages × 6 targets = 30 jobs) and on
+  CPU (3 × 6 = 18 jobs), each exporting SRT/VTT/MP4 (PROGRESS.md, M12, R3,
+  v1.0.3 E2E).
+
+**Edge cases**
+| Case | Result |
+|---|---|
+| Gemini fails (no network, quota, bad key) | Local M2M100 is used; notice "Gemini couldn't be used, so the captions were translated on this computer instead." |
+| Neither engine can translate | Captions stay in the spoken language, with a notice; the job does **not** fail |
+| GPU fails to load the model | Runs on CPU int8; notice "The GPU couldn't be used, so this ran on the CPU." |
+| No segment passes Whisper's no-speech check | Retried without it; if that yields captions, a low-confidence notice is shown |
+| Out of memory | Failed: "Ran out of memory while transcribing. Choose a smaller speech model in Settings…" |
+| Disk full / no audio track / unreadable file / missing source | A specific sentence each (`friendly_error`) |
+| Model download blocked by TLS interception | "…put its root certificate (.crt) in the certs folder… run 'vcm restart'" |
+| Worker restarted mid-job | Requeued on start, up to 3 times, then failed with the smaller-model advice (§8 of [ARCHITECTURE.md](ARCHITECTURE.md)) |
+| Retranscribe while processing | 409 |
+
+### F4. Caption editing
+
+**Acceptance criteria**
+- Captions can be edited (text, timing, per-caption colour, bold and scale
+  overrides), split at a time and text offset, merged with the next one,
+  added by hand, and deleted.
+- `start_ms < end_ms` is enforced (422 otherwise).
+- Every text change, add, split, merge and delete queues a re-embed of the
+  video, so search matches the current text.
+- Low-confidence lines are flagged in the editor ("Check this line"), based on
+  `captions.confidence`.
+
+### F5. Caption styling
+
+**Acceptance criteria**
+- One style per video. Every field must be expressible both in CSS (the
+  preview) and in ASS (the burn-in); see the docstring of `CaptionStyle` in
+  `backend/app/models/caption_style.py`.
+- Built-in fonts: Sans, Serif, Mono, DejaVu, Poppins (default), Lato,
+  Barlow Condensed, Anton, Bebas Neue. Presets: `youtube`, `tiktok`,
+  `minimal`. The Google Fonts library can also be searched, and a family is
+  downloaded the first time it is used.
+- Sizes are stored against a 1080p reference and scaled to the output.
+
+### F6. Export
+
+**Acceptance criteria**
+- SRT, VTT and JSON are written immediately and come back `completed`.
+- MP4 is queued to the worker. The client polls every 1.5 s while a render
+  runs.
+- MP4 can be rendered at 360/480/720/1080/1440/2160 p plus the source height.
+  The default resolution is the smallest one at which captions are at least
+  24 px tall (`recommended_height`), and it is never below the source height.
+- Encoding uses NVENC when it is available, and x264 (CRF 18) otherwise.
+- A download needs a short-lived token (15 min) bound to one export.
+- Sidecars are named exactly after the video (`movie.srt`). A burn gets
+  `-captions.mp4`. A name the user types replaces both.
+
+**Edge cases**: export with no captions → 409. Download of an export that
+isn't finished → 409. Render queue unreachable → 503, and the export row is
+removed.
+
+### F7. Semantic search
+
+**Acceptance criteria**
+- `GET /api/search?q=` searches all of the user's videos, or one video with
+  `video_id`.
+- Results carry timestamps, and clicking one jumps there.
+- Hits with a cosine distance over 0.75 are dropped (`MAX_DISTANCE`).
+- **Retrieval-only by default.** `POST /api/ask` writes an answer only when a
+  Gemini key is set. Without one it returns the passages and
+  "Add a Gemini API key in Settings to get written answers…".
+- A question the video doesn't answer must return
+  "I couldn't find an answer to that in this video." rather than an invention
+  (`backend/app/services/rag.py`).
+
+### F8. Settings
+
+**Acceptance criteria**
+- Shows the hardware the worker detected, the speech model in use and its
+  source (`user`/`env`/`auto`), the translation engine, the disk and the
+  theme.
+- The speech model can be `auto`, `small`, `medium`, `large-v3-turbo` or
+  `large-v3`. Anything else is rejected with 422.
+- The Gemini key can be set or cleared. It is stored server-side, and **it is
+  never returned**: only `gemini_configured` and `gemini_source` are.
+- Install settings can only be changed in local mode (403 in accounts mode).
+
+### F9. Update and uninstall
+
+**Acceptance criteria**
+- `vcm update` verifies `SHA256SUMS`, pulls the images, recreates the
+  containers and runs `alembic upgrade head` on API start. Videos, captions
+  and the database are kept (verified in R5 and on every release since).
+- The update downloads only the image layers that changed: 1.0.3 → 1.0.4
+  downloaded 0 of 14 backend layers and 3 of 9 frontend layers, 6.1 MB
+  (PROGRESS.md).
+- `vcm uninstall` asks first. Typing `DELETE` removes the containers, volumes,
+  app images, install folder and `vcm` command. Anything else keeps the
+  `vcm_*` volumes and the install folder, which holds the password the kept
+  data needs.
+- Uninstall only removes images named `/video-caption-maker-`. The shared
+  postgres, redis and chroma images are never removed.
+
+## 7. Supported languages, formats, models and hardware tiers
+
+### Languages (`backend/app/services/languages.py`)
+
+| Code | Caption target | Notes |
+|---|---|---|
+| `same` | yes (default) | Captions in whatever language Whisper detected. **Any** language Whisper recognises. |
+| `en` | yes | From non-English audio: Whisper `task="translate"` in the same pass |
+| `hi`, `fr`, `de`, `nl` | yes | Transcribe, then translate (Gemini or M2M100) |
+| `auto` | spoken-language value | Default for `spoken_language`; Whisper detects from the first 30 s |
+
+### Input formats
+`.mp4 .mov .mkv .webm .avi .m4v`, with content types `video/mp4`,
+`video/quicktime`, `video/x-matroska`, `video/webm`, `video/x-msvideo` and
+`video/x-m4v`. Upload limit: `MAX_UPLOAD_SIZE_MB`. The production compose
+default is 4096; the code default is 2048.
+
+### Output formats
+| Format | How | Media type |
+|---|---|---|
+| SRT | instant | `application/x-subrip` |
+| VTT | instant | `text/vtt` |
+| JSON | instant (milliseconds as integers, emphasis included) | `application/json` |
+| MP4 | worker render, H.264 (NVENC or x264), audio kept | `video/mp4` |
+
+### Models
+| Model | Use | Licence | Download |
+|---|---|---|---|
+| Whisper `small` / `medium` / `large-v3-turbo` / `large-v3` (faster-whisper, CTranslate2) | speech | MIT | 484 / 1530 / 1620 / 3090 MB (`WHISPER_SIZES_MB`) |
+| M2M100 1.2B / 418M (`jncraton/*-ct2-int8`, pinned commits) | translation | MIT | 1260 / 500 MB |
+| `sentence-transformers/all-MiniLM-L6-v2` | search embeddings | Apache-2.0 | ~90 MB (README) |
+| Gemini (`gemini-flash-latest`) | optional translation and answers | Google API terms | none (remote) |
+
+### Hardware tiers (`backend/app/services/hardware.py`)
+| Machine | Whisper | Compute | Translator |
+|---|---|---|---|
+| NVIDIA GPU with ≥ 6 GB VRAM (or unknown VRAM) | `large-v3` | float16 | M2M100 by RAM, on the GPU (int8_float16) |
+| GPU with < 6 GB VRAM | `small` | int8_float16 | M2M100 by RAM |
+| CPU, ≥ 12 GB RAM | `large-v3-turbo` | int8 | `m2m100_1.2B` (int8) |
+| CPU, < 12 GB RAM | `small` | int8 | `m2m100_418M` (int8) |
+
+RAM is the smaller of the machine's memory and the container's cgroup
+limit. The precedence is Settings, then `WHISPER_MODEL_SIZE`, then the tier.
+macOS always runs on the CPU.
+
+## 8. Non-goals
+
+What the code deliberately does not do:
+
+- **No login, accounts or multi-user use in the shipped build.** The code for
+  accounts mode (registration, JWT, Google sign-in, password change, delete
+  account) is kept for a hosted build (`AUTH_MODE=accounts` plus
+  `NEXT_PUBLIC_AUTH_MODE=accounts`). It isn't shipped or offered.
+- **No LLM rewriting of transcripts.** Captions stay what Whisper heard. Gemini
+  only translates (when asked) and answers questions (docs/roadmap.md, "Where
+  Gemini fits").
+- **No network exposure.** Only the UI port is published, and only on
+  `127.0.0.1` (`docker-compose.prod.yml`).
+- **No caption languages beyond the five targets.** "Same as spoken" is the
+  only route to other languages.
+- **No term highlighting in search.** Semantic matches have no matched words
+  (PROGRESS.md, v1.0.4).
+- **No features without data behind them.** The v1.0.4 redesign left out the
+  design's app-version chip, live transcript, cancel button, memory figures,
+  cache clearing, "System" theme and inference-speed tiles, because no API
+  supplies them (PROGRESS.md, v1.0.4 redesign log).
+- **No re-encoding of the source.** The upload is stored and streamed byte for
+  byte. Only the MP4 export is an encode.
+
+## 9. Constraints
+
+- **Must run** on a CPU-only machine with 8 GB of RAM, and on Windows (WSL 2),
+  Linux and macOS via Docker.
+- **Must never** keep Whisper and the translator in memory together.
+- **Must not** need the internet for the core flow once the models are
+  downloaded. Gemini, Google Fonts on demand, model downloads and image pulls
+  are the only network uses (see [SECURITY.md](SECURITY.md)).
+- **Must** keep `.env`, `certs/`, storage and dumps out of every image, commit
+  and release (allow-list `backend/Dockerfile.dockerignore`, `.gitignore`).
+- **Must** use permissively licensed models (MIT/Apache-2.0); see
+  [DECISIONS.md](DECISIONS.md).
+- **One worker, one job at a time** (`--pool=solo`).
+- **Images:** amd64 only (built on `ubuntu-latest`); Apple Silicon runs them
+  under emulation (README).
+
+## 10. Known limitations
+
+From the README "Known limitations" and PROGRESS.md:
+
+- **macOS is untested.** The installer and images are meant to work with
+  Docker Desktop for Mac, but no one has run them there. On a Mac everything
+  runs on the CPU, and Apple Silicon runs the amd64 images under emulation,
+  which is slow.
+- **The small speech model is weak on fast non-English speech, especially
+  Hindi.** `small` is chosen automatically on machines under 12 GB of RAM (or
+  GPUs under 6 GB). On a low-RAM Hindi test it first produced no captions at
+  all. Since `b8c446a` it retries and produces rough captions, with the
+  low-confidence notice on 4 of 6 jobs (PROGRESS.md, R4). A larger model in
+  Settings is much better if the machine has the memory.
+- **Local translation is literal.** M2M100 translates each caption line on its
+  own, so idioms and fragments read more literally than with Gemini, which
+  sees 25 lines at once.
+- **Burned-in captions in Chinese, Japanese or Korean need a font picked by
+  hand.** This is not about the five caption targets (none of them is CJK).
+  It applies when **"Same as spoken"** is used on Chinese, Japanese or Korean
+  audio. Whisper then produces captions in that script, and the image's
+  fallback fonts (`fonts-noto-core`, DejaVu, Liberation) have no CJK glyphs:
+  `fc-list :lang=ja`, `:lang=ko` and `:lang=zh-cn` each return 0 families in
+  the worker image, while `:lang=hi` returns 2. Without a CJK font chosen in
+  the style panel (the Google Fonts library has some, e.g. the Nanum and Zen
+  families), libass draws empty boxes in the MP4. SRT/VTT/JSON exports are
+  unaffected.
+- **No custom 404 page for unknown URLs.** `(dashboard)/not-found.tsx` covers
+  `notFound()` inside the dashboard. Any other unmatched URL shows Next's
+  default page.
+- **CPU transcription is slow:** roughly real time with the default model
+  (README, Troubleshooting).
+
+## 11. Definition of done
+
+A change is done when all of these hold (from the working rules in
+PROGRESS.md and [AGENTS.md](../AGENTS.md)):
+
+1. **Scope.** It does only what was asked. UI work restyles without changing
+   logic, and shows no mock data: every figure comes from the API.
+2. **Backend.** `docker compose exec backend python -m pytest` passes in the
+   dev stack (it uses the dev database; see [TESTING.md](TESTING.md)).
+3. **Frontend.** `npm run lint`, `npm run type-check` and `npm run build`
+   pass. These also run in CI (`.github/workflows/ci.yml`).
+4. **Scripts.** `bash -n` and `shellcheck -S warning` pass for
+   `install/install.sh` and `install/vcm`, and both compose files pass
+   `docker compose config -q` (CI).
+5. **UI changes.**
+   - Screenshots at 375 px and 1440 px in light and dark.
+   - axe-core reports 0 WCAG 2 A/AA violations.
+   - Every keyboard stop shows a visible focus ring.
+   - No horizontal overflow at 375 px.
+6. **End-to-end flows.** Changes to the pipeline, the installer or the
+   release are verified with `scripts/e2e.py` against a running install, and
+   on a clean machine for installer changes.
+7. **Docs.** The affected docs in `docs/` and PROGRESS.md are updated.
+8. **Commit.** It is committed in small groups (at most ~5 files), with no
+   secrets, no `.env`, no certificates and nothing from `design/stitch/`.
+
+## Open questions
+
+1. **Target users.** The code implies "one person, own computer, five caption
+   languages", but no document names the intended audience (for example
+   creators, educators, or Hindi-language publishers). Who is the product
+   for?
+2. **Why these five languages?** `languages.py` says they are five "that can
+   be checked". Is adding more caption targets in or out of scope?
+3. **`translation_available` is wrong for local translation.**
+   `GET /api/videos/languages` sets it from the environment's
+   `GEMINI_API_KEY` only (`backend/app/api/videos.py`), with a comment saying
+   the other four languages "go through Gemini". The editor's Redo dropdown
+   uses it to **disable Hindi, French, German and Dutch** when no env key is
+   set (`caption-editor.tsx`), although local M2M100 translates them. The
+   dashboard's language step doesn't use the flag and offers all five. Which
+   behaviour is intended?
+4. **Is macOS support a goal for a future release, or will it stay
+   "untested"?**
+5. **Accounts mode.** Is the hosted (`accounts`) mode still a product
+   direction, or kept only so the code isn't lost?
