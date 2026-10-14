@@ -1,6 +1,6 @@
 # Testing
 
-How VideoCaptionMaker is tested, as of v1.0.4: what exists in the repo, the
+How VideoCaptionMaker is tested, as of v1.0.5 (on `main`): what exists in the repo, the
 commands, and the manual procedures recorded in PROGRESS.md for the things
 automated tests can't reach (GPU, installers, updates).
 
@@ -8,14 +8,16 @@ automated tests can't reach (GPU, installers, updates).
 
 | Layer | Tool | Where | Runs in CI |
 |---|---|---|---|
-| Backend unit and integration | pytest 8 + pytest-asyncio (`asyncio_mode = auto`, **one session-wide event loop**) + httpx `ASGITransport` | `backend/tests/` (15 files, ~290 test functions; PROGRESS.md records 325 passed with parametrisation) | **no**: needs Postgres, Redis, ChromaDB and FFmpeg, so it runs in the dev stack |
+| Backend lint | ruff (`backend/ruff.toml`) | `backend/` | **yes** (`ci.yml`, job `backend`) |
+| Backend unit and integration | pytest 8 + pytest-asyncio (`asyncio_mode = auto`, **one session-wide event loop**) + httpx `ASGITransport` | `backend/tests/` (351 collected: 350 pass, 1 skipped, on v1.0.5) | **yes** (`ci.yml`, job `backend`): the CPU dev image runs against Postgres, Redis and ChromaDB service containers |
 | Frontend static checks | `next lint` (`next/core-web-vitals`), `tsc --noEmit`, `next build` | `frontend/` | yes (`ci.yml`, job `frontend`) |
 | Installer scripts | `bash -n`, `shellcheck -S warning`, `docker compose config -q` for both compose files | `install/`, compose files | yes (`ci.yml`, job `scripts`) |
 | End to end | `scripts/e2e.py` (stdlib only) | against a running install or dev stack | no (manual) |
-| UI screenshots and accessibility | Playwright (Chromium) + axe-core | **not committed** (see Open questions) | no (manual) |
+| UI screenshots, accessibility and behaviour | Playwright 1.63 (Chromium) + axe-core 4.13 | `scripts/ui-check/` | no (manual, against a running app) |
 | Update download size | `scripts/update_layers.py` | against GHCR | no (manual, at release) |
 
-There are **no frontend unit tests**.
+There are **no frontend unit tests**. Frontend behaviour is checked in a real
+browser by `scripts/ui-check/checks.js`.
 
 ### Backend test conventions (`backend/tests/conftest.py`)
 
@@ -23,10 +25,19 @@ There are **no frontend unit tests**.
   app is imported, so registration, JWT and refresh are exercised. Local-mode
   behaviour has its own tests that switch it on (`test_local_install.py`,
   `test_request_guard.py`).
-- **The tests use the dev database, Redis and Chroma** (m5 in PROGRESS.md).
-  - Users are `test-<hex>@example.com`. After each test they are deleted, and
-    storage folders with no matching user are removed.
-  - **Never** point the suite at an install's database.
+- **The suite never uses the dev (or any real) data.** Before the app is
+  imported, `conftest.py` redirects every store:
+
+  | Store | Tests use | Notes |
+  |---|---|---|
+  | Postgres | `<configured db>_test` (e.g. `vcm_test`) | **dropped and recreated, then `alembic upgrade head`, on every run**; refuses any name not ending in `_test` |
+  | Redis | database **14** | flushed at start; no worker listens on it, so queued test jobs are never run (`test_recovery.py` uses 15) |
+  | ChromaDB | collection `captions_test` | deleted at start |
+  | Storage | `<tmp>/vcm-test-storage` | emptied at start |
+
+  `tests/test_isolation.py` pins all four. Users are still
+  `test-<hex>@example.com`, deleted after each test, so tests don't see each
+  other's data.
 - **Rate-limit buckets are cleared before every test**: ASGITransport has no
   client IP, so all requests share the `unknown` bucket.
 - **Transcription is not queued from uploads** (`dont_queue_transcription`).
@@ -43,15 +54,30 @@ There are **no frontend unit tests**.
 
 ```bash
 cp .env.example .env                       # once; never commit .env
-docker compose up -d                       # or add -f docker-compose.gpu.yml
-docker compose exec backend alembic upgrade head
-docker compose exec backend python -m pytest                  # whole suite
+docker compose up -d                       # CPU; GPU: VCM_VARIANT=cuda … -f docker-compose.gpu.yml up -d --build
+docker compose exec backend alembic upgrade head              # dev migrations are manual
+docker compose exec backend ruff check app tests alembic scripts
+docker compose exec backend python -m pytest                  # whole suite, on vcm_test
 docker compose exec backend python -m pytest tests/test_request_guard.py -q
 docker compose exec backend python -m pytest -m "not network" # offline
-docker compose exec backend ruff check app tests              # optional, not enforced
 ```
 
-**The dev stack and an install both use port 3000.** Run `vcm stop` first.
+**Dev migrations are manual, by decision.** The dev backend runs
+`uvicorn --reload`, not the entrypoint, so after pulling a new migration run
+`docker compose exec backend alembic upgrade head`. The test suite migrates
+its own database itself.
+
+The tests need only the dev backend's services: `docker compose up -d
+postgres redis chromadb backend` is enough, and leaves port 3000 to an install.
+
+**CI** (`.github/workflows/ci.yml`, job `backend`) builds `backend/Dockerfile`
+`--target dev` with `VARIANT=cpu` (cache from the release's
+`buildcache-cpu`), then runs ruff and pytest in it with `--network host`
+against `postgres:16.14-alpine`, `redis:7.4.10-alpine` and
+`chromadb/chroma:1.0.0` service containers.
+
+**The dev stack and an install both use port 3000.** Run `vcm stop` first
+if you need the dev frontend.
 
 ### Frontend
 
@@ -97,17 +123,35 @@ python scripts/e2e.py --base http://localhost:3000 \
 For each job it prints the stages it saw, the time taken, any notice and the
 first captions. Each job exports SRT, VTT and (unless `--no-burn`) MP4.
 
-### Screenshots and accessibility (manual)
+### Screenshots, accessibility and UI behaviour: `scripts/ui-check/`
 
-The procedure used for every v1.0.4 screen (PROGRESS.md, "v1.0.4 redesign
-log"):
+Committed in v1.0.5 (see its README). Run against a running app: an install,
+or a dev server. On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first.
+
+```bash
+cd scripts/ui-check && npm ci && npx playwright install chromium
+node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
+node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
+node checks.js http://localhost:3000 theme not-found retry-small editor-languages
+node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes data: test installs only
+```
+
+| Script | Fails when |
+|---|---|
+| `shoot.js` | any console error, page error or horizontal overflow (on a 404 page it also reports the page's own 404 response) |
+| `axe.js` | any WCAG 2 A/AA violation, in either theme |
+| `checks.js theme` | Settings lacks Light/Dark/System; System isn't the default, doesn't clear the stored choice, or doesn't follow an OS change live; an explicit choice doesn't stick |
+| `checks.js not-found` | an unknown address isn't a 404 with the app's own page and a working way back |
+| `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
+| `checks.js editor-languages` | the editor's caption-language select doesn't offer all six choices enabled. Read-only (it presents a video as completed with one caption) |
+| `flow.js` | the guarded UI flow (delete, settings change and back, SRT and MP4 export and download) fails, or the guard refuses any of the app's own requests |
+
+Required for every UI change (PROGRESS.md, v1.0.4 rules):
 - screenshots at **375 px and 1440 px**, in **light and dark**;
-- **axe-core** (WCAG 2 A/AA) must report **0 violations**;
+- **axe 0**;
 - a keyboard pass: every stop shows the focus ring;
 - no console errors and no horizontal overflow;
-- run against the **production build**, not the dev server.
-
-The scripts used were throwaway files and aren't in the repo.
+- a production build (`docker build --target build frontend`) must succeed.
 
 ### Update download size: `scripts/update_layers.py`
 
@@ -151,7 +195,18 @@ Full layer digests are in PROGRESS.md.
 | Sidecar formats (SRT/VTT/JSON), names, download tokens | `test_exports.py` | SRT opened in an external player (M8) |
 | Burn-in: captions actually drawn into pixels, audio and resolution kept, scale before subtitles | `test_exports.py` (`test_captions_are_actually_drawn_into_the_pixels`) | MP4 per E2E job |
 | Hardware tiers and model choice | `test_local_install.py` (`test_a_big_gpu_gets_large_v3_in_float16`, `test_cpu_with_little_ram_gets_small_int8`, …) | GPU, CPU and low-RAM runs (§4) |
-| Local mode: no credentials, session without cookie, settings validation, key never returned | `test_local_install.py` | |
+| Local mode: no credentials, session without cookie, settings validation | `test_local_install.py` | |
+| Gemini key never returned by any response and never logged (SQL echo included) | `test_local_install.py` (`test_the_gemini_key_is_never_logged_or_returned_anywhere`) | |
+| All five caption languages available without a key | `test_videos.py` (`test_every_caption_language_is_available_without_a_gemini_key`) | `checks.js editor-languages` |
+| Deleting a video deletes its export files | `test_exports.py` (`test_deleting_the_video_deletes_its_export_files`; fails without the fix) | |
+| `/api/ask` without a key says a key is needed | `test_search.py` | |
+| API version is `VCM_VERSION` | `test_version.py` | |
+| Forwarded headers trusted only from the frontend | `test_proxy_headers.py` | live: a container aliased `frontend` vs another (v1.0.5) |
+| No Celery limit can cut a long job | `test_worker_config.py` | measured: `--pool=solo` enforces no limit |
+| Google Fonts pinned to a commit; a font moved on `main` still downloads | `test_font_library.py` | |
+| Unused settings removed; upload limit 4096 MB | `test_settings.py` | |
+| Test isolation itself | `test_isolation.py` | |
+| System theme, 404 page, Retry with small model | | `checks.js theme`, `not-found`, `retry-small` |
 | Request guard and audit log | `test_request_guard.py` (8 tests; 6 fail with the guard removed) | live probes on both installs at `localhost` and `127.0.0.1` |
 | Restart recovery and the 3-requeue limit | `test_recovery.py` (5 tests) | live OOM test: worker capped at 1 GB, 3 kills → failed (PROGRESS.md) |
 | Transcription: segment splitting, silence filtering, no-speech retry, friendly errors | `test_transcription.py` (48) | |
@@ -169,8 +224,41 @@ each tier is tested by changing what the worker can see:
 |---|---|---|
 | **GPU** (≥ 6 GB VRAM) | dev stack with `-f docker-compose.gpu.yml`, or the installed CUDA variant | `large-v3` float16; Settings shows the GPU; MP4 uses `h264_nvenc` |
 | **CPU, ≥ 12 GB RAM** | without the GPU override (the clean Linux machine) | `large-v3-turbo` int8, `m2m100_1.2B` |
-| **CPU, < 12 GB RAM** | worker under an **8 GB cgroup memory limit** | `small` int8, `m2m100_418M`. Hindi carries the low-confidence notice (R4) |
+| **CPU, < 12 GB RAM** | worker under an **8 GB cgroup memory limit** (recipe below) | `small` int8, `m2m100_418M`. Hindi carries the low-confidence notice (R4) |
 | **OOM path** | worker capped at **1 GB** with `large-v3-turbo` forced | 3 requeues, then failed with the smaller-model message; after switching to automatic (small) and retrying, it completes |
+
+### Low-RAM recipe
+
+The worker sizes models from the **smaller** of the host's RAM and its own
+cgroup limit (`hardware._ram_gb`), so a container memory limit is enough to
+simulate a small machine.
+
+1. **Check the tier choice** with the dev backend image (seconds; no worker, nothing changed):
+   ```bash
+   docker run --rm --memory 8g --memory-swap 8g --entrypoint python \
+     videocaptionmaker-backend:latest -c "from app.services import hardware as h; \
+     hw = h.detect(); print(hw.ram_gb, h.whisper_profile(hw).model, h.translator_profile(hw).model)"
+   ```
+   Expected `8.0 small m2m100_418M`; with `16g`, `16.0 large-v3-turbo m2m100_1.2B`.
+   Verified on 2026-10-14.
+2. **Run real jobs under the limit** (dev stack). Create an override file
+   outside the repo, e.g. `lowram.yml`:
+   ```yaml
+   services:
+     worker:
+       mem_limit: 8g
+       memswap_limit: 8g
+   ```
+   Then:
+   ```bash
+   docker compose -f docker-compose.yml -f lowram.yml up -d worker
+   # Settings (or GET /api/system) must show ram_gb 8.0 and Whisper small
+   python scripts/e2e.py --base http://localhost:8000 --video hi.mp4
+   docker compose up -d worker      # recreate without the limit
+   ```
+3. **OOM path:** the same with `mem_limit: 1g` and Settings → Speech model →
+   Large v3 Turbo. Expect 3 requeues, then failed with the smaller-model
+   message; "Retry with small model" then completes.
 
 - Settings → hardware should match what was set up.
   `GET /api/system` returns `hardware`, `whisper` (with `source`) and
@@ -223,10 +311,11 @@ else does.
 
 **Before tagging**
 1. All work committed in small commits; PROGRESS.md updated.
-2. Backend suite passes in the dev stack.
+2. CI green: ruff and the backend suite (job `backend`), frontend lint,
+   types and build, and the script checks.
 3. `npm run lint`, `type-check` and `build` pass.
-4. UI changes have screenshots at 375/1440 px in light and dark, and axe
-   reports 0.
+4. UI changes: `scripts/ui-check` screenshots at 375/1440 px in light and
+   dark, axe 0, and the relevant `checks.js` checks pass.
 5. E2E on the GPU install, and on CPU for pipeline changes.
 6. CI green on the `main` commit to be tagged.
 
@@ -260,19 +349,15 @@ else does.
 9. Remove named test resources only.
 10. Update PROGRESS.md and the CHANGELOG.
 
-## Open questions
+## Decisions recorded
 
-1. **The screenshot and axe harness isn't in the repo.** Should it be
-   committed (for example under `scripts/ui-check/`) so the v1.0.4 procedure
-   can be repeated?
-2. **The backend suite doesn't run in CI.** It needs Postgres, Redis, Chroma
-   and FFmpeg; GitHub Actions could provide them as service containers. Is
-   that wanted?
-3. **Tests share the dev database.** They create and delete `test-%` users
-   there. Should they get an isolated database (m5 chose to document rather
-   than isolate)?
-4. **The low-RAM test procedure isn't recorded.** PROGRESS.md records "worker
-   capped at 8 GB (cgroup)" but not the exact command or compose change.
-   Should a reproducible recipe be added?
-5. **macOS has never been tested.** Is there a plan, or a person, to run the
-   installer on a Mac?
+Answers from the maintainer (2026-10-14) to this document's former open
+questions:
+
+| Question | Answer |
+|---|---|
+| Commit the screenshot and axe harness | Done: `scripts/ui-check/`. |
+| Backend suite in CI | Done in v1.0.5, with ruff. |
+| Tests shared the dev database | Fixed in v1.0.5: isolated `_test` database, Redis db, collection and storage. |
+| Low-RAM recipe | Recorded (§4). |
+| macOS | Stays untested until a Mac is available. |
