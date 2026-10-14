@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Cpu, HardDrive, KeyRound, Languages, Moon, Sparkles, Sun } from "lucide-react";
+import { Check, Cpu, HardDrive, KeyRound, Languages, Monitor, Moon, Sparkles, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useTheme } from "@/components/layout/theme-provider";
@@ -315,7 +315,7 @@ function TranslationSection({ info }: { info: SystemInfo }) {
 
 function StorageSection() {
   const { data } = useStats();
-  const { theme, toggleTheme } = useTheme();
+  const { preference, setPreference } = useTheme();
   // The stored theme is only known after mount; see ThemeToggle.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -370,16 +370,17 @@ function StorageSection() {
             [
               { value: "light", label: "Light", icon: Sun },
               { value: "dark", label: "Dark", icon: Moon },
+              { value: "system", label: "System", icon: Monitor },
             ] as const
           ).map((option) => {
-            const active = mounted && theme === option.value;
+            const active = mounted && preference === option.value;
             return (
               <button
                 key={option.value}
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => !active && toggleTheme()}
+                onClick={() => !active && setPreference(option.value)}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-5 py-1.5 text-[13px] transition-colors",
                   active ? "bg-surface-3 font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
