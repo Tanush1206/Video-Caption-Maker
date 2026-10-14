@@ -43,8 +43,12 @@ import urllib.request
 from pathlib import Path
 
 METADATA_URL = "https://fonts.google.com/metadata/fonts"
-TREE_URL = "https://api.github.com/repos/google/fonts/git/trees/main?recursive=1"
-RAW = "https://raw.githubusercontent.com/google/fonts/main/"
+# Everything is read at one commit of google/fonts, and the catalogue records
+# it: downloads then come from that commit forever, rather than from `main`,
+# where families are moved and files replaced under an installed app's feet.
+COMMIT_URL = "https://api.github.com/repos/google/fonts/commits/main"
+TREE_URL = "https://api.github.com/repos/google/fonts/git/trees/{tree}?recursive=1"
+RAW = "https://raw.githubusercontent.com/google/fonts/{commit}/"
 
 OUT = Path(__file__).resolve().parent.parent / "app" / "data" / "google_fonts.json"
 
@@ -70,8 +74,17 @@ def google_metadata() -> dict[str, dict]:
     return {f["family"]: f for f in payload["familyMetadataList"]}
 
 
-def font_tree() -> list[dict]:
-    payload = json.loads(fetch(TREE_URL, accept="application/vnd.github+json").decode())
+def main_commit() -> tuple[str, str]:
+    """(commit sha, its tree sha) of google/fonts main right now."""
+    payload = json.loads(fetch(COMMIT_URL, accept="application/vnd.github+json").decode())
+    return payload["sha"], payload["commit"]["tree"]["sha"]
+
+
+def font_tree(tree_sha: str) -> list[dict]:
+    # The commit's *tree* sha, not the commit's own: asked for a merge commit
+    # by date, GitHub can hand back a merged-in subtree's history instead.
+    url = TREE_URL.format(tree=tree_sha)
+    payload = json.loads(fetch(url, accept="application/vnd.github+json").decode())
     if payload.get("truncated"):
         raise SystemExit("GitHub truncated the tree; this script needs the whole listing")
     return payload["tree"]
@@ -108,8 +121,9 @@ def main() -> None:
     meta = google_metadata()
     print(f"  {len(meta)} families")
 
-    print("fetching the google/fonts file tree…")
-    tree = font_tree()
+    commit, tree_sha = main_commit()
+    print(f"fetching the google/fonts file tree at {commit}…")
+    tree = font_tree(tree_sha)
     ttfs = {t["path"]: t.get("size", 0) for t in tree if t["path"].endswith(".ttf")}
     print(f"  {len(ttfs)} ttf files")
 
@@ -212,7 +226,7 @@ def main() -> None:
     OUT.write_text(
         json.dumps(
             {
-                "base_url": RAW,
+                "base_url": RAW.format(commit=commit),
                 # Recorded so the picker's info panel can state what is missing
                 # without hardcoding numbers that go stale the next time this
                 # script runs.

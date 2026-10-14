@@ -25,8 +25,8 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# A year, immutable. These files never change: the catalogue pins a specific
-# path in google/fonts, and a family that changed would be a new entry.
+# A year, immutable. These files never change: the catalogue pins one commit
+# of google/fonts (its base_url), so a path always names the same bytes.
 CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 # Comfortably past Google's whole catalogue (1942 families), so a caller asking

@@ -318,3 +318,37 @@ def test_downloads_and_caches_a_real_face(tmp_path, monkeypatch):
     # every request would be silly.
     span = font_library.win_span("pacifico")
     assert span is not None and 1.0 < span < 3.0
+
+
+def test_the_catalogue_downloads_from_one_pinned_commit():
+    """`main` moves: families get renamed and files replaced under an install."""
+    import json
+    import re
+    from pathlib import Path
+
+    catalogue = json.loads(
+        (Path(__file__).resolve().parents[1] / "app/data/google_fonts.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert re.fullmatch(
+        r"https://raw\.githubusercontent\.com/google/fonts/[0-9a-f]{40}/", catalogue["base_url"]
+    )
+
+
+@pytest.mark.network
+def test_a_moved_family_still_downloads_from_the_pinned_commit():
+    """Akshar's file was moved on main after the catalogue was built."""
+    import json
+    import urllib.request
+    from pathlib import Path
+
+    catalogue = json.loads(
+        (Path(__file__).resolve().parents[1] / "app/data/google_fonts.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    entry = next(font for font in catalogue["fonts"] if font["key"] == "akshar")
+    request = urllib.request.Request(catalogue["base_url"] + entry["regular"], method="HEAD")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        assert response.status == 200
