@@ -220,6 +220,12 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Planned later work, not yet built |
 | [docs/MILESTONES.md](docs/MILESTONES.md) | The original 10-milestone plan (historical) |
 
+## Reporting a security problem
+
+Please report vulnerabilities privately through GitHub's **Security** tab →
+**Report a vulnerability**, not in a public issue. See
+[docs/SECURITY.md](docs/SECURITY.md#9-reporting-a-vulnerability).
+
 ## Licences of the models
 
 | Model | Licence |

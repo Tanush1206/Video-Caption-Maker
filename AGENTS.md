@@ -18,8 +18,9 @@ MP4 with burned-in captions, or SRT/VTT/JSON.
   - FastAPI + Celery (`backend/`, one image, `api`/`worker` commands);
   - Postgres 16, Redis 7, ChromaDB 1.0;
   - installers in `install/`, release automation in `.github/workflows/`.
-- **Current release:** v1.0.4. Progress, decisions and the backlog are in
-  [PROGRESS.md](PROGRESS.md).
+- **Current release:** v1.0.4; v1.0.5 is committed on `main` and not yet
+  tagged. Progress, decisions and the backlog are in
+  [PROGRESS.md](PROGRESS.md); later work is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Source of truth: `docs/`
 
@@ -38,6 +39,7 @@ anything.**
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | any code; commit format |
 | [docs/TESTING.md](docs/TESTING.md) | tests, E2E, release checklist |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | anything that revisits a past decision |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | anything already planned for later (don't build it unasked) |
 | [CHANGELOG.md](CHANGELOG.md) | release notes |
 
 ## Rules
@@ -78,8 +80,13 @@ anything.**
 
 ### Verify before committing
 11. **Run tests, lint and build before committing:**
-    - backend: `docker compose exec backend python -m pytest`;
+    - backend: `docker compose exec backend ruff check app tests alembic scripts`
+      and `docker compose exec backend python -m pytest`. The suite uses its
+      own `_test` database, Redis db 14, collection and temp storage; **never**
+      point tests at real data;
     - frontend: `npm run lint` and `npm run type-check`;
+    - UI changes: `scripts/ui-check` (`shoot.js`, `axe.js`, and the relevant
+      `checks.js` checks; axe must report 0);
     - build: `docker build --target build frontend`, or let CI run it;
     - **never** run `next build` inside the running dev container: it
       clobbers `.next`.
@@ -118,8 +125,9 @@ anything.**
 ```bash
 # dev stack
 cp .env.example .env                 # never commit it
-docker compose up -d                 # add -f docker-compose.gpu.yml for NVIDIA
-docker compose exec backend alembic upgrade head
+docker compose up -d                 # CPU; GPU: VCM_VARIANT=cuda … -f docker-compose.gpu.yml up -d --build
+docker compose exec backend alembic upgrade head   # dev migrations are manual
+docker compose exec backend ruff check app tests alembic scripts
 docker compose exec backend python -m pytest
 docker compose exec frontend npm run lint
 docker compose exec frontend npm run type-check

@@ -6,16 +6,65 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.0.5] - Unreleased
+
+Committed on `main`; not yet tagged or released.
 
 ### Added
-- Project documentation in `docs/`:
-  - PRD, ARCHITECTURE (rewritten from `architecture.md`), DATABASE, API,
-    SECURITY, ENVIRONMENT, DESIGN_SYSTEM, CODE_STYLE, TESTING and DECISIONS;
-  - this changelog;
-  - `AGENTS.md` and `CLAUDE.md`.
-- v1.0.4 update measurements, the delete-data uninstall result and the final
-  secrets check recorded in PROGRESS.md (`3686171`, `f2e9763`).
+- **System theme** in Settings → Interface theme (Light / Dark / System, the
+  default). It follows the OS, including a change while the app is open
+  (`2c0f020`).
+- **The app's own 404 page** for unknown addresses, with a way back to the
+  videos (`fc402f7`).
+- **"Retry with small model"** on the failed screen. It sets the speech model
+  to small with the existing Settings API, then retries the video (`87aa211`).
+- **Backend lint and tests in CI**: ruff (`backend/ruff.toml`) and the full
+  pytest suite against Postgres, Redis and ChromaDB service containers
+  (`6f1fe9d`).
+- **`scripts/ui-check/`**: the screenshot, axe-core and UI-flow harness, plus
+  named behaviour checks (`73be0c8`, `3206d9f`, `13b9403`).
+- **Documentation:** `docs/` (PRD, ARCHITECTURE, DATABASE, API, SECURITY,
+  ENVIRONMENT, DESIGN_SYSTEM, CODE_STYLE, TESTING, DECISIONS, ROADMAP;
+  the original plan is now MILESTONES), this changelog, `AGENTS.md` and
+  `CLAUDE.md`.
+
+### Changed
+- **The API reports the release version** (`VCM_VERSION`) instead of
+  `0.1.0` (`369a30e`).
+- **Forwarded headers are believed only from the frontend container**
+  (`TrustedProxyHeaders`, uvicorn `--no-proxy-headers`), not from any caller
+  (`3a418bf`).
+- **Google Fonts download from a pinned commit** of `google/fonts`, the one
+  the catalogue was built at. Six catalogue fonts had moved on `main` and
+  failed to download (`2aabf29`).
+- **The dev stack builds the CPU image by default**; `VCM_VARIANT=cuda` plus
+  `docker-compose.gpu.yml` for the GPU, as in the installed app (`2089492`).
+- **The upload limit defaults to 4096 MB** in the code, matching installs
+  (`b63ed42`, `7e7ed6f`).
+- **The test suite runs on its own stores**: a `_test` database rebuilt from
+  migrations on every run, Redis db 14, the `captions_test` collection and a
+  temp directory. It never touches the dev database (`62bf07a`).
+- **Removed unused settings** `STORAGE_BACKEND`, `MODEL_CACHE_DIR` and
+  `S3_*`. `.env.example` now asks for a 64-hex `JWT_SECRET_KEY` and no longer
+  offers `GEMINI_API_KEY`, which is set in Settings (`d270caf`).
+
+### Fixed
+- **The editor's Redo disabled Hindi, French, German and Dutch** unless a
+  Gemini key was in the environment, although they translate locally. All
+  five are now offered offline, and `translation_available` is always true
+  (`160781f`).
+- **Deleting a video left its export files on disk** (`3fd56b2`).
+- **The Gemini key could appear in the dev backend log**: SQL echo printed
+  bound values when the key was saved. Both database engines now hide
+  parameters (`f2e9ca6`).
+- **`/api/ask` without a Gemini key** answered "I couldn't find an answer…"
+  when nothing matched. It now always says that written answers need a key
+  (`bde0889`).
+- **Celery's 30/35 min time limits removed.** They never fired under
+  `--pool=solo`, but would have cut long transcriptions and 3 h renders
+  short under any other pool (`17367ff`).
+- **The light-theme "Failed" badge failed AA contrast** (3.82:1). Destructive
+  is now rose-700 (`eb1c345`).
 
 ## [1.0.4] - 2026-10-12
 
@@ -119,7 +168,7 @@ three app layers (6.1 MB; 0 of 14 backend layers).
 
 The first installable release. The app's features (upload, transcription,
 caption editor with timeline and styling, export and burn-in, semantic
-search, dashboard) were built in Milestones 1–10; see `docs/roadmap.md`.
+search, dashboard) were built in Milestones 1–10; see `docs/MILESTONES.md`.
 
 ### Added
 - **One-command install** (`de8a875`):
@@ -193,7 +242,7 @@ search, dashboard) were built in Milestones 1–10; see `docs/roadmap.md`.
   to `/data`, so dev vectors were lost on recreate. Both compose files are
   fixed (`4384ff2`).
 
-[Unreleased]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.4...HEAD
+[1.0.5]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.4...HEAD
 [1.0.4]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.1...v1.0.2
