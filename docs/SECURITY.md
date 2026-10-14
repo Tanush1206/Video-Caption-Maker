@@ -1,0 +1,345 @@
+# Security
+
+The security design of VideoCaptionMaker as shipped (v1.0.4): a single-user
+app that runs on the user's own computer. Every rule names the file that
+enforces it.
+
+## 1. Threat model
+
+### What is protected
+
+| Asset | Where |
+|---|---|
+| The user's videos, captions and exports | `media` volume, Postgres |
+| The Gemini API key (if set) | `app_settings.gemini_api_key` in Postgres |
+| The install's secrets (`POSTGRES_PASSWORD`, `JWT_SECRET_KEY`) | the install's `.env` |
+| The integrity of what gets installed and updated | release assets, GHCR images |
+
+### Trust boundaries
+
+- **The network.** Nothing is published except the UI, and that only on
+  **`127.0.0.1:${VCM_PORT}`** (`docker-compose.prod.yml`). Postgres, Redis,
+  ChromaDB and the API are reachable only on the compose network. Other
+  machines on the LAN cannot connect.
+- **The person at the computer** is the only user, and is trusted. Local mode
+  has no login (`AUTH_MODE=local`, `backend/app/dependencies.py`).
+- **Other web pages in the user's browser are not trusted.** They can make the
+  browser send requests to `localhost`. This is the main threat the request
+  guard addresses (§3).
+- **Other local programs are trusted, in effect.** A program running as the
+  user can call the API without browser headers and is allowed through. It
+  could forge any header anyway. This is a deliberate limit, not a gap the
+  guard tries to close.
+
+### In scope
+- Cross-site requests, DNS rebinding, and other localhost apps acting through
+  the browser.
+- Path traversal and file-type abuse through uploads and download names.
+- Header injection through user-chosen download names.
+- Secrets leaking into git, images, releases, logs or API responses.
+- Tampered or truncated installer files.
+- TLS-intercepting proxies or antivirus breaking downloads (handled by
+  trusting a user-supplied CA, never by disabling verification).
+
+### Out of scope (by design)
+- An attacker with the user's OS account, or with Docker access on the host.
+- Other users on the LAN; they are blocked by binding to 127.0.0.1, not by
+  auth.
+- A compromised GitHub account or GHCR. See the limits in §8.
+
+## 2. Authentication modes
+
+| | Local mode (installed app) | Accounts mode (hosted build, not shipped) |
+|---|---|---|
+| Who | one auto-created user (`local-user@localhost.localdomain`) | registered users, or Google sign-in |
+| Login UI | none; `/`, `/login`, `/register` redirect to `/dashboard` (`frontend/src/middleware.ts`) | login and register pages |
+| API credential | none needed; every request acts as the local user | `Authorization: Bearer` access token (30 min) |
+| Request guard | **on** | off |
+| Install settings (`PATCH /api/system/settings`) | allowed | 403 |
+
+What accounts mode implements (kept in the code, covered by tests):
+
+- **Passwords** are hashed with **bcrypt directly**, not passlib:
+  passlib 1.7.4 breaks with bcrypt ≥ 5. Passwords over 72 bytes are rejected,
+  not silently truncated (`backend/app/utils/security.py`).
+- **Tokens:**
+  - JWT access token (30 min) and refresh token (7 days, httpOnly cookie
+    `vcm_refresh`, `SameSite=Lax`, path `/api/auth`, `Secure` in
+    production).
+  - Each token has a `type` claim, so a refresh token can't be used as an
+    access token, and a `jti` for revocation.
+  - Logout revokes the refresh token in a Redis denylist that fails closed.
+  - A password change moves `users.sessions_valid_from`, which kills every
+    older refresh token.
+- **Login** gives the same response, and spends about the same time (a dummy
+  bcrypt comparison), for a wrong password and for an unknown email.
+- **Rate limits** allow 10 attempts per 300 s in each bucket:
+  - register: per IP;
+  - login: per IP **and** per email (both buckets reset on success);
+  - password change and account deletion: per user.
+
+  They are Redis-backed and **fail open** (`backend/app/utils/rate_limit.py`).
+- **Google OAuth** is implemented with `httpx`, with the CSRF state kept in
+  Redis.
+- **The frontend** keeps the access token in memory only (Zustand,
+  `frontend/src/stores/auth.ts`), never in localStorage.
+
+**In both modes:**
+- Media and download URLs carry short-lived, single-resource tokens:
+  - a **stream** token (60 min, claim `vid`) bound to one video;
+  - a **download** token (15 min, claim `eid`) bound to one export.
+- Each type is refused anywhere else, including as an API credential.
+- A resource someone else owns returns **404, never 403**.
+
+## 3. The request guard
+
+`backend/app/request_guard.py`, registered as HTTP middleware in
+`backend/app/main.py`. It is **active only in local mode**.
+
+### Why it exists
+
+Local mode has no login, and listening on 127.0.0.1 is not on its own a
+boundary, because **any page the user has open can make the browser send
+requests to localhost**:
+
+- **DNS rebinding.** A domain the attacker controls resolves to `127.0.0.1`.
+  Its page is then *same-origin* with the install, so CORS never applies, and
+  it could read and delete everything. The `Host` it sends is its own domain,
+  not `localhost`.
+- **Cross-site and same-site requests.** A page on any other origin,
+  including another app on a different localhost port, can send
+  state-changing requests. The browser labels them in `Sec-Fetch-Site`.
+
+On 2026-10-11, six videos on a running install were deleted through the
+frontend proxy by an actor nobody could identify afterwards. The access log
+had no User-Agent or Origin, and the container that held it had been
+replaced (PROGRESS.md, R11). The guard and `audit.log` are the fix
+(`491ebee`, `72ea1fa`).
+
+### Why CORS was not enough
+
+- **CORS controls whether a page may read a response. It does not stop the
+  browser from sending the request.** A cross-site form POST or a no-cors
+  fetch still reaches the server.
+- **DNS rebinding makes the attacker same-origin**, so CORS is never
+  consulted.
+- **Through the Next proxy, every request reaches the API from the
+  frontend.** The browser sees one origin, so CORS cannot tell the app's own
+  pages from anything else.
+- **The production compose never sets `CORS_ORIGINS`.** Its default,
+  `http://localhost:3000`, was trusted on every install, including one moved
+  to port 3001. That was the guard hole fixed before v1.0.3: the allowed
+  origin is now the install's own forwarded host and port (`72ea1fa`).
+
+### The rules, in order (`refusal_reason`)
+
+1. **Host.** Take `X-Forwarded-Host` (set by the Next proxy), or else `Host`.
+   Its hostname **must** be one of `localhost`, `127.0.0.1`, `::1` or
+   `backend`. Otherwise the request is refused: "host … is not this
+   computer". This applies to **every method, reads included**, which is what
+   defeats DNS rebinding.
+2. **Safe methods** (`GET`, `HEAD`, `OPTIONS`) pass once rule 1 holds.
+3. **`Sec-Fetch-Site: cross-site`** on a state-changing method is refused.
+4. **No `Origin` header** (a script or CLI, not a browser) passes.
+5. **Through the proxy** (`X-Forwarded-Host` present): `Origin`'s `host:port`
+   **must equal** the forwarded host exactly. That is whatever port the
+   install was given, at `localhost` or `127.0.0.1`. Another app's port,
+   `null`, or any other origin is refused.
+6. **Direct to the backend** (dev only; the install doesn't expose it):
+   `Origin` must be listed in `CORS_ORIGINS`.
+
+A refusal returns `403` with
+`{"detail": "This request didn't come from VideoCaptionMaker on this computer, so it was refused."}`
+and is written to the audit log with the reason.
+
+Verified live on both installs at `localhost` and `127.0.0.1`:
+- another port's Origin → 403;
+- cross-site → 403;
+- a rebinding Host → 403;
+- the app's own origin passes.
+
+The tests are in `backend/tests/test_request_guard.py` (8 tests; 6 fail with
+the guard removed).
+
+## 4. `audit.log`
+
+Written by `audit()` in `backend/app/request_guard.py`.
+
+| | |
+|---|---|
+| **Where** | `<storage root>/audit.log`, i.e. `/app/storage/audit.log` on the `media` volume. It survives updates and container replacement. |
+| **What is recorded** | every **refused** request (403); every **DELETE** (any status); every **POST/PUT/PATCH to `/api/system/settings`** |
+| **Fields** (one JSON object per line) | `time` (UTC), `method`, `path`, `status`, `user_agent`, `origin`, `referer`, `sec_fetch_site`, `host` (forwarded or direct), `client` (peer IP), and `refused` (the reason) on refusals |
+| **Never recorded** | **request bodies**. A settings body can hold the Gemini key. Tested by `test_a_settings_change_is_recorded_without_its_value`. Query strings aren't recorded either; only `path` is. |
+| **Rotation** | before a write, if `audit.log` is over **5 MB** it is renamed to `audit.log.1`, replacing the previous `.1`. At most two files of about 5 MB each (`AUDIT_MAX_BYTES`; `test_the_audit_log_cannot_grow_without_bound`). |
+| **Also** | each entry is logged through Python logging (`logger.info("audit …")`), so it appears in `vcm logs backend` too. A failed write is logged and never fails the request. |
+| **Accounts mode** | no auditing; the guard is off |
+
+To read it on an install:
+`docker exec vcm-backend-1 cat /app/storage/audit.log`.
+
+## 5. Secrets
+
+| Secret | Created by | Stored | Rules |
+|---|---|---|---|
+| `POSTGRES_PASSWORD` | installer, first run | install `.env` | 64 hex chars from 32 random bytes (`openssl rand -hex 32` or `/dev/urandom`; `RandomNumberGenerator` on Windows). Never contains `$`. Kept on reinstall. |
+| `JWT_SECRET_KEY` | installer, first run | install `.env` | same generation. Signs stream and download tokens even in local mode |
+| Gemini API key | the user, in Settings | Postgres `app_settings`, **plain text** | write-only through the API. `GET /api/system` returns only `gemini_configured` and `gemini_source`. Never logged: `app_settings.py` logs no values and the audit log has no bodies. Tested by `test_the_gemini_key_is_stored_but_never_returned`. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | operator (accounts mode only) | env | not used by the installed app |
+
+**Rules:**
+
+- **The install's `.env`:**
+  - is created with `umask 077` and `chmod 600` on macOS/Linux
+    (`install/install.sh`);
+  - on Windows it lives under `%LOCALAPPDATA%\VideoCaptionMaker` and the
+    installer sets no explicit ACL (see Open questions);
+  - is **never** overwritten on reinstall. Uninstall keeps it unless the user
+    typed `DELETE`, because the kept data is locked with its password.
+- **The repository:**
+  - `.env`, `certs/`, `backend/storage/`, `*.dump`, `design/stitch/` and
+    `learning-guide.md` are gitignored;
+  - no `.env`, key, certificate, dump or storage file is tracked, or ever has
+    been (checked against full history for v1.0.4; PROGRESS.md "Secrets
+    (final)").
+- **The images:**
+  - the backend is built from an **allow-list**
+    (`backend/Dockerfile.dockerignore`: only `pyproject.toml`,
+    `constraints.txt`, `alembic*`, `app/`, the entrypoint, the tests and
+    `frontend/public/fonts`);
+  - the frontend's `.dockerignore` excludes `.env*` (except `.env.example`)
+    and `**/certs`;
+  - checked on the 1.0.4 images: no `.env` or key files (the frontend's one
+    `.pem` is Alpine's public CA bundle), an empty extra-CA directory, and
+    `NODE_EXTRA_CA_CERTS` unset.
+- **Build-time CA:**
+  - a TLS-intercepting proxy's root is passed as a **BuildKit secret**
+    (`--secret id=extra_ca,src=…`);
+  - it is mounted only for the `RUN` that needs it and never written to a
+    layer;
+  - CI builds without one.
+- **Release assets** are exactly: `install.sh`, `install.ps1`, `vcm`,
+  `vcm.ps1`, `vcm.cmd`, `docker-compose.prod.yml`, `docker-compose.gpu.yml`
+  and `SHA256SUMS`.
+- **Never** read, print or log the values in a `.env`. Tools and docs refer to
+  variables by name only.
+
+## 6. What goes over the network
+
+With no Gemini key, after the models are downloaded, the core flow (upload,
+transcribe, translate, export, search) makes **no outbound requests**.
+
+| Destination | When | What is sent | Code |
+|---|---|---|---|
+| `github.com` (release assets) | install, `vcm update` | nothing about the user | `install/*`, `vcm` |
+| `ghcr.io` | install, `vcm update` (image pulls) | nothing about the user | compose |
+| `huggingface.co` | first use of each model (Whisper size, M2M100 size, MiniLM) | model repo requests | `services/model_store.py`, `transcription.py`, `translation.py`, `embeddings.py` |
+| `raw.githubusercontent.com/google/fonts` | the first time a Google Font from the library is used | the font path | `services/font_library.py` |
+| Gemini API (`google-genai`) | **only with a key**: translating to hi/fr/de/nl, and `POST /api/ask` | **caption text only**: up to 25 lines per translation batch, up to 6 retrieved captions plus the question for answers. **Never the video or audio.** | `services/translation.py`, `services/rag.py` |
+| Google OAuth | accounts mode only | OAuth exchange | `api/auth.py` |
+
+- `HF_HUB_DISABLE_IMPLICIT_TOKEN=1`: no Hugging Face token is ever sent.
+- Font files are served by the backend itself, never by redirecting the
+  browser to Google, so the user's IP isn't shared with a third party while
+  they browse fonts (`api/fonts.py`).
+- `NEXT_TELEMETRY_DISABLED=1` is set in the frontend image.
+- **TLS verification is never disabled.** On networks that re-sign HTTPS, the
+  user puts the proxy's root `.crt` in the install's `certs/` folder. The
+  entrypoint runs `update-ca-certificates`, and `SSL_CERT_FILE`/
+  `REQUESTS_CA_BUNDLE` make every client (httpx, requests, urllib) use the
+  system bundle.
+
+## 7. Upload and download validation
+
+`backend/app/api/videos.py`, `backend/app/services/storage.py`,
+`backend/app/utils/filenames.py`.
+
+1. **The caption language** must be `same` or one of the five codes, or 422.
+2. **Both** the declared content type **and** the extension must be on the
+   allow-lists (415 otherwise). The extensions are `.mp4 .mov .mkv .webm
+   .avi .m4v`; the types are the matching `video/*`.
+3. **The size is counted while streaming,** in 1 MiB chunks, against
+   `MAX_UPLOAD_SIZE_MB`. `Content-Length` is never trusted. Over the limit:
+   413 and the partial file is deleted. Disk full: 507 and the partial file
+   is deleted.
+4. **An empty file** gets 400.
+5. **The stored name is a fresh UUID** plus the allow-listed extension. The
+   user's filename never reaches the filesystem; it is kept only as a label.
+   `storage.resolve()` rejects any path outside the storage root, and
+   recursive deletes check `is_relative_to` the root.
+6. **ffprobe reads the file** for its duration. If the file isn't really
+   video, probing fails, the upload is kept without metadata, and
+   transcription fails later with "This file couldn't be read as a video…".
+7. **Files live outside any webroot.** They are served only by
+   `GET /stream` (token) and `GET /thumbnail` (owner). API responses never
+   contain a filesystem path (`VideoRead` has `has_thumbnail`, not the path).
+8. **Download names typed by the user** go through `safe_stem`:
+   - directories are dropped (`../../etc/passwd` → `passwd`);
+   - control characters, including **CR/LF, which would split the
+     `Content-Disposition` header**, are removed, as are `/ \ : * ? " < > |`;
+   - leading and trailing dots and spaces are trimmed;
+   - the result is capped at 120 characters.
+
+## 8. Installer checksum verification and its limits
+
+**What it does** (`install/install.sh`, `install/install.ps1`, `vcm update`
+in `install/vcm` and `install/vcm.ps1`):
+
+- Downloads the compose files and `vcm` scripts **and** `SHA256SUMS` into
+  `*.tmp` files.
+- Checks every file against its line in `SHA256SUMS`.
+- If any file is missing from the list or mismatches, it deletes the `*.tmp`
+  files and **stops before replacing anything**: "…didn't match the release's
+  SHA256SUMS; nothing was installed/changed."
+- `SHA256SUMS` is produced by the release workflow from the exact files it
+  attaches (`.github/workflows/release.yml`). Tampered-file tests passed on
+  both platforms (`d0fb999`).
+
+**What it does not protect against:**
+
+- **`SHA256SUMS` comes from the same place as the files.** Anyone able to
+  change the release assets (a compromised GitHub account or release) can
+  change both. The check catches truncation, corruption, and a proxy or
+  mirror altering one file. It does not establish who published the release.
+- **The installer itself isn't verified.** `curl … install.sh | bash` and
+  `irm … install.ps1 | iex` run whatever GitHub serves over TLS.
+- **Images are pulled by tag, not digest** (`…:latest-cpu`, `…:1.0.4-cuda`),
+  and are not signed. Their integrity rests on GHCR and TLS, and image
+  content isn't covered by `SHA256SUMS`.
+- **Model weights:** Whisper repositories are fetched by name; only the
+  M2M100 conversions are pinned to a commit. CTranslate2's `model.bin` is a
+  weights format, not a pickle, so loading it cannot execute code
+  (`translation.py`).
+- **Google Fonts** come from the `main` branch of `google/fonts`, not a
+  pinned commit.
+
+## 9. Reporting a vulnerability
+
+There is no `SECURITY.md` policy, security contact or private reporting
+channel in the repository (see Open questions). Until one is set up:
+
+- **Never** post exploit details, secrets, `.env` contents or `audit.log`
+  excerpts in a public issue.
+- Contact the repository owner privately through GitHub
+  (`github.com/Tanush1206`).
+
+## Open questions
+
+1. **Reporting channel.** Should GitHub private vulnerability reporting be
+   enabled, or a contact address published?
+2. **Windows `.env` permissions.** `install.ps1` writes `.env` without setting
+   an ACL, relying on the inherited permissions of `%LOCALAPPDATA%`. Is that
+   acceptable, or should it restrict the file to the current user, as
+   `chmod 600` does on Linux/macOS?
+3. **The Gemini key is stored in plain text** in Postgres. Acceptable for
+   local mode?
+4. **Image pinning.** Should installs pin images by digest, and should
+   releases be signed (for example with cosign), given the limits in §8?
+5. **`--forwarded-allow-ips='*'`.** uvicorn trusts `X-Forwarded-*` from any
+   peer (`docker-entrypoint.sh`). This is safe only because the backend isn't
+   published in the production compose. Should it be limited to the
+   frontend's address?
+6. **Google Fonts are not pinned to a commit.** `google_fonts.json` uses
+   `…/google/fonts/main/`, while `api/fonts.py` says the catalogue "pins a
+   specific path". A path on `main` can change. Is pinning to a commit
+   wanted?
