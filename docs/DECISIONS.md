@@ -25,9 +25,11 @@ installers (`install.sh`, `install.ps1`) check Docker, the GPU and the disk,
 generate `.env`, pull and start the stack, and add a `vcm` command.
 
 **Alternatives.**
-- Native installers per OS: no evidence in the repo of these being tried.
-  The pinned GPU stack (CTranslate2 4.8.1 + cuBLAS 12.9 + cuDNN 9.24 for
-  Blackwell) is exactly what is hard to reproduce natively.
+- Native installers per OS: **not formally considered** (maintainer,
+  2026-10-14). Docker was chosen to have **one install path across Windows
+  and Linux, GPU and CPU**. The pinned GPU stack (CTranslate2 4.8.1 +
+  cuBLAS 12.9 + cuDNN 9.24 for Blackwell) is also exactly what would be hard
+  to reproduce natively on every machine.
 - A hosted service: contradicts the product goal (local, no account, the
   video never leaves the machine).
 
@@ -166,13 +168,17 @@ the five languages. Verified 20/20 pairs and 30 GPU plus 18 CPU E2E jobs.
   - citations are attached from the server's own hits, never from the
     model's text.
 
-**Alternatives.** A local LLM to generate answers: not in the repo (no model
-chosen). Requiring a key for search: rejected; retrieval is the useful part
-and needs no LLM.
+**Alternatives.**
+- **A local LLM for answers (Ollama + Qwen2.5-3B):** considered and
+  rejected (maintainer, 2026-10-14). It meant an extra container, a ~2 GB
+  model download, and slow answers on CPU, which is the tier most installs
+  run on.
+- **Requiring a key for search:** rejected; retrieval is the useful part and
+  needs no LLM.
 
 **Reason.**
 - Retrieval needs no network.
-- The roadmap's acceptance test for answers is "not found, not a
+- The milestone plan's acceptance test for answers is "not found, not a
   fabrication", which retrieval-only satisfies trivially, and the two-layer
   refusal satisfies with a key.
 
@@ -291,7 +297,13 @@ for the images (PROGRESS.md, decision d).
 - The CUDA job frees about 30 GB of runner disk first.
 - The repo and packages are public.
 
-**Alternatives.** Docker Hub, or self-hosting the scripts: not in the repo.
+**Alternatives.**
+- **Docker Hub:** considered and rejected (maintainer, 2026-10-14). Its
+  anonymous pull rate limits are a real risk for a 2+ GB image pulled by
+  people with no Docker account, on install and on every update. GHCR serves
+  public images anonymously, from the same place as the code.
+- Self-hosting the scripts: not considered; `releases/latest/download/` gives
+  a stable URL for free.
 
 **Reason.** Free for public projects, in the same place as the code, and the
 tag drives both images and assets. `releases/latest/download/` gives the
@@ -360,7 +372,7 @@ row in its own short session. The UI polls with TanStack Query
 - exports every 1.5 s;
 - alerts every 3 s.
 
-**Alternatives.** SSE or websockets (the roadmap's original "TBD").
+**Alternatives.** SSE or websockets (the milestone plan's original "TBD", docs/MILESTONES.md).
 
 **Reason.** Progress changes a few times a minute, and a short poll avoids
 connection, reconnection and auth handling (comment in
@@ -368,7 +380,8 @@ connection, reconnection and auth handling (comment in
 the observed rate.
 
 **Trade-offs.** Up to 2 s of latency, and a little idle traffic while jobs
-run.
+run. Re-confirmed on 2026-10-14 (maintainer): the 2 s poll is fine as is,
+including for model-download progress.
 
 ---
 
@@ -392,12 +405,65 @@ transcription is GPU- or CPU-bound anyway.
   transcription.
 - Recovery (D9) depends on there being exactly one worker.
 
-## Open questions
+---
 
-1. **D1 alternatives.** The repo has no record of native installers being
-   evaluated. Was that considered, and why rejected?
-2. **D5 alternatives.** Was a local LLM for answers considered, for example
-   via llama.cpp? Nothing in the repo says.
-3. **D8 alternatives.** Was Docker Hub, or another registry, considered?
-4. **D10 latency.** Is the 2 s poll still the right trade-off now that jobs
-   report model-download progress continuously?
+## D12. No Celery time limits; each step bounds itself
+
+**Date:** v1.0.5 (2026-10-14)
+
+**Context.** `celery_app.py` set a 30 min soft and 35 min hard limit, which
+would kill a long CPU transcription (roughly real time, longer on the small
+tier) or a render allowed 3 h. Measured: under `--pool=solo` (D11), Celery
+enforces neither limit. A 6 s task under a 3 s hard limit ran to completion.
+
+**Decision.** Set both to `None`, and say why in the code. A job is bounded
+by the steps that can hang: FFmpeg renders (3 h), probes (30 s), thumbnails
+(60 s), waveforms (300 s). `tests/test_worker_config.py` pins it.
+
+**Alternatives.**
+- Raise the limits: misleading for the same reason.
+- Derive a limit from the video's duration: needs a pool that enforces it,
+  which solo doesn't, and a prefork pool contradicts D11.
+
+**Trade-offs.** A step without its own timeout (Whisper decoding) can run as
+long as it runs. A hung decode blocks the single worker until it is
+restarted, which then requeues it under D9's limit.
+
+---
+
+## D13. Forwarded headers trusted by service name
+
+**Date:** v1.0.5 (2026-10-14)
+
+**Context.** uvicorn ran with `--forwarded-allow-ips='*'`, so any caller could
+set the client address that `audit.log` records. uvicorn trusts only IPs or
+networks, and the frontend's IP is unknown when the API starts: it starts
+after it, and changes when recreated.
+
+**Decision.** Run uvicorn with `--no-proxy-headers`, and add the
+`TrustedProxyHeaders` middleware (`app/proxy_headers.py`). It trusts the
+addresses the name `frontend` resolves to (`TRUSTED_PROXIES`), re-resolved at
+most every 5 s.
+
+**Alternatives.**
+- A fixed IP for the frontend on a fixed subnet: would change the `vcm_default`
+  network of existing installs on update, and could collide with networks
+  already on the user's machine.
+- Trusting the whole compose subnet: the Docker gateway (host connections in
+  dev) is inside it.
+
+**Trade-offs.** One DNS lookup at most every 5 s on the request path. Trust
+follows the name, so anything else given the alias `frontend` on the network
+would be trusted. Only the compose file assigns it.
+
+## Decisions recorded
+
+Answers from the maintainer (2026-10-14) to this document's former open
+questions, now in the entries above:
+
+| Question | Answer |
+|---|---|
+| D1: native installers? | Not formally considered; Docker chosen for one install path across Windows/Linux and GPU/CPU. |
+| D5: local LLM for answers? | Ollama + Qwen2.5-3B considered and rejected (extra container, ~2 GB download, slow on CPU). |
+| D8: Docker Hub? | Considered and rejected (anonymous pull rate limits for a 2+ GB image). |
+| D10: 2 s poll? | Fine as is. |
