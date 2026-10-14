@@ -60,6 +60,51 @@ const CHECKS = {
     ok("not-found: the link works", page.url().endsWith("/dashboard"));
     await page.close();
   },
+
+  // The failed screen's "Retry with small model": sets the speech model to
+  // small through Settings' own API, then queues the video again, in that
+  // order. Read-only: the video is shown as failed and both writes are
+  // answered here, so no real setting or video changes.
+  async "retry-small"(browser, base) {
+    const page = await browser.newPage();
+    const listing = await (await page.request.get(`${base}/api/videos?limit=1`)).json();
+    const video = listing.items[0];
+    if (!video) throw new Error("needs at least one video");
+    const writes = [];
+
+    await page.route("**/api/system", async (route) => {
+      const info = await (await route.fetch()).json();
+      info.whisper = { ...(info.whisper ?? { device: "cpu", compute_type: "int8", source: "auto" }), model: "large-v3-turbo" };
+      await route.fulfill({ json: info });
+    });
+    await page.route(`**/api/videos/${video.id}`, async (route) => {
+      const body = await (await route.fetch()).json();
+      await route.fulfill({
+        json: { ...body, status: "failed", stage: null, error_message: "Ran out of memory while transcribing." },
+      });
+    });
+    await page.route("**/api/system/settings", async (route) => {
+      writes.push(`${route.request().method()} settings ${route.request().postData()}`);
+      const info = await (await page.request.get(`${base}/api/system`)).json();
+      await route.fulfill({ json: { ...info, whisper_choice: "small" } });
+    });
+    await page.route(`**/api/videos/${video.id}/transcribe`, async (route) => {
+      writes.push(`${route.request().method()} transcribe`);
+      await route.fulfill({ json: { ...video, status: "pending", stage: null, progress: 0 } });
+    });
+
+    await page.goto(`${base}/editor/${video.id}`, { waitUntil: "networkidle" });
+    const button = page.getByRole("button", { name: "Retry with small model" });
+    ok("retry-small: offered on the failed screen", await button.isVisible());
+    await button.click();
+    await page.waitForTimeout(1000);
+    ok(
+      "retry-small: model set to small, then the video retried",
+      writes.length === 2 && writes[0] === 'PATCH settings {"whisper_model":"small"}' && writes[1] === "POST transcribe",
+      writes.join(" → ")
+    );
+    await page.close();
+  },
 };
 
 (async () => {

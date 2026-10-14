@@ -6,6 +6,7 @@ import {
   Check,
   Clock,
   Download,
+  Feather,
   Info,
   RefreshCw,
   ShieldCheck,
@@ -15,7 +16,7 @@ import {
 import { Stepper } from "@/components/flow/stepper";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { useSystem } from "@/hooks/use-system";
+import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
 import { useRetranscribe } from "@/hooks/use-videos";
 import { stageLabel, useEta } from "@/lib/stages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
@@ -181,8 +182,20 @@ function Processing({ video }: { video: Video }) {
 
 function Failed({ video }: { video: Video }) {
   const retranscribe = useRetranscribe();
+  const updateSettings = useUpdateSystemSettings();
   const { data: system } = useSystem();
   const model = system?.whisper?.model;
+  // Offered whenever a smaller model exists to fall back to. The usual cause
+  // of a failure that a retry won't fix is running out of memory, and the
+  // small model needs the least. Two existing calls, no new backend: set the
+  // install's speech model, then queue the video again.
+  const canGoSmaller = Boolean(model) && model !== "small";
+  const retrySmall = async () => {
+    askToNotify();
+    await updateSettings.mutateAsync({ whisper_model: "small" });
+    retranscribe.mutate({ id: video.id }, { onSuccess: () => watchTranscription(video.id) });
+  };
+  const failedToRetry = updateSettings.error ?? retranscribe.error;
 
   return (
     <div className="flex flex-col gap-4">
@@ -215,13 +228,37 @@ function Failed({ video }: { video: Video }) {
               <RefreshCw />
               Try again
             </Button>
+            {canGoSmaller && (
+              <Button
+                size="lg"
+                variant="secondary"
+                loading={updateSettings.isPending}
+                disabled={retranscribe.isPending}
+                onClick={() => void retrySmall().catch(() => undefined)}
+                aria-describedby="retry-small-note"
+              >
+                <Feather />
+                Retry with small model
+              </Button>
+            )}
             <Link href="/settings" className={buttonVariants({ variant: "secondary", size: "lg" })}>
               <SlidersHorizontal />
               Open Settings
             </Link>
+            {canGoSmaller && (
+              <p id="retry-small-note" className="text-[12px] leading-snug text-muted-foreground">
+                Small switches the speech model in Settings for every video, until you change it back.
+              </p>
+            )}
           </div>
         </div>
       </div>
+
+      {failedToRetry && (
+        <p role="alert" className="text-[13px] text-destructive">
+          {failedToRetry.message}
+        </p>
+      )}
 
       {model && (
         <div className="rounded-lg border border-border bg-card p-5">
