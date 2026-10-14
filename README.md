@@ -197,7 +197,7 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
   (frontend build) turns registration, login and Google sign-in back on for
   a hosted deployment.
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). History:
-  [docs/roadmap.md](docs/roadmap.md).
+  [docs/MILESTONES.md](docs/MILESTONES.md).
 
 ## Documentation
 
@@ -217,7 +217,8 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Key decisions with context, alternatives and trade-offs |
 | [CHANGELOG.md](CHANGELOG.md) | Changes in each release, v1.0.0–v1.0.4 |
 | [AGENTS.md](AGENTS.md) | Rules for anyone (or any agent) changing the code |
-| [docs/roadmap.md](docs/roadmap.md) | The original 10-milestone plan (historical) |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Planned later work, not yet built |
+| [docs/MILESTONES.md](docs/MILESTONES.md) | The original 10-milestone plan (historical) |
 
 ## Licences of the models
 
