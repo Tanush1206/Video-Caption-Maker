@@ -45,6 +45,21 @@ const CHECKS = {
     await radio("System").click();
     await context.close();
   },
+
+  // An address that matches no route gets the app's own 404 page, with a way
+  // back, instead of Next's bare default.
+  async "not-found"(browser, base) {
+    const page = await browser.newPage();
+    const response = await page.goto(`${base}/no-such-page-${Date.now()}`, { waitUntil: "networkidle" });
+    ok("not-found: status 404", response.status() === 404, String(response.status()));
+    ok("not-found: the app's own page", await page.getByRole("heading", { name: "Page not found" }).isVisible());
+    const back = page.getByRole("link", { name: "Back to your videos" });
+    ok("not-found: links back to the videos", (await back.getAttribute("href")) === "/dashboard");
+    await back.click();
+    await page.waitForURL(/\/dashboard$/);
+    ok("not-found: the link works", page.url().endsWith("/dashboard"));
+    await page.close();
+  },
 };
 
 (async () => {
