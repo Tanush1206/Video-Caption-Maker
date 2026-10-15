@@ -700,7 +700,7 @@ One commit per fix, each with tests:
   backend:1.0.4-cpu, frontend:1.0.4 tags, test clips. The dev stack was
   stopped (not removed) for port 3000 and left stopped, as asked.
 
-## v1.0.6 (prepared 2026-10-15; CI green on 9c66a7d)
+## v1.0.6 (released 2026-10-15)
 - Forwarded headers through the frontend: `frontend/forwarded-for.js`,
   preloaded with `node -r` (runtime image) and `NODE_OPTIONS` (dev compose),
   overwrites X-Forwarded-For/-Proto with the frontend socket's peer before
@@ -720,3 +720,29 @@ One commit per fix, each with tests:
   (192.0.2.44) recorded `172.18.0.1`. `next dev` listens dual-stack, so dev
   addresses are IPv4-mapped (`::ffff:`); the runtime image (HOSTNAME=0.0.0.0)
   records plain IPv4.
+
+### v1.0.6 released and measured (2026-10-15)
+- Tag v1.0.6 on b8a0025; CI run 38704686755 and release run 38707130530
+  (4 jobs) green, release in ~2.5 min. 8 assets match SHA256SUMS; anonymous
+  GHCR 200 for 1.0.6-cpu/-cuda, latest-*, frontend 1.0.6/latest.
+- Windows `vcm update` 1.0.5 → 1.0.6 in 37 s. `update_layers.py`: backend
+  1.0.6-cuda 0 of 14 layers (0 of 2291.2 MB); frontend 1.0.6 4 of 10
+  layers, 6.1 of 54.4 MB (#10 is forwarded-for.js). Frontend runs
+  `node -r ./forwarded-for.js server.js`.
+- After: VCM_VERSION and API 1.0.6, alembic b4e7c2d91a36, counts
+  31/505/93, caption md5, video list and media checksum identical.
+- Guard at localhost and 127.0.0.1: another port's Origin, cross-site,
+  rebinding Host (POST and GET) 403; own origin passes.
+- The fix, live: forged X-Forwarded-For from the host recorded 172.19.0.1
+  (vcm_default gateway), from the worker 172.19.0.7 (the worker). The only
+  forged values in audit.log are the two v1.0.5 test entries from before
+  the update. `flow.js` at both hosts 7/7 PASS, 0 refused; its DELETEs and
+  PATCHes recorded client 172.19.0.1.
+- No E2E (pipeline unchanged); 4 throwaway videos made with e2e.py for the
+  UI flow, all deleted. No clean-machine CPU run: frontend-only release,
+  the frontend image is the same for both variants, and the CPU backend
+  changed no layers.
+- Secrets: nothing forbidden in git history; images hold only public CA
+  bundles (certifi, pip, grpc), empty extra-CA dirs; frontend /app adds
+  only forwarded-for.js.
+- Left as asked: install running on 3000, dev stack stopped.

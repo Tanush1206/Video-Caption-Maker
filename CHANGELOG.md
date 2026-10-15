@@ -9,7 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.0.6] - 2026-10-15
 
 A security fix in the frontend only; no backend code change and no
-migration.
+migration. Updating from 1.0.5 downloads about 6.1 MB, all frontend; the
+backend downloads nothing.
 
 ### Fixed
 - **A caller could forge `audit.log`'s client address through the UI
