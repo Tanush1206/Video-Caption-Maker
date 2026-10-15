@@ -613,7 +613,7 @@ code.html.
 All 15 folders (code.html + screen.png each) and DESIGN.md verified present
 on 2026-10-12.
 
-## v1.0.5 (2026-10-14, committed, not tagged)
+## v1.0.5 (released 2026-10-14)
 Tanush answered the docs' open questions; the docs now record the answers
 ("Decisions recorded" in each), and later items are in docs/ROADMAP.md.
 One commit per fix, each with tests:
@@ -648,5 +648,54 @@ One commit per fix, each with tests:
   head and media checksum identical; `vcmbk` removed (`down -v`), backups
   deleted.
 - To do by Tanush: enable GitHub private vulnerability reporting (Settings →
-  Code security → Private vulnerability reporting); push; tag v1.0.5 when
-  ready (then the release checklist in docs/TESTING.md).
+  Code security → Private vulnerability reporting).
+
+### v1.0.5 released and measured (2026-10-14/15)
+- Tag v1.0.5 on 750e392; CI run 38580282498 (scripts, backend, frontend)
+  and release run 38580381042 (3 image jobs + release) green. 8 assets, all
+  match SHA256SUMS from `releases/latest/download/`. Anonymous GHCR
+  manifests 200 for 1.0.5-cpu/-cuda, latest-cpu/-cuda, frontend
+  1.0.5/latest; latest = 1.0.5 digests.
+- `vcm update` 1.0.4 → 1.0.5 from the real release:
+
+| Install | Image | Layers downloaded | Bytes (manifest) | NIC received | Time |
+|---|---|---|---|---|---|
+| Windows | backend 1.0.5-cuda | 3 / 14 (#12-#14) | 0.2 of 2291.2 MB | - | 28 s |
+| Windows | frontend 1.0.5 | 3 / 9 (#7-#9) | 6.1 of 54.4 MB | | |
+| Clean | backend 1.0.5-cpu | 3 / 14 (#12-#14) | 0.2 of 810.1 MB | 10.9 MB | 26 s |
+| Clean | frontend 1.0.5 | 3 / 9 (#7-#9) | 6.1 of 54.4 MB | (incl.) | |
+
+  Backend layers 1-11 (incl. the 2050 MB deps layer) reused, as intended by
+  keeping ruff config out of pyproject. vs 1.0.4: 0 + 6.1 MB.
+- After, on both: VCM_VERSION and API version 1.0.5, alembic b4e7c2d91a36
+  (no migration), counts, caption-text md5, video list and media checksum
+  identical (Windows 31/505/93, 178 files; clean 2/6/3, 7 files).
+- Guard on both, at localhost and 127.0.0.1: another port's Origin,
+  cross-site and rebinding Host (POST and GET) 403; own origin passes.
+- **Open question (found here, not fixed):** the Next proxy does not add
+  X-Forwarded-For; it only passes through one the caller sent. So through
+  the frontend, `audit.log`'s `client` is the frontend container's IP for
+  normal requests (worker → frontend with no header recorded 172.19.0.5,
+  the frontend), and whatever a caller puts in X-Forwarded-For is recorded
+  (198.51.100.7, 203.0.113.9 tested). `3a418bf` stops direct spoofing at
+  the API, but SECURITY.md §4a's "the browser's address when the request
+  came through the frontend" does not hold in installs.
+- Windows UI flow (`flow.js`) at localhost and 127.0.0.1: 7/7 PASS each,
+  0 refused; speech model restored to auto.
+- E2E (pipeline changed: Celery limits): Windows GPU 2 clips × same,hi with
+  SRT/VTT/MP4, ALL PASSED (2 m 30 s); clean CPU (high tier) same,hi,fr ALL
+  PASSED (43 s). The 4 E2E videos on Windows were deleted afterwards.
+- Clean machine: fresh `docker:29-dind` `vcm-clean`, v1.0.4 installed from
+  its release assets (images side-loaded; Norton root in the dind CA store
+  and the install's `certs/`), then `.env` switched to `latest` like a real
+  install. A Docker Desktop shutdown mid-E2E interrupted a translation; on
+  restart, recovery requeued it and it completed.
+- Secrets: no .env/key/cert/dump/storage file in git history
+  (`docs/learning-guide.md` was tracked in 79da389 and removed in 4dc2628,
+  2026-08-06; pushed, so it is in public history; scanned: no keys, tokens,
+  64-hex secrets or local paths). Images: no .env/key files, empty
+  extra-CA dir; the only .pem is grpc's public roots bundle (115 certs, no
+  private key).
+- Removed by name: `vcm-clean` (+ its volume), docker:29-dind,
+  backend:1.0.4-cpu, frontend:1.0.4 tags, test clips. The dev stack was
+  stopped (not removed) for port 3000 and left stopped, as asked.

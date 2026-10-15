@@ -6,9 +6,10 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.5] - Unreleased
+## [1.0.5] - 2026-10-14
 
-Committed on `main`; not yet tagged or released.
+Updating from 1.0.4 downloads about 6.3 MB (backend 0.2 MB, frontend
+6.1 MB), measured on both test installs. No migration.
 
 ### Added
 - **System theme** in Settings → Interface theme (Light / Dark / System, the
@@ -242,7 +243,7 @@ search, dashboard) were built in Milestones 1–10; see `docs/MILESTONES.md`.
   to `/data`, so dev vectors were lost on recreate. Both compose files are
   fixed (`4384ff2`).
 
-[1.0.5]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.4...HEAD
+[1.0.5]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.1...v1.0.2

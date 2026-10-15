@@ -1,7 +1,7 @@
 # Product requirements: VideoCaptionMaker
 
-Status: describes the product as of **v1.0.5** (committed on `main`, not yet
-tagged; v1.0.4 is the latest release). Everything here is taken from the code,
+Status: describes the product as of **v1.0.5**, the latest release
+(2026-10-14). Everything here is taken from the code,
 the config, the tests and [PROGRESS.md](../PROGRESS.md). Product questions are
 answered by the maintainer and recorded in [Decisions recorded](#decisions-recorded).
 

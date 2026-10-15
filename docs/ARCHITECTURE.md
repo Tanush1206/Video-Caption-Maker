@@ -1,6 +1,6 @@
 # Architecture
 
-How VideoCaptionMaker is built, as of v1.0.5 (on `main`, not yet tagged). Every statement points at the
+How VideoCaptionMaker is built, as of v1.0.5 (released 2026-10-14). Every statement points at the
 file it comes from. Auth and the request guard are in
 [SECURITY.md](SECURITY.md); tables are in [DATABASE.md](DATABASE.md); endpoints
 are in [API.md](API.md).
