@@ -67,8 +67,10 @@ flowchart LR
   the peer is an address that `TRUSTED_PROXIES` (default `frontend`)
   resolves to. It re-resolves at most every 5 s, because a recreated frontend
   container gets a new IP and Docker can hand the old one to another
-  container. The request guard then sees the real client address for
-  `audit.log`.
+  container. The frontend overwrites both headers with its own socket's peer
+  before proxying (`frontend/forwarded-for.js`, preloaded with `node -r`), so
+  `audit.log`'s client can't be forged. For a browser on the host, that peer
+  is Docker's gateway ([SECURITY.md](SECURITY.md) §4a).
 
   Polling was chosen over SSE or websockets (see [DECISIONS.md](DECISIONS.md)).
 - Only the worker sees the GPU. At `worker_ready` it writes a hardware report

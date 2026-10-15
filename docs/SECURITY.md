@@ -169,7 +169,7 @@ Written by `audit()` in `backend/app/request_guard.py`.
 |---|---|
 | **Where** | `<storage root>/audit.log`, i.e. `/app/storage/audit.log` on the `media` volume. It survives updates and container replacement. |
 | **What is recorded** | every **refused** request (403); every **DELETE** (any status); every **POST/PUT/PATCH to `/api/system/settings`** |
-| **Fields** (one JSON object per line) | `time` (UTC), `method`, `path`, `status`, `user_agent`, `origin`, `referer`, `sec_fetch_site`, `host` (forwarded or direct), `client` (the browser's address when the request came through the frontend, otherwise the peer's own; see §4a), and `refused` (the reason) on refusals |
+| **Fields** (one JSON object per line) | `time` (UTC), `method`, `path`, `status`, `user_agent`, `origin`, `referer`, `sec_fetch_site`, `host` (forwarded or direct), `client` (through the frontend: the address of whatever connected to the frontend, which in a Docker install is usually Docker's gateway rather than the browser; otherwise the API's own peer. Never a caller-supplied value; see §4a), and `refused` (the reason) on refusals |
 | **Never recorded** | **request bodies**. A settings body can hold the Gemini key. Tested by `test_a_settings_change_is_recorded_without_its_value`. Query strings aren't recorded either; only `path` is. |
 | **Rotation** | before a write, if `audit.log` is over **5 MB** it is renamed to `audit.log.1`, replacing the previous `.1`. At most two files of about 5 MB each (`AUDIT_MAX_BYTES`; `test_the_audit_log_cannot_grow_without_bound`). |
 | **Also** | each entry is logged through Python logging (`logger.info("audit …")`), so it appears in `vcm logs backend` too. A failed write is logged and never fails the request. |
@@ -198,6 +198,45 @@ the frontend's IP is assigned at start (after the API's). Verified live on the
 dev network: a container aliased `frontend` had its forwarded address
 recorded, while another container sending the same header had its own
 address recorded. Tests: `backend/tests/test_proxy_headers.py`.
+
+**What the frontend forwards** (since `forwarded-for.js`, after v1.0.5).
+Trusting the frontend is only safe if the frontend never passes a caller's
+value along. Next's `/api` rewrite proxy does: it forwards the incoming
+headers as they are and adds `X-Forwarded-For` only when it is missing. In
+v1.0.5, anyone who could reach the UI port could therefore write any address
+into `audit.log`; this was found during the v1.0.5 release check.
+
+Now `frontend/forwarded-for.js` is preloaded into the Next server
+(`node -r` in the runtime image, `NODE_OPTIONS` in the dev compose). On every
+request and upgrade, before Next sees it, it **overwrites**:
+- `X-Forwarded-For` with the frontend socket's peer address;
+- `X-Forwarded-Proto` with `https` or `http`, from whether that socket is TLS.
+
+Whatever the caller sent is dropped. `X-Forwarded-Host` was already safe:
+Next's proxy sets it from `Host`, over any caller value.
+
+**Who the peer is.** It is whatever opened the TCP connection to the
+frontend, which is not always the browser:
+- **a browser on the same computer** (every normal use of an install): the
+  connection arrives through Docker's port publishing, so the peer is
+  **Docker's gateway on the compose network** (e.g. `172.20.0.1`), not
+  `127.0.0.1`. Every browser request records the same gateway address;
+- **another container on the compose network**: that container's own
+  address.
+
+So `client` tells the gateway (outside Docker) apart from containers on the
+network, and can't be forged; it can't tell two programs on the host apart.
+
+Verified on the built runtime image behind `-p 127.0.0.1:…:3000` with a
+header-echo backend:
+- from the host, a request sending `X-Forwarded-For: 203.0.113.9` and
+  `X-Forwarded-Proto: https` reached the backend as `172.20.0.1` (the
+  network's gateway) and `http`;
+- from a container, it reached the backend as that container's address.
+
+Tests: `frontend/tests/forwarded-for.test.js` (`npm test`, run in CI). They
+send a forged header directly, send no header, and go through Next's own
+rewrite proxy (`proxyRequest`). All three fail without the preload.
 
 The request guard's `X-Forwarded-Host` rule (§3) is unchanged: only the
 frontend can reach the API in an install, and a direct caller is a script,

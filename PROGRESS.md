@@ -672,7 +672,7 @@ One commit per fix, each with tests:
   identical (Windows 31/505/93, 178 files; clean 2/6/3, 7 files).
 - Guard on both, at localhost and 127.0.0.1: another port's Origin,
   cross-site and rebinding Host (POST and GET) 403; own origin passes.
-- **Open question (found here, not fixed):** the Next proxy does not add
+- **Found here; fixed after the release (unreleased, see below):** the Next proxy does not add
   X-Forwarded-For; it only passes through one the caller sent. So through
   the frontend, `audit.log`'s `client` is the frontend container's IP for
   normal requests (worker → frontend with no header recorded 172.19.0.5,
@@ -699,3 +699,16 @@ One commit per fix, each with tests:
 - Removed by name: `vcm-clean` (+ its volume), docker:29-dind,
   backend:1.0.4-cpu, frontend:1.0.4 tags, test clips. The dev stack was
   stopped (not removed) for port 3000 and left stopped, as asked.
+
+## Unreleased (after v1.0.5)
+- Forwarded headers through the frontend: `frontend/forwarded-for.js`,
+  preloaded with `node -r` (runtime image) and `NODE_OPTIONS` (dev compose),
+  overwrites X-Forwarded-For/-Proto with the frontend socket's peer before
+  Next proxies `/api`. Tests: `frontend/tests/forwarded-for.test.js` (3; all
+  fail without the preload; one goes through Next's `proxyRequest`), run by
+  `npm test` in CI. Live on the built runtime image behind a published port:
+  a forged 203.0.113.9 + https from the host reached the backend as
+  172.20.0.1 (Docker gateway) + http; from a container, as that container.
+  SECURITY.md §4a rewritten. Test container/network/image removed. Ships
+  with the next release; the dev stack wasn't started, so the
+  `NODE_OPTIONS` path is untested live there.
