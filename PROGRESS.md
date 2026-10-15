@@ -710,5 +710,13 @@ One commit per fix, each with tests:
   a forged 203.0.113.9 + https from the host reached the backend as
   172.20.0.1 (Docker gateway) + http; from a container, as that container.
   SECURITY.md §4a rewritten. Test container/network/image removed. Ships
-  with the next release; the dev stack wasn't started, so the
-  `NODE_OPTIONS` path is untested live there.
+  with the next release.
+- Dev stack verified (2026-10-15), frontend recreated with
+  `NODE_OPTIONS=--require /app/forwarded-for.js` (one `next dev` process).
+  Cross-site POSTs with forged X-Forwarded-For, read from audit.log:
+  host → dev frontend (203.0.113.9) recorded `::ffff:172.18.0.1` (dev
+  network gateway); worker → frontend (198.51.100.7) recorded
+  `::ffff:172.18.0.6` (the worker); control, host → backend:8000 directly
+  (192.0.2.44) recorded `172.18.0.1`. `next dev` listens dual-stack, so dev
+  addresses are IPv4-mapped (`::ffff:`); the runtime image (HOSTNAME=0.0.0.0)
+  records plain IPv4.
