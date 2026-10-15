@@ -84,7 +84,7 @@ anything.**
       and `docker compose exec backend python -m pytest`. The suite uses its
       own `_test` database, Redis db 14, collection and temp storage; **never**
       point tests at real data;
-    - frontend: `npm run lint` and `npm run type-check`;
+    - frontend: `npm run lint`, `npm run type-check` and `npm test`;
     - UI changes: `scripts/ui-check` (`shoot.js`, `axe.js`, and the relevant
       `checks.js` checks; axe must report 0);
     - build: `docker build --target build frontend`, or let CI run it;
@@ -131,6 +131,7 @@ docker compose exec backend ruff check app tests alembic scripts
 docker compose exec backend python -m pytest
 docker compose exec frontend npm run lint
 docker compose exec frontend npm run type-check
+docker compose exec frontend npm test
 
 # end to end against a running install
 python scripts/e2e.py --base http://localhost:3000 --video clip.mp4

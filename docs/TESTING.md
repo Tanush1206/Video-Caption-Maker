@@ -84,7 +84,12 @@ if you need the dev frontend.
 ```bash
 docker compose exec frontend npm run lint
 docker compose exec frontend npm run type-check
+docker compose exec frontend npm test     # node:test, tests/*.test.js
 ```
+
+`npm test` uses Node's built-in runner, with no extra dependencies.
+`tests/forwarded-for.test.js` checks that a caller-supplied
+`X-Forwarded-For` never reaches the API (SECURITY.md §4a).
 
 **Never run `next build` inside the running dev container.** It overwrites
 `.next` and every dev route returns 500. Build the image target instead,
@@ -313,7 +318,7 @@ else does.
 1. All work committed in small commits; PROGRESS.md updated.
 2. CI green: ruff and the backend suite (job `backend`), frontend lint,
    types and build, and the script checks.
-3. `npm run lint`, `type-check` and `build` pass.
+3. `npm run lint`, `type-check`, `test` and `build` pass.
 4. UI changes: `scripts/ui-check` screenshots at 375/1440 px in light and
    dark, axe 0, and the relevant `checks.js` checks pass.
 5. E2E on the GPU install, and on CPU for pipeline changes.

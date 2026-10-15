@@ -23,6 +23,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run lint
       - run: npm run type-check
+      - run: npm test
       - run: npm run build
         env:
           NEXT_PUBLIC_API_URL: ""
