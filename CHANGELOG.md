@@ -6,7 +6,10 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.0.6] - 2026-10-15
+
+A security fix in the frontend only; no backend code change and no
+migration.
 
 ### Fixed
 - **A caller could forge `audit.log`'s client address through the UI
@@ -15,7 +18,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   overwrites both with its own socket's peer before proxying
   (`frontend/forwarded-for.js`). For a browser on the same computer, that
   peer is Docker's gateway. Tested in `frontend/tests/`, which CI now runs
-  (`npm test`).
+  (`npm test`) (`16b8747`, `4f8ac57`, `5fd32c2`).
 
 ## [1.0.5] - 2026-10-14
 
@@ -254,7 +257,7 @@ search, dashboard) were built in Milestones 1–10; see `docs/MILESTONES.md`.
   to `/data`, so dev vectors were lost on recreate. Both compose files are
   fixed (`4384ff2`).
 
-[Unreleased]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.5...HEAD
+[1.0.6]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.2...v1.0.3

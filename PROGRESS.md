@@ -700,7 +700,7 @@ One commit per fix, each with tests:
   backend:1.0.4-cpu, frontend:1.0.4 tags, test clips. The dev stack was
   stopped (not removed) for port 3000 and left stopped, as asked.
 
-## Unreleased (after v1.0.5)
+## v1.0.6 (prepared 2026-10-15; CI green on 9c66a7d)
 - Forwarded headers through the frontend: `frontend/forwarded-for.js`,
   preloaded with `node -r` (runtime image) and `NODE_OPTIONS` (dev compose),
   overwrites X-Forwarded-For/-Proto with the frontend socket's peer before
