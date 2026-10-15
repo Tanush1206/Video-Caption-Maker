@@ -187,6 +187,9 @@ services:
       # Windows bind mounts don't deliver inotify events into the container,
       # so the dev-server file watcher must poll to see host edits.
       WATCHPACK_POLLING: "true"
+      # As in the runtime image: never pass a caller's X-Forwarded-For on to
+      # the API (frontend/forwarded-for.js).
+      NODE_OPTIONS: --require /app/forwarded-for.js
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

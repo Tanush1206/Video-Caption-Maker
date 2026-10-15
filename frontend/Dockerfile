@@ -45,6 +45,7 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
+COPY --from=build --chown=app:app /app/forwarded-for.js ./
 USER app
 # Last, so a new version number is metadata only and does not invalidate the
 # layers above it (see backend/Dockerfile).
@@ -53,4 +54,6 @@ LABEL org.opencontainers.image.version="${VERSION}"
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
     CMD wget -q --spider http://127.0.0.1:3000/healthz || exit 1
-CMD ["node", "server.js"]
+# The preload replaces any caller-sent X-Forwarded-For/-Proto with this
+# socket's peer before Next proxies /api (see forwarded-for.js).
+CMD ["node", "-r", "./forwarded-for.js", "server.js"]
