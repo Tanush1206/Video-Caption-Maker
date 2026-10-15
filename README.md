@@ -1,10 +1,14 @@
 # VideoCaptionMaker
 
+**Private, offline AI captions and translation, on your own computer.**
+
 Captions for your videos, made on your own computer. Upload a video, choose
 the caption language, export it with the captions burned in, or as subtitle
 files. Speech recognition (Whisper) and translation (M2M100) run locally on
 your CPU or NVIDIA GPU. There's no account and no cloud service, and your
 video never leaves the machine.
+
+![VideoCaptionMaker dashboard](docs/images/dashboard.png)
 
 ## Install
 
@@ -47,6 +51,31 @@ Running it again is safe. Your videos and settings are kept.
 Editing captions, retiming them on the waveform, styling them and searching
 the transcript by meaning are all optional. They're on each video's page,
 below the export step.
+
+## Features
+
+- **Local transcription** with faster-whisper. The model is chosen
+  automatically for your hardware: large-v3 on NVIDIA GPUs, large-v3-turbo
+  or small on the CPU.
+- **Local translation** between English, Hindi, French, German and Dutch
+  with M2M100. Optionally add a Gemini key for more natural translations,
+  with automatic fallback to the local model.
+- **Caption editor**: edit text, retime captions on the waveform, drag them
+  on the video, and style them with a large font catalogue.
+- **Export** burned-in MP4, SRT or VTT.
+- **Semantic search** across everything said in all your videos, with
+  clickable timestamps.
+- **Light and dark themes**, responsive from phone to desktop.
+- **Small updates**: `vcm update` downloads only what changed, about 6 MB
+  for a typical release.
+
+## Screenshots
+
+| Dashboard | Editor |
+|---|---|
+| ![Dashboard](docs/images/dashboard.png) | ![Editor](docs/images/editor.png) |
+| **Search** | **Settings** |
+| ![Search](docs/images/search.png) | ![Settings](docs/images/settings.png) |
 
 ## Requirements
 
@@ -167,6 +196,36 @@ healthy.
 `vcm uninstall` stops and removes the app. It deletes your videos, captions
 and downloaded models only if you type `DELETE` when asked.
 
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 14, React, Tailwind CSS |
+| Backend | FastAPI, Celery |
+| Data | PostgreSQL, Redis, ChromaDB |
+| Speech | faster-whisper (Whisper small / large-v3-turbo / large-v3) |
+| Translation | M2M100 via CTranslate2 (int8), optional Gemini |
+| Search | all-MiniLM-L6-v2 sentence embeddings |
+| Delivery | Docker, GitHub Actions, GitHub Container Registry, GitHub Releases |
+
+## Engineering highlights
+
+- **Checksum-verified installer**: one command installs or updates the app,
+  and every downloaded file is checked against the release's `SHA256SUMS`
+  before anything is replaced.
+- **Hardware-aware model selection** across GPU and CPU tiers, tested on an
+  NVIDIA RTX 5080 and on a clean CPU-only Linux machine.
+- **Crash recovery**: jobs interrupted by a restart or an out-of-memory kill
+  are requeued automatically, with a 3-attempt limit that stops crash loops
+  and tells the user to pick a smaller model.
+- **Request guard** for a no-login local app: blocks DNS rebinding and
+  cross-origin requests, and records every delete, settings change and
+  refused request in a rotating audit log.
+- **Small updates**: reordering the Docker build cut a typical update from
+  about 2.2 GB to about 6 MB.
+- **Tested**: 350+ backend tests, frontend tests, end-to-end runs on GPU and
+  CPU, and 0 axe accessibility violations across light and dark themes.
+
 ## Development
 
 The dev stack bind-mounts the source with hot reload:
@@ -176,10 +235,13 @@ cp .env.example .env            # dev settings; never commit .env
 docker compose up               # CPU (default)
 VCM_VARIANT=cuda docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build   # NVIDIA GPU
 docker compose exec backend alembic upgrade head
-docker compose exec backend python -m pytest      # uses the dev database
 docker compose exec frontend npm run lint
+docker compose exec frontend npm test
 python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to end
 ```
+
+Backend tests run against an isolated test database; see
+[docs/TESTING.md](docs/TESTING.md) for the exact commands.
 
 - Frontend (Next.js 14): `frontend/`. Backend (FastAPI, Celery): `backend/`.
 - Production images: `backend/Dockerfile` (`VARIANT=cpu|cuda`, built from the
@@ -215,7 +277,7 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | Python and TypeScript conventions, error handling, logging, lint commands, commit format |
 | [docs/TESTING.md](docs/TESTING.md) | Test layout and commands, `e2e.py`, `update_layers.py`, CPU/GPU tiers, clean-machine tests, release checklist |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Key decisions with context, alternatives and trade-offs |
-| [CHANGELOG.md](CHANGELOG.md) | Changes in each release, v1.0.0–v1.0.4 |
+| [CHANGELOG.md](CHANGELOG.md) | Changes in each release, v1.0.0–v1.0.6 |
 | [AGENTS.md](AGENTS.md) | Rules for anyone (or any agent) changing the code |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Planned later work, not yet built |
 | [docs/MILESTONES.md](docs/MILESTONES.md) | The original 10-milestone plan (historical) |
