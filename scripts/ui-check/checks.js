@@ -475,6 +475,39 @@ const CHECKS = {
     await page.close();
   },
 
+  // A caption that wraps breaks into lines of about the same width, as
+  // libass's WrapStyle 0 does in the export (measured: 61% + 64% of the
+  // frame there; the preview's greedy wrap was 86% + 38%). Changes data:
+  // see editorVideo.
+  async "caption-wrap"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    await openEditor(page, base, id);
+    await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_size: 130 } });
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+    const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
+    const long = captions.items.reduce((a, b) => (b.text.length > a.text.length ? b : a));
+    await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (long.start_ms + long.end_ms) / 2000);
+    await waitForCaption(page, long.text);
+    const widths = await page.evaluate(() => {
+      const range = document.createRange();
+      range.selectNodeContents(document.querySelector("[data-caption-text]"));
+      const byLine = new Map();
+      for (const r of range.getClientRects()) {
+        const key = Math.round(r.top);
+        const [lo, hi] = byLine.get(key) ?? [Infinity, -Infinity];
+        byLine.set(key, [Math.min(lo, r.left), Math.max(hi, r.right)]);
+      }
+      return [...byLine.values()].map(([lo, hi]) => hi - lo);
+    });
+    ok("caption-wrap: the long caption wraps", widths.length >= 2, `${widths.length} lines`);
+    const ratio = Math.min(...widths) / Math.max(...widths);
+    ok("caption-wrap: lines are balanced like the export's", ratio > 0.8, `${widths.map((w) => w.toFixed(0)).join(" / ")} (min/max ${ratio.toFixed(2)})`);
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.close();
+  },
+
   // Indic captions are drawn in the bundled Noto faces, the same files the
   // export burns with, whatever the caption font and whatever the operating
   // system has; Latin words in the same caption stay in the caption font.

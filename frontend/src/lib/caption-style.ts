@@ -93,6 +93,11 @@ export function captionTextStyle(
     // as far apart here as in the export, and a box is as tall.
     lineHeight: span,
     whiteSpace: "pre-wrap",
+    // libass runs with WrapStyle 0, "smart" wrapping, which evens out the
+    // lines of a wrapped caption; the browser fills each line greedily. The
+    // same caption broke as 86% + 38% of the frame here and 61% + 64% in the
+    // export. `balance` evens them out the same way: 60% + 63%.
+    textWrap: "balance",
     display: "inline-block",
   };
 

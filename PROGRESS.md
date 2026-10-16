@@ -960,6 +960,12 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   `test_indic_text_is_burned_at_the_caption_fonts_em` (ratio 1.0 before,
   0.634 = span ratio after); check `script-fonts` (CDP: which font drew the
   glyphs).
+- B2 line wrapping: libass (WrapStyle 0) balances a wrapped caption's lines,
+  the browser filled them greedily, so the preview broke lines elsewhere.
+  Measured, a 2-line caption as fractions of the frame: burn 0.609 + 0.635,
+  preview 0.863 + 0.375, preview with `text-wrap: balance` 0.601 + 0.633.
+  Applies to every language; Indic scripts wrap at spaces like the others.
+  Check `caption-wrap` (min/max line width 0.52 before, 0.90 after).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
