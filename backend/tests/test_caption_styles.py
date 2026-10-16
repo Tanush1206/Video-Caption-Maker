@@ -334,6 +334,25 @@ async def test_malformed_colour_is_rejected(client, auth_headers, sample_video_b
 
 
 @pytest.mark.asyncio
+async def test_the_style_carries_the_fonts_win_span(client, auth_headers, sample_video_bytes):
+    """
+    libass sizes a face by its whole cell, (usWinAscent + usWinDescent) /
+    unitsPerEm, where CSS sizes the em; the preview needs the ratio to agree
+    with the export. Measured from the installed files: Liberation Sans is
+    (1854 + 434) / 2048, Poppins Bold (1050 + 712) / 1000.
+    """
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    url = f"/api/videos/{video_id}/style"
+
+    sans = (await client.patch(url, headers=auth_headers, json={"font_key": "sans"})).json()
+    assert sans["font_win_span"] == pytest.approx((1854 + 434) / 2048, abs=0.002)
+    poppins = (
+        await client.patch(url, headers=auth_headers, json={"font_key": "poppins", "bold": True})
+    ).json()
+    assert poppins["font_win_span"] == pytest.approx(1.762, abs=0.002)
+
+
+@pytest.mark.asyncio
 async def test_reset_and_presets_clear_a_hand_placement(client, auth_headers, sample_video_bytes):
     """
     Reset is "back to the defaults" and a preset names its own position, so

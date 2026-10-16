@@ -369,6 +369,14 @@ def ensure(key: str, weight: str = "regular") -> Path:
     return path
 
 
+def span_of(path: Path) -> float | None:
+    """The win span of a font file on disk, or None if it can't be read."""
+    try:
+        return _validate(path.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
 def win_span(key: str, weight: str = "regular") -> float | None:
     """The cached vertical span, or None if the face has not been fetched."""
     sidecar = metrics_path(key, weight)

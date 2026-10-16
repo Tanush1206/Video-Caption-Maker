@@ -15,7 +15,10 @@ exists to make that true:
     both ends, so one style means the same thing on a 360p and a 4K video.
 """
 
+import subprocess
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,6 +104,42 @@ FONTS: tuple[Font, ...] = (
 
 FONTS_BY_KEY = {font.key: font for font in FONTS}
 DEFAULT_FONT_KEY = "sans"
+
+
+@lru_cache(maxsize=64)
+def _installed_span(render_name: str, bold: bool) -> float | None:
+    """The win span of the face fontconfig hands libass for this family."""
+    try:
+        path = subprocess.run(
+            ["fc-match", "-f", "%{file}", f"{render_name}:weight={200 if bold else 80}"],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return font_library.span_of(Path(path)) if path else None
+
+
+def font_win_span(key: str, bold: bool) -> float:
+    """
+    How much taller than its em square libass draws this font.
+
+    libass sizes a face the way GDI did: the requested Fontsize is the height
+    of the font's whole cell, usWinAscent + usWinDescent, not its em. CSS
+    `font-size` is the em. So the same number drew Poppins (span 1.4) 40%
+    larger in the preview than in the export, and Liberation Sans 12% larger —
+    the export wrapped in different places and every caption came out smaller
+    than it looked. The preview divides by this to draw at libass's em, and
+    sets its line height to it, which is libass's line pitch.
+
+    1.0 (no correction) only if the face can't be measured.
+    """
+    font = get_font(key)
+    if key not in FONTS_BY_KEY:
+        weight = "bold" if bold else "regular"
+        span = font_library.win_span(key, weight) or font_library.win_span(key)
+    else:
+        span = _installed_span(font.render_name, bold)
+    return span or 1.0
 
 
 def get_font(key: str) -> Font:
