@@ -59,6 +59,31 @@ const previewSignature = (page) =>
     return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, b.padding, b.maxWidth].join("|");
   });
 
+/** A pointer that can be a mouse or a finger, driving one drag gesture. */
+async function pointer(page, kind) {
+  if (kind === "mouse") {
+    return {
+      down: async (x, y) => { await page.mouse.move(x, y); await page.mouse.down(); },
+      move: (x, y) => page.mouse.move(x, y, { steps: 4 }),
+      up: () => page.mouse.up(),
+    };
+  }
+  const cdp = await page.context().newCDPSession(page);
+  let last = [0, 0];
+  const touch = (type, points) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
+  return {
+    down: async (x, y) => { last = [x, y]; await touch("touchStart", [{ x, y }]); },
+    move: async (x, y) => {
+      const [x0, y0] = last;
+      for (let k = 1; k <= 4; k++) await touch("touchMove", [{ x: x0 + ((x - x0) * k) / 4, y: y0 + ((y - y0) * k) / 4 }]);
+      last = [x, y];
+    },
+    up: () => touch("touchEnd", []),
+  };
+}
+
+const near = (a, b, tolerance = 1.5) => Math.abs(a - b) <= tolerance;
+
 const CHECKS = {
   // Settings → Interface theme offers Light, Dark and System. System stores
   // nothing, follows the OS, and follows it live when the OS changes.
@@ -264,6 +289,85 @@ const CHECKS = {
       }
       await page.request.delete(`${base}/api/videos/${id}/style`);
       await page.close();
+    }
+  },
+
+  // Dragging the caption on the video, by mouse and by touch, at 1440 and
+  // 375: no jump on grab, follows the pointer, stays whole and inside the
+  // frame however far it is dragged, saves on release where it was dropped,
+  // and is in the same place after a reload. Changes data: see editorVideo.
+  async "caption-drag"(browser, base) {
+    for (const width of [1440, 375]) {
+      for (const kind of ["mouse", "touch"]) {
+        const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: kind === "touch" });
+        const page = await context.newPage();
+        const id = await editorVideo(page, base);
+        await openEditor(page, base, id);
+        const at = `caption-drag@${width}/${kind}`;
+        const drag = await pointer(page, kind);
+        await page.locator("[data-caption-text]").scrollIntoViewIfNeeded();
+        const start = await captionGeometry(page);
+        const { frame } = start;
+        const size = { w: start.text.w, h: start.text.h };
+
+        // Grab, then a small move: the caption moves exactly that far.
+        await drag.down(start.text.cx, start.text.cy);
+        await drag.move(start.text.cx + 12, start.text.cy - 12);
+        await page.waitForTimeout(80);
+        let now = await captionGeometry(page);
+        ok(`${at}: no jump on grab`, near(now.text.cx - start.text.cx, 12) && near(now.text.cy - start.text.cy, -12), `${(now.text.cx - start.text.cx).toFixed(1)},${(now.text.cy - start.text.cy).toFixed(1)}`);
+
+        // A move that stays inside the frame: the caption follows exactly.
+        // Up by 30% of the frame, but never above the viewport: a pointer
+        // cannot leave the window, and a portrait frame is taller than it.
+        // Measured against the frame, so a page scroll doesn't count.
+        // Nor so far that the caption's own top edge meets the frame's,
+        // where the clamp (correctly) stops it.
+        const dy = -Math.min(frame.h * 0.3, start.text.cy - 20, start.text.y - frame.y - 10);
+        await drag.move(start.text.cx + 12, start.text.cy + dy);
+        await page.waitForTimeout(80);
+        now = await captionGeometry(page);
+        const travelled = (now.text.cy - now.frame.y) - (start.text.cy - start.frame.y);
+        const scrolled = now.frame.y - start.frame.y;
+        ok(`${at}: follows the pointer`, near(travelled, dy - scrolled), `${travelled.toFixed(1)} vs ${(dy - scrolled).toFixed(1)}`);
+
+        // Far past each edge in turn: the caption stays whole, its own size,
+        // and inside the frame.
+        for (const [name, x, y] of [["right", frame.x + frame.w * 3, now.text.cy], ["bottom", now.text.cx, frame.y + frame.h * 3], ["left", frame.x - frame.w * 2, now.text.cy], ["top", now.text.cx, frame.y - frame.h * 2]]) {
+          await drag.move(x, y);
+          await page.waitForTimeout(80);
+          const g = await captionGeometry(page);
+          const inside = g.text.x >= frame.x - 1 && g.text.y >= frame.y - 1 && g.text.x + g.text.w <= frame.x + frame.w + 1 && g.text.y + g.text.h <= frame.y + frame.h + 1;
+          ok(`${at}: past the ${name} edge stays inside the frame`, inside, JSON.stringify(g.text));
+          ok(`${at}: past the ${name} edge keeps its size`, near(g.text.w, size.w, 2) && near(g.text.h, size.h, 2), `${g.text.w.toFixed(0)}x${g.text.h.toFixed(0)} vs ${size.w.toFixed(0)}x${size.h.toFixed(0)}`);
+        }
+
+        // Back to a middle spot, release: no jump, and saved where it lies.
+        const tx = frame.x + frame.w * 0.4, ty = frame.y + frame.h * 0.35;
+        await drag.move(tx, ty);
+        await page.waitForTimeout(80);
+        const held = await captionGeometry(page);
+        await drag.up();
+        await page.waitForTimeout(200);
+        const dropped = await captionGeometry(page);
+        ok(`${at}: no jump on release`, near(dropped.text.cx, held.text.cx) && near(dropped.text.cy, held.text.cy));
+        await page.waitForTimeout(800);
+        const saved = await styleOf(page, base, id);
+        const fx = (dropped.text.cx - frame.x) / frame.w, fy = (dropped.text.cy - frame.y) / frame.h;
+        ok(`${at}: saved where it was dropped`, near(saved.pos_x, fx, 0.005) && near(saved.pos_y, fy, 0.005), `${saved.pos_x?.toFixed(3)},${saved.pos_y?.toFixed(3)} vs ${fx.toFixed(3)},${fy.toFixed(3)}`);
+        ok(`${at}: a drag does not toggle playback`, await page.evaluate(() => document.querySelector("video").paused));
+
+        const time = await page.evaluate(() => document.querySelector("video").currentTime);
+        await page.reload({ waitUntil: "networkidle" });
+        await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+        await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, time);
+        await page.locator("[data-caption-text]").waitFor();
+        const reloaded = await captionGeometry(page);
+        const rx = (reloaded.text.cx - reloaded.frame.x) / reloaded.frame.w, ry = (reloaded.text.cy - reloaded.frame.y) / reloaded.frame.h;
+        ok(`${at}: same place after a reload`, near(rx, fx, 0.004) && near(ry, fy, 0.004), `${rx.toFixed(3)},${ry.toFixed(3)} vs ${fx.toFixed(3)},${fy.toFixed(3)}`);
+        await page.request.delete(`${base}/api/videos/${id}/style`);
+        await context.close();
+      }
     }
   },
 };

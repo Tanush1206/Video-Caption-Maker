@@ -168,6 +168,21 @@ export function captionBoxStyle(style: CaptionStyle, scale: number): CSSProperti
       position: "absolute",
       left: `${free.x * 100}%`,
       top: `${free.y * 100}%`,
+      // Its own width, not whatever is left of the frame after `left`. An
+      // absolute box shrinks to fit the space between its left edge and the
+      // frame's right edge, so the same caption wrapped into a narrow column
+      // near the right of the frame and spread out near the left — its size
+      // changed under the drag that was clamping it by that size, and it
+      // could be pushed half out of frame. libass doesn't do that: under
+      // `\pos` it wraps at the margins and nowhere else, which is maxWidth.
+      width: "max-content",
+      // A flex item, not an inline-block on a text line. On a line it sits
+      // on the baseline with descender room below it, so the box was taller
+      // than the text and the text's centre sat a few pixels above the
+      // point `\an5\pos` names — a jump on grab, and a save that was off by
+      // the same few pixels. Anchored mode is already a flex container.
+      display: "flex",
+      justifyContent: HORIZONTAL[style.alignment],
       transform: anchorTransform(style),
       // The wrap width, and the one thing `\pos` does *not* take over: libass
       // still breaks lines at PlayResX minus the horizontal margins. Verified

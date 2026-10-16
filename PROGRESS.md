@@ -753,8 +753,8 @@ translation quality; add 12 caption languages. Definition of done and rules
 are in Tanush's brief of 2026-10-15; this section is the resume point.
 
 ### Backlog
-- [ ] A1 Caption drag on the video: reproduce in Playwright (mouse, touch,
-      keyboard; 1440/375; light/dark), fix, test.
+- [x] A1 Caption drag on the video: reproduce in Playwright (mouse, touch,
+      1440/375), fix, test. (Keyboard is A4; themes in the D screenshots.)
 - [ ] A2 Drag handle "dot": there is no dot today (the whole frame is the
       drag surface). Add one per the brief (>= 24x24 hit area, on top, starts
       a drag, touch), test.
@@ -802,6 +802,20 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   Check `style-sliders` (both widths, every slider: drag monotonic and stays
   put, click, arrow step, label, live preview, save + reload): 35 FAIL before,
   4 with fix 1 only (Opacity moves), 0 after (92 PASS).
+- A1 drag, two root causes in the free-placed caption box:
+  1. **Width depended on `left`.** An absolute box shrinks to the space
+     between its left edge and the frame's right edge, so the caption
+     rewrapped as it moved (133x130 near the middle, 413x33 at the left,
+     207x98 at the right). The clamp used the size measured at grab, so it
+     overflowed the frame by up to 115 px. libass wraps only at the margins
+     under `\pos`. Fix: `width: max-content` (wrap at maxWidth only).
+  2. **Baseline strut.** In free mode the box was a block, so the
+     inline-block text sat on a line with descender room: the box was taller
+     than the text and the text centre sat above `n5\pos`'s point. Grab
+     jumped ~1.7 px; the saved y was off by 0.009 of the frame (375 px).
+     Fix: the box is a flex container, like anchored mode.
+  Check `caption-drag` (mouse + CDP touch, 1440/375, 16:9 and 9:16): 17 FAIL
+  before, 0 after (56 PASS per video).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
