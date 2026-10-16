@@ -206,13 +206,22 @@ def _filter_chain(subtitle_file: Path, target: tuple[int, int] | None) -> str:
 
     `flags=lanczos` because the default (bicubic) is soft, and an upscale is
     exactly the case where that shows.
+
+    The `ass` filter, not `subtitles`: the same libass renderer, but the only
+    one of the two that can ask for **complex shaping**. Under `subtitles`
+    libass shapes simply — characters in memory order — so Hindi's ि was drawn
+    after its consonant instead of before it, conjuncts showed a bare virama,
+    and Bengali, Tamil and Malayalam two-part vowel signs split round a dotted
+    circle. Every Indic burn did that until v1.0.7. The file is always ASS
+    (`subtitles.to_ass`), which is all `ass` reads.
     """
     steps = []
     if target is not None:
         steps.append(f"scale={target[0]}:{target[1]}:flags=lanczos")
     steps.append(
-        f"subtitles={_escape_filter_path(subtitle_file)}"
+        f"ass={_escape_filter_path(subtitle_file)}"
         f":fontsdir={_escape_filter_path(Path(get_settings().font_cache_dir))}"
+        ":shaping=complex"
     )
     return ",".join(steps)
 
@@ -314,7 +323,7 @@ def _follow_progress(
 
 def _escape_filter_path(path: Path) -> str:
     """
-    Quote a path for the `subtitles=` filter argument.
+    Quote a path for the `ass=` filter argument.
 
     FFmpeg's filtergraph parser has its own escaping layer on top of the shell:
     colons separate filter options and backslashes escape. A Windows-style path

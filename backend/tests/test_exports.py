@@ -615,6 +615,15 @@ async def test_burned_caption_sits_where_the_preview_puts_it(
     centre_y = (rows.min() + rows.max() + 1) / 2 / height
     assert abs(centre_x - placed["pos_x"]) < 0.01, f"box centred at x={centre_x:.3f}"
     assert abs(centre_y - placed["pos_y"]) < 0.01, f"box centred at y={centre_y:.3f}"
+    # One line is libass's whole cell — the font size — plus the padding above
+    # and below. The preview's line-height is the font's win span in ems,
+    # which is that same cell, so the two boxes are the same height.
+    from app.services.caption_style import scale_for
+
+    scale = scale_for(height)
+    cell = round(placed["font_size"] * scale) + 2 * round(placed["box_padding"] * scale)
+    box_height = rows.max() - rows.min() + 1
+    assert abs(box_height - cell) <= 2, f"box {box_height}px tall, cell + padding is {cell}px"
 
     # Its level, on the box's own pixels (the black letters excluded).
     level_opaque = float(np.median(opaque[box])) - background
@@ -622,6 +631,61 @@ async def test_burned_caption_sits_where_the_preview_puts_it(
     assert abs(level_partial / level_opaque - 0.6) < 0.03, (
         f"box drawn at {level_partial / level_opaque:.3f} of opaque, asked for 0.6"
     )
+
+
+def test_indic_scripts_are_shaped_in_the_burn(tmp_path):
+    """
+    "कि" is drawn with its vowel sign ि *before* the consonant, as Hindi and
+    Marathi are read. That takes complex (HarfBuzz) shaping; libass's simple
+    shaping draws the characters in memory order, ि after क, and in Bengali,
+    Tamil and Malayalam splits two-part vowel signs around a dotted circle.
+
+    The burn used FFmpeg's `subtitles` filter, which cannot ask libass for
+    complex shaping, so every Indic caption ever exported came out like that.
+    Measured on the rendered pixels: ि's hook is the only ink above the
+    headline, so it must sit in the left half of the word.
+    """
+    import numpy as np
+
+    from app.services import rendering
+
+    width, height = 640, 360
+    source = tmp_path / "black.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d=1:r=5",
+            "-f", "lavfi", "-i", "sine=duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            str(source),
+        ],
+        capture_output=True, timeout=120, check=True,
+    )
+    style = a_style(font_key="sans", font_size=400, outline_width=0, shadow=0, box_opacity=0.0)
+    caption = Caption(video_id=1, sequence=0, start_ms=0, end_ms=1000, text="कि", confidence=-0.1)
+    ass = tmp_path / "captions.ass"
+    ass.write_text(subtitles.to_ass([caption], style, width, height), encoding="utf-8")
+    burned = tmp_path / "burned.mp4"
+    rendering.burn_captions(source, ass, burned, duration_ms=1000)
+
+    ink = _frame(burned, 0.5, width, height) > 128
+    rows, cols = np.where(ink)
+    assert rows.size > 0, "nothing was drawn"
+    top, bottom = rows.min(), rows.max()
+    left, right = cols.min(), cols.max()
+    # The topmost ink: ि's hook, which rises above the headline.
+    hook = cols[rows < top + (bottom - top) * 0.12]
+    assert hook.mean() < (left + right) / 2, (
+        "ि is drawn after क: the burn is not using complex shaping"
+    )
+
+
+def test_the_burn_asks_libass_for_complex_shaping():
+    from pathlib import Path
+
+    from app.services import rendering
+
+    assert ":shaping=complex" in rendering._filter_chain(Path("/tmp/x.ass"), None)
 
 
 @pytest.mark.asyncio
@@ -718,7 +782,7 @@ def test_the_scale_runs_before_the_subtitles_filter():
 
     chain = rendering._filter_chain(Path("/tmp/x.ass"), (1920, 1080))
 
-    assert chain.index("scale=1920:1080") < chain.index("subtitles=")
+    assert chain.index("scale=1920:1080") < chain.index("ass=")
 
 
 def test_no_scale_filter_when_rendering_at_the_source_size():
