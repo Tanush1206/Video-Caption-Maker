@@ -186,19 +186,22 @@ const CHECKS = {
     await page.close();
   },
 
-  // The editor's caption-language select (used by Redo) offers all five
-  // languages, enabled, with or without a Gemini key: translation is local.
+  // The editor's caption-language picker (used by Redo): every language the
+  // API serves, enabled, each with its own name and its English one; search
+  // by either (accents optional), keyboard to choose. Read-only: the video
+  // and its captions are answered here, and Redo is never pressed.
   async "editor-languages"(browser, base) {
     const page = await browser.newPage();
     const listing = await (await page.request.get(`${base}/api/videos?limit=1`)).json();
     const video = listing.items[0];
     if (!video) throw new Error("needs at least one video");
+    const served = (await (await page.request.get(`${base}/api/videos/languages`)).json()).caption;
     // Shown as completed whatever its real state, so any install will do.
     await page.route(`**/api/videos/${video.id}`, async (route) => {
       const body = await (await route.fetch()).json();
-      await route.fulfill({ json: { ...body, status: "completed", stage: null, error_message: null } });
+      await route.fulfill({ json: { ...body, status: "completed", stage: null, error_message: null, caption_language: "same" } });
     });
-    // The select sits in the caption list, which needs a caption to render.
+    // The picker sits in the caption list, which needs a caption to render.
     await page.route(`**/api/videos/${video.id}/captions`, (route) =>
       route.fulfill({
         json: {
@@ -211,12 +214,71 @@ const CHECKS = {
       })
     );
     await page.goto(`${base}/editor/${video.id}`, { waitUntil: "networkidle" });
-    const select = page.locator("label", { hasText: "Captions" }).locator("select").first();
-    const options = await select.locator("option").evaluateAll((els) => els.map((o) => [o.value, o.disabled]));
-    const values = options.map(([value]) => value).join(",");
-    ok("editor-languages: all six choices", values === "same,en,hi,fr,de,nl", values);
-    ok("editor-languages: none disabled", options.every(([, disabled]) => !disabled));
+    const trigger = page.getByRole("button", { name: /^Caption language:/ });
+    ok("editor-languages: picker shown", await trigger.isVisible());
+    await trigger.click();
+    const options = page.getByRole("listbox", { name: "Caption language" }).getByRole("option");
+    const texts = await options.allInnerTexts();
+    ok("editor-languages: every served language", texts.length === served.length, `${texts.length} vs ${served.length}`);
+    const both = served.filter((o) => o.native && o.native !== o.label).every((o) => texts.some((t) => t.includes(o.native) && t.includes(o.label)));
+    ok("editor-languages: native and English names", both);
+    const search = page.getByRole("combobox", { name: "Search caption languages" });
+    ok("editor-languages: search has focus on open", await search.evaluate((e) => e === document.activeElement));
+    await search.fill("rus");
+    ok("editor-languages: search by English name", (await options.allInnerTexts()).join("|").includes("Русский") && (await options.count()) === 1);
+    await search.fill("espanol");
+    ok("editor-languages: search ignores accents", (await options.count()) === 1 && (await options.first().innerText()).includes("Español"));
+    await search.fill("বাংলা");
+    ok("editor-languages: search by native name", (await options.count()) === 1);
+    await search.fill("zzz");
+    ok("editor-languages: says when nothing matches", (await page.getByText("No language matches").count()) === 1);
+    await search.fill("ta");
+    await page.keyboard.press("Enter");
+    ok("editor-languages: Enter chooses and closes", (await trigger.getAttribute("aria-expanded")) === "false" && (await trigger.getAttribute("aria-label")).includes("தமிழ்"));
+    ok("editor-languages: focus returns to the picker", await trigger.evaluate((e) => e === document.activeElement));
+    ok("editor-languages: Redo hint appears", await page.getByText("Press Redo to apply").isVisible());
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Escape");
+    ok("editor-languages: Escape closes", (await trigger.getAttribute("aria-expanded")) === "false");
+    await trigger.click();
+    await page.mouse.click(5, 5);
+    ok("editor-languages: a click outside closes", (await trigger.getAttribute("aria-expanded")) === "false");
     await page.close();
+  },
+
+  // The upload's language step: one card per served language, searchable by
+  // English name, own name or code; "Same as spoken" always there. Read-only:
+  // a file is picked but never uploaded.
+  async "language-step"(browser, base) {
+    for (const width of [1440, 375]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const at = `language-step@${width}`;
+      const served = (await (await page.request.get(`${base}/api/videos/languages`)).json()).caption;
+      await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
+      await page.locator('input[type="file"]').first().setInputFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not really a video") });
+      const group = page.getByRole("radiogroup", { name: "Caption into" });
+      await group.waitFor();
+      const cards = group.getByRole("radio");
+      ok(`${at}: a card per served language`, (await cards.count()) === served.length, `${await cards.count()} vs ${served.length}`);
+      const search = page.getByRole("searchbox", { name: "Search caption languages" });
+      await search.fill("bengali");
+      const shown = await group.locator("label").allInnerTexts();
+      ok(`${at}: search by English name`, shown.length === 2 && shown[1].includes("বাংলা"), shown.join(" / "));
+      await search.fill("Русский");
+      ok(`${at}: search by native name`, (await cards.count()) === 2);
+      await search.fill("ml");
+      ok(`${at}: search by code`, (await group.locator("label").allInnerTexts()).some((t) => t.includes("മലയാളം")));
+      await search.fill("klingon");
+      ok(`${at}: only "Same as spoken" when nothing matches`, (await cards.count()) === 1);
+      ok(`${at}: says nothing matches`, await page.getByRole("status").filter({ hasText: "No caption language matches" }).isVisible());
+      await search.fill("tamil");
+      await group.locator("label").nth(1).click();
+      ok(`${at}: a found language can be chosen`, await group.getByRole("radio", { checked: true }).evaluate((e) => e.value === "ta"));
+      await search.fill("");
+      ok(`${at}: clearing the search shows them all`, (await cards.count()) === served.length);
+      await page.close();
+    }
   },
 
   // Every style-panel slider, by drag, click and arrow keys: the value moves

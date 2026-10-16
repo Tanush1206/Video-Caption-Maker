@@ -1,21 +1,15 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, AudioLines, Check, Cpu, FileVideo, Loader2, Sparkles, Subtitles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, AudioLines, Check, Cpu, FileVideo, Loader2, Search, Sparkles, Subtitles, X } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { inputClasses } from "@/components/ui/field";
+import { matchesLanguage } from "@/components/videos/language-picker";
 import { formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
 import type { LanguageOptions } from "@/types/video";
-
-/** Each language in its own name, as the cards lead with it. */
-const NATIVE_NAMES: Record<string, string> = {
-  en: "English",
-  hi: "हिन्दी",
-  fr: "Français",
-  de: "Deutsch",
-  nl: "Nederlands",
-};
 
 /**
  * Step 2 of Upload → Language → Export, after a file is picked and before it
@@ -45,7 +39,12 @@ export function LanguageStep({
   onStart: () => void;
   onCancel: () => void;
 }) {
-  const choices = options?.caption ?? [{ code: "same", label: "Same as spoken" }];
+  const choices = options?.caption ?? [{ code: "same", label: "Same as spoken", native: null }];
+  // Fourteen cards no longer fit on a screen, so they can be searched: by the
+  // language's own name, its English name or its code. "Same as spoken" is
+  // the default and is always shown.
+  const [query, setQuery] = useState("");
+  const visible = choices.filter((option) => option.code === "same" || matchesLanguage(option, query));
   const translating = language !== "same";
   const viaGemini = translating && system?.translation_engine === "gemini";
   const model = system?.whisper?.model;
@@ -82,14 +81,30 @@ export function LanguageStep({
           The language the captions come out in.
         </p>
 
+        <div className="relative mt-4">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search caption languages"
+            placeholder={`Search ${choices.length - 1} languages — বাংলা, Español, Tamil…`}
+            disabled={!options || !!upload}
+            className={cn(inputClasses, "pl-9")}
+          />
+        </div>
+
         <div
           role="radiogroup"
           aria-labelledby="caption-language-heading"
-          className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {choices.map((option) => {
+          {visible.map((option) => {
             const selected = option.code === language;
-            const native = option.code === "same" ? "Same as spoken" : (NATIVE_NAMES[option.code] ?? option.label);
+            const native = option.code === "same" ? "Same as spoken" : (option.native ?? option.label);
             const sub = option.code === "same" ? "No translation" : option.label;
             return (
               <label
@@ -144,6 +159,11 @@ export function LanguageStep({
             );
           })}
         </div>
+        {visible.length === 1 && query.trim() && (
+          <p role="status" className="mt-3 text-sm text-muted-foreground">
+            No caption language matches “{query.trim()}”.
+          </p>
+        )}
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">

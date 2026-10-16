@@ -54,15 +54,18 @@ export const ACCEPTED_EXTENSIONS = [".mp4", ".mov", ".mkv", ".webm", ".avi", ".m
 
 export interface LanguageOption {
   code: string;
+  /** The English name, or "Auto-detect" / "Same as spoken". */
   label: string;
+  /** The name in the language itself ("বাংলা"); null for auto and same. */
+  native: string | null;
 }
 
 export interface LanguageOptions {
   spoken: LanguageOption[];
   caption: LanguageOption[];
   /**
-   * Always true: English comes from Whisper itself and the other four from
-   * the local M2M100 translator, so no key is needed for any of them.
+   * Always true: English comes from Whisper itself and the others from the
+   * local M2M100 translator, so no key is needed for any of them.
    */
   translation_available: boolean;
 }

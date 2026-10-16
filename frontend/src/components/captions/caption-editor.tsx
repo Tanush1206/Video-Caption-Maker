@@ -17,6 +17,7 @@ import {
   useVideoCaptions,
 } from "@/hooks/use-captions";
 import type { Playback } from "@/hooks/use-playback";
+import { LanguagePicker } from "@/components/videos/language-picker";
 import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import type { Video } from "@/types/video";
@@ -300,22 +301,18 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           captions say" is a translation, and a different operation entirely. */}
       {languageOptions && (
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border/70 bg-background/30 px-2.5 py-2">
-          <label className="flex items-center gap-1.5 text-[11px]">
-            <span className="text-muted-foreground">Captions</span>
-            <select
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-muted-foreground" aria-hidden="true">Captions</span>
+            {/* Every language is offered, as on the dashboard's language step:
+                translation runs locally, so none of them needs a key. */}
+            <LanguagePicker
+              label="Caption language"
+              options={languageOptions.caption}
               value={captionLanguage}
-              onChange={(event) => setCaptionLanguage(event.target.value)}
-              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px]"
-            >
-              {languageOptions.caption.map((option) => (
-                // Every language is offered, as on the dashboard's language
-                // step: translation runs locally, so none of them needs a key.
-                <option key={option.code} value={option.code}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={setCaptionLanguage}
+              className="w-56"
+            />
+          </div>
 
           {languageChanged && (
             <span className="text-[10px] text-muted-foreground">
