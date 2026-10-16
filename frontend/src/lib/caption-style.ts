@@ -15,6 +15,14 @@ import { ANCHOR_SHIFT } from "@/lib/caption-drag";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 
+/**
+ * Indic scripts are drawn in vendored Noto faces, in the preview and in the
+ * burn alike. libass names them per run (`subtitles._script_runs`); here they
+ * lead the stack and `unicode-range` keeps them to their own characters.
+ */
+const SCRIPT_FONT_STACK =
+  '"Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Malayalam"';
+
 /** Per-caption emphasis, or nothing when the caption inherits. */
 type Override = Pick<Caption, "override_color" | "override_bold" | "override_scale">;
 
@@ -67,7 +75,10 @@ export function captionTextStyle(
     // The style's own resolved stack first: it covers every catalogue font,
     // where `font` is only ever one of the nine built-ins. The lookup is kept
     // as a fallback for a cached style response from before this field existed.
-    fontFamily: style.font_css_stack || font?.css_stack || "sans-serif",
+    // The Indic script faces first: each is limited to its own script by
+    // unicode-range (globals.css), so they take only those characters, in
+    // the same files and at the same em the export uses (SCRIPT_FONTS).
+    fontFamily: `${SCRIPT_FONT_STACK}, ${style.font_css_stack || font?.css_stack || "sans-serif"}`,
     fontSize: `${(style.font_size * emphasisScale * scale) / span}px`,
     fontWeight: (override?.override_bold ?? style.bold) ? 700 : 400,
     fontStyle: style.italic ? "italic" : "normal",

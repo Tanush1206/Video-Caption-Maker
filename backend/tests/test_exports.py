@@ -929,3 +929,66 @@ async def test_deleting_the_video_deletes_its_export_files(client, auth_headers,
     ).status_code == 204
 
     assert not any(path.exists() for path in paths)
+
+
+def test_indic_runs_get_their_own_font_at_the_caption_fonts_em():
+    """
+    Indic text is drawn in a vendored Noto face named for its script, sized so
+    its em is the caption font's em — the em the browser draws it at — and
+    the caption font comes back afterwards. Latin text is left alone.
+    """
+    from app.services.caption_style import font_win_span, script_font_span
+
+    style = a_style(font_key="poppins", bold=True, font_size=54)
+    caption = Caption(
+        video_id=1, sequence=0, start_ms=0, end_ms=1000,
+        text="Hello हमारा सूप, এবং Tamil", confidence=-0.1,
+    )
+    line = subtitles.to_ass([caption], style, 1280, 720).splitlines()[-1]
+    size = round(54 * 720 / 1080)
+    devanagari = round(size * script_font_span("Noto Sans Devanagari", True) / font_win_span("poppins", True), 1)
+
+    # The ASS tags fn and fs with their backslash, built rather than escaped.
+    fn, fs = chr(92) + "fn", chr(92) + "fs"
+    assert f"Hello {{{fn}Noto Sans Devanagari{fs}{devanagari:g}}}हमारा सूप{{{fn}Poppins{fs}{size}}}," in line
+    assert f"{{{fn}Noto Sans Bengali" in line
+    assert line.endswith(f"}}এবং{{{fn}Poppins{fs}{size}}} Tamil")
+
+
+def test_indic_text_is_burned_at_the_caption_fonts_em(tmp_path):
+    """
+    The same Hindi word under two caption fonts comes out in the ratio of
+    their win spans: drawn in one Noto face at each font's own em, as the
+    preview draws it. Before, libass sized whatever fallback it picked by the
+    fallback's own span, so the caption font made no difference.
+    """
+    import numpy as np
+
+    from app.services import rendering
+    from app.services.caption_style import font_win_span
+
+    width, height = 640, 360
+    source = tmp_path / "black.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d=1:r=5",
+            "-f", "lavfi", "-i", "sine=duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            str(source),
+        ],
+        capture_output=True, timeout=120, check=True,
+    )
+
+    def ink_height(font_key: str) -> int:
+        style = a_style(font_key=font_key, bold=True, font_size=300, outline_width=0, shadow=0, box_opacity=0.0)
+        caption = Caption(video_id=1, sequence=0, start_ms=0, end_ms=1000, text="हमारा", confidence=-0.1)
+        ass = tmp_path / f"{font_key}.ass"
+        ass.write_text(subtitles.to_ass([caption], style, width, height), encoding="utf-8")
+        burned = tmp_path / f"{font_key}.mp4"
+        rendering.burn_captions(source, ass, burned, duration_ms=1000)
+        rows = np.where((_frame(burned, 0.5, width, height) > 128).any(axis=1))[0]
+        return rows.max() - rows.min() + 1
+
+    expected = font_win_span("sans", True) / font_win_span("poppins", True)
+    assert ink_height("poppins") / ink_height("sans") == pytest.approx(expected, abs=0.03)

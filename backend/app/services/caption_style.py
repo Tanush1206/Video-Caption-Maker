@@ -106,6 +106,30 @@ FONTS_BY_KEY = {font.key: font for font in FONTS}
 DEFAULT_FONT_KEY = "sans"
 
 
+# Scripts drawn in a font of their own, whatever the caption font is.
+#
+# Caption fonts are Latin faces, so these scripts were always drawn by some
+# fallback — fontconfig's choice in libass (Poppins for Devanagari, Noto for
+# the others), the operating system's in the browser (Nirmala UI on Windows).
+# Two different fonts, at two different sizes: libass sizes a fallback by its
+# own win span, the browser at the caption font's em. Naming one vendored file
+# for each script, in both renderers, and sizing it to the caption font's em,
+# makes them agree. The files are in frontend/public/fonts, identical to the
+# image's fonts-noto-core; globals.css gives the browser the same ones,
+# limited to each script's characters with unicode-range.
+SCRIPT_FONTS: tuple[tuple[str, str], ...] = (
+    ("Noto Sans Devanagari", "\u0900-\u097F\uA8E0-\uA8FF\u1CD0-\u1CFF"),
+    ("Noto Sans Bengali", "\u0980-\u09FF"),
+    ("Noto Sans Tamil", "\u0B80-\u0BFF"),
+    ("Noto Sans Malayalam", "\u0D00-\u0D7F"),
+)
+
+
+def script_font_span(family: str, bold: bool) -> float:
+    """The win span of a script font, for sizing it to the caption font's em."""
+    return _installed_span(family, bold) or 1.0
+
+
 @lru_cache(maxsize=64)
 def _installed_span(render_name: str, bold: bool) -> float | None:
     """The win span of the face fontconfig hands libass for this family."""

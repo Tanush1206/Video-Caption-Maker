@@ -10,12 +10,17 @@ the words in the database, which are the words Whisper heard.
 """
 
 import json
+import re
 from collections.abc import Sequence
 
 from app.models.caption import Caption
 from app.models.caption_style import CaptionStyle
 from app.services.caption_style import (
+    SCRIPT_FONTS,
+    font_win_span,
+    get_font,
     scale_for,
+    script_font_span,
     to_ass_free_alignment,
     to_ass_inline_colour,
     to_ass_style_block,
@@ -154,6 +159,40 @@ def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> list[
     return tags
 
 
+# A run: characters of one script, with the joiners (ZWNJ, ZWJ) that shape
+# them and any spaces *between* two of them — so a sentence is one run, not
+# one per word, and a space before Latin text is left to the caption font.
+_SCRIPT_RUNS = [
+    (family, re.compile(rf"[{chars}](?:[{chars}\u200c\u200d]|\s+(?=[{chars}]))*"))
+    for family, chars in SCRIPT_FONTS
+]
+
+
+def _script_runs(text: str, style: CaptionStyle, size: int) -> str:
+    """
+    Wrap each run of an Indic script in its own font, at the caption font's em.
+
+    `size` is the caption's Fontsize as libass will apply it. libass makes a
+    face's whole cell that size, so a script font with a different win span
+    has to be asked for at `size * its span / the caption font's span` to come
+    out with the same em — the em the browser draws it at (see SCRIPT_FONTS).
+    Afterwards the caption's own font and size are put back.
+    """
+    primary = get_font(style.font_key).render_name
+    primary_span = font_win_span(style.font_key, style.bold)
+    for family, pattern in _SCRIPT_RUNS:
+        scaled = round(size * script_font_span(family, style.bold) / primary_span, 1)
+
+        def wrap(match: re.Match, family: str = family, scaled: float = scaled) -> str:
+            return (
+                f"{{\\fn{family}\\fs{scaled:g}}}{match.group(0)}"
+                f"{{\\fn{primary}\\fs{size}}}"
+            )
+
+        text = pattern.sub(wrap, text)
+    return text
+
+
 def _placement_tags(style: CaptionStyle, width: int, height: int) -> list[str]:
     """
     Inline override tags for a caption the user placed by hand.
@@ -206,7 +245,8 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
         # so building the list first is the version with no empty `{}` in it.
         tags = _placement_tags(style, width, height) + _emphasis_tags(caption, style, scale)
         prefix = "{" + "".join(tags) + "}" if tags else ""
-        text = prefix + escape_ass_text(body)
+        size = round(style.font_size * (caption.override_scale or 1) * scale)
+        text = prefix + _script_runs(escape_ass_text(body), style, size)
         events.append(
             f"Dialogue: 0,{ass_time(caption.start_ms)},{ass_time(caption.end_ms)},"
             f"Default,,0,0,0,,{text}"

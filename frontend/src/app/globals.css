@@ -105,6 +105,78 @@
 }
 
 /*
+ * Indic scripts, in the same files libass burns them with (identical to the
+ * image's fonts-noto-core; app/services/caption_style.py SCRIPT_FONTS).
+ * unicode-range limits each face to its own script, so listing them first in
+ * a caption's stack (lib/caption-style.ts) takes these characters away from
+ * the caption font and the operating system's fallback, and nothing else.
+ */
+@font-face {
+  font-family: "Noto Sans Devanagari";
+  src: url("/fonts/NotoSansDevanagari-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0900-097F, U+A8E0-A8FF, U+1CD0-1CFF, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Devanagari";
+  src: url("/fonts/NotoSansDevanagari-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0900-097F, U+A8E0-A8FF, U+1CD0-1CFF, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  src: url("/fonts/NotoSansBengali-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0980-09FF, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  src: url("/fonts/NotoSansBengali-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0980-09FF, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Tamil";
+  src: url("/fonts/NotoSansTamil-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Tamil";
+  src: url("/fonts/NotoSansTamil-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0B80-0BFF, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Malayalam";
+  src: url("/fonts/NotoSansMalayalam-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0D00-0D7F, U+200C-200D;
+}
+@font-face {
+  font-family: "Noto Sans Malayalam";
+  src: url("/fonts/NotoSansMalayalam-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0D00-0D7F, U+200C-200D;
+}
+
+/*
  * Design tokens, from design/stitch/local_video_studio_engine/DESIGN.md
  * (v1.0.4): a cold slate base, one indigo accent, emerald only for local
  * engine health. The screens' own palettes disagree with each other in
