@@ -746,3 +746,63 @@ One commit per fix, each with tests:
   bundles (certifi, pip, grpc), empty extra-CA dirs; frontend /app adds
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
+
+## v1.0.7 (in progress)
+Brief: fix caption dragging, the drag handle and the style sliders; improve
+translation quality; add 12 caption languages. Definition of done and rules
+are in Tanush's brief of 2026-10-15; this section is the resume point.
+
+### Backlog
+- [ ] A1 Caption drag on the video: reproduce in Playwright (mouse, touch,
+      keyboard; 1440/375; light/dark), fix, test.
+- [ ] A2 Drag handle "dot": there is no dot today (the whole frame is the
+      drag surface). Add one per the brief (>= 24x24 hit area, on top, starts
+      a drag, touch), test.
+- [x] A3 Style sliders (opacity and the rest): reproduce, fix, test.
+- [ ] A4 Keyboard placement: arrow keys move a focused caption, Shift = far.
+- [ ] A5 Burn test: rendered MP4 caption position and opacity match preview.
+- [ ] B1 Translation sweep, all pairs of en/hi/fr/de/nl through M2M100
+      (and Gemini if a key is set): script, completeness, punctuation, wrap.
+- [ ] B2 Fixes without changing models (context, wrapping, script/fonts).
+- [ ] B3 Record a sample per pair and the weak pairs.
+- [ ] C1 Verify M2M100's language list for bn pa mr gu ta kn ml te es pt it ru.
+- [ ] C2 Quality check per new language; reject unusable ones.
+- [ ] C3 Fonts: burn-in per new script (fonts-noto-core already has
+      Bengali, Gurmukhi, Devanagari, Gujarati, Tamil, Kannada, Malayalam,
+      Telugu; Cyrillic/Latin via DejaVu/Noto).
+- [ ] C4 Searchable language pickers (language step, editor, settings) with
+      native + English names.
+- [ ] C5 Backend config/validation, API, frontend, tests, PRD, README.
+- [ ] C6 ROADMAP: Arabic, Urdu (RTL), Chinese, Japanese, Korean (CJK).
+- [ ] D  DoD checks: suites, E2E on GPU (new Indian + European), burn per
+      language, screenshots + axe, docs, CHANGELOG v1.0.7.
+
+### Decisions
+- A3: controls that don't apply (outline/shadow colour with a box or at 0,
+  box colour and padding without a box) stay visible and disabled, instead
+  of appearing and vanishing. Hint line under them says why.
+- Editor checks live in `scripts/ui-check/checks.js` (Playwright against a
+  running app, like the existing checks); they need a completed video and
+  reset its style before and after. `VCM_CHECK_VIDEO` picks the video.
+
+### Done
+- A3 sliders, two root causes, both reproduced in Chromium:
+  1. **Controlled value lagged the event.** The slider's value came from the
+     query cache, which re-renders on react-query's schedule (~150 ms on the
+     dev editor), not inside the input event. React restores a controlled
+     input to its prop as soon as the event returns, so a click or arrow key
+     snapped the thumb and the number back, then forward. Fix: the slider
+     owns its displayed value (set in the event), synced from the style
+     whenever that changes.
+  2. **Layout reflow under the pointer.** Dragging Opacity off 0 removed the
+     outline/shadow colour swatches above it in the 2-column grid; the slider
+     jumped 68 px (1440) / 136 px (375) mid-drag, the browser read the
+     pointer as 0, the swatches came back: 6,0,17,0,28,0... Fix: keep them
+     mounted, disabled.
+  Check `style-sliders` (both widths, every slider: drag monotonic and stays
+  put, click, arrow step, label, live preview, save + reload): 35 FAIL before,
+  4 with fix 1 only (Opacity moves), 0 after (92 PASS).
+
+### Next
+- A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
+  video, explore with Playwright.

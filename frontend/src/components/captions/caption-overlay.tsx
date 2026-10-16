@@ -400,7 +400,7 @@ export function CaptionOverlay({
           data-placed={placed || undefined}
         >
           {caption && height > 0 && (
-            <span ref={textEl} style={captionTextStyle(style, font, scale, caption)}>
+            <span ref={textEl} data-caption-text style={captionTextStyle(style, font, scale, caption)}>
               {caption.text}
             </span>
           )}

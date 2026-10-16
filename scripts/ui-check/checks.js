@@ -12,6 +12,53 @@ const ok = (name, pass, detail = "") => results.push(`${pass ? "PASS" : "FAIL"} 
 const isDark = (page) => page.evaluate(() => document.documentElement.classList.contains("dark"));
 const stored = (page) => page.evaluate(() => localStorage.getItem("vcm-theme"));
 
+// The editor checks below need a completed video with captions, and they
+// change its caption style (reset to defaults before and after): run them on
+// the dev stack or a test install. VCM_CHECK_VIDEO picks the video; otherwise
+// the newest completed one is used.
+async function editorVideo(page, base) {
+  if (process.env.VCM_CHECK_VIDEO) return Number(process.env.VCM_CHECK_VIDEO);
+  const listing = await (await page.request.get(`${base}/api/videos?limit=50`)).json();
+  const video = listing.items.find((v) => v.status === "completed");
+  if (!video) throw new Error("needs a completed video");
+  return video.id;
+}
+
+/** Open the editor on `id` with the default style and a caption on screen. */
+async function openEditor(page, base, id) {
+  await page.request.delete(`${base}/api/videos/${id}/style`);
+  await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+  const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
+  const first = captions.items.find((c) => c.end_ms - c.start_ms > 1000) ?? captions.items[0];
+  await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (first.start_ms + first.end_ms) / 2000);
+  await page.locator("[data-caption-text]").waitFor();
+}
+
+const styleOf = async (page, base, id) => (await page.request.get(`${base}/api/videos/${id}/style`)).json();
+
+/** Geometry of the frame and the caption text, in page pixels. */
+const captionGeometry = (page) =>
+  page.evaluate(() => {
+    const text = document.querySelector("[data-caption-text]");
+    const frame = document.querySelector("video").parentElement.getBoundingClientRect();
+    const r = text?.getBoundingClientRect();
+    return {
+      frame: { x: frame.x, y: frame.y, w: frame.width, h: frame.height },
+      text: r ? { x: r.x, y: r.y, w: r.width, h: r.height, cx: r.x + r.width / 2, cy: r.y + r.height / 2 } : null,
+    };
+  });
+
+/** Everything about the preview a style slider can change. */
+const previewSignature = (page) =>
+  page.evaluate(() => {
+    const text = document.querySelector("[data-caption-text]");
+    const s = getComputedStyle(text);
+    const r = text.getBoundingClientRect();
+    const b = getComputedStyle(text.parentElement);
+    return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, b.padding, b.maxWidth].join("|");
+  });
+
 const CHECKS = {
   // Settings → Interface theme offers Light, Dark and System. System stores
   // nothing, follows the OS, and follows it live when the OS changes.
@@ -137,6 +184,87 @@ const CHECKS = {
     ok("editor-languages: all six choices", values === "same,en,hi,fr,de,nl", values);
     ok("editor-languages: none disabled", options.every(([, disabled]) => !disabled));
     await page.close();
+  },
+
+  // Every style-panel slider, by drag, click and arrow keys: the value moves
+  // with the pointer (never snapping back), the label shows the value, the
+  // preview changes, and the saved style matches after a reload.
+  // Changes data: see editorVideo.
+  async "style-sliders"(browser, base) {
+    for (const width of [1440, 375]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const id = await editorVideo(page, base);
+      await openEditor(page, base, id);
+      const at = `style-sliders@${width}`;
+      for (const tab of ["Typography", "Appearance", "Position"]) {
+        await page.getByRole("radio", { name: tab }).click();
+        const sliders = page.locator('#caption-style input[type="range"]:visible');
+        for (let i = 0; i < (await sliders.count()); i++) {
+          const el = sliders.nth(i);
+          // Greyed out while it has no effect (Padding without a box).
+          if (await el.isDisabled()) continue;
+          await el.scrollIntoViewIfNeeded();
+          const label = el.locator("xpath=ancestor::label[1]");
+          const name = (await label.innerText()).split(" —")[0];
+          const [min, max, step] = ["min", "max", "step"].map(async (a) => Number(await el.getAttribute(a)));
+          const lo = await min, hi = await max, st = (await step) || 1;
+          const value = async () => Number(await el.inputValue());
+          const shown = async () => Number((await label.innerText()).match(/— (-?[\d.]+)/)?.[1]);
+
+          // Drag the thumb from the minimum to the right, sampling as it goes.
+          await el.focus(); await page.keyboard.press("Home");
+          let box = await el.boundingBox();
+          const y = box.y + box.height / 2;
+          await page.mouse.move(box.x + 8, y); await page.mouse.down();
+          const samples = [];
+          for (let k = 1; k <= 8; k++) {
+            await page.mouse.move(box.x + 8 + ((box.width - 16) * k) / 10, y);
+            await page.waitForTimeout(40);
+            samples.push(await value());
+          }
+          await page.mouse.up();
+          const monotonic = samples.every((v, k) => k === 0 || v >= samples[k - 1]) && samples.at(-1) > lo;
+          ok(`${at}: ${tab}/${name} drag follows the pointer`, monotonic, samples.join(","));
+          // A control appearing or vanishing above it must not move the
+          // slider out from under a pointer that is still dragging it.
+          const moved = await el.boundingBox();
+          ok(`${at}: ${tab}/${name} stays put while dragged`, Math.abs(moved.x - box.x) < 1 && Math.abs(moved.y - box.y) < 1, `${Math.round(box.x)},${Math.round(box.y)} → ${Math.round(moved.x)},${Math.round(moved.y)}`);
+
+          // Click a point on the track, then step it with the keyboard.
+          box = await el.boundingBox();
+          await page.mouse.click(box.x + 8 + (box.width - 16) * 0.25, box.y + box.height / 2);
+          const clicked = await value();
+          const expected = lo + (hi - lo) * 0.25;
+          ok(`${at}: ${tab}/${name} click sets the value`, Math.abs(clicked - expected) <= (hi - lo) * 0.03 + st, `${clicked} vs ${expected}`);
+          const before = await previewSignature(page);
+          await el.focus(); await page.keyboard.press("ArrowRight");
+          const keyed = await value();
+          ok(`${at}: ${tab}/${name} arrow key steps by ${st}`, Math.abs(keyed - clicked - st) < 1e-9, `${clicked} → ${keyed}`);
+          ok(`${at}: ${tab}/${name} label shows the value`, (await shown()) === keyed, `${await shown()} vs ${keyed}`);
+          // Live: the overlay redraws from the cache a render later, well
+          // inside half a second.
+          const updated = await page.waitForFunction((b) => {
+            const t = document.querySelector("[data-caption-text]"); const s = getComputedStyle(t); const r = t.getBoundingClientRect();
+            const p = getComputedStyle(t.parentElement);
+            return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, p.padding, p.maxWidth].join("|") !== b;
+          }, before, { timeout: 500 }).then(() => true, () => false);
+          ok(`${at}: ${tab}/${name} preview updates`, updated);
+        }
+      }
+      await page.waitForTimeout(1000);
+      const saved = await styleOf(page, base, id);
+      await page.reload({ waitUntil: "networkidle" });
+      const reloaded = await styleOf(page, base, id);
+      ok(`${at}: saved style survives a reload`, JSON.stringify(saved) === JSON.stringify(reloaded));
+      for (const [name, field, scale] of [["Size", "font_size", 1], ["Opacity", "box_opacity", 100], ["Outline", "outline_width", 1]]) {
+        const tab = name === "Size" ? "Typography" : "Appearance";
+        await page.getByRole("radio", { name: tab }).click();
+        const shownValue = Number(await page.getByLabel(new RegExp(`^${name} —`)).inputValue());
+        ok(`${at}: ${name} after reload shows the saved value`, Math.round(saved[field] * scale) === shownValue, `${shownValue} vs ${saved[field]}`);
+      }
+      await page.request.delete(`${base}/api/videos/${id}/style`);
+      await page.close();
+    }
   },
 };
 

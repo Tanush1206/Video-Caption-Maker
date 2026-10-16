@@ -104,6 +104,7 @@ function Slider({
   max,
   step = 1,
   suffix,
+  disabled = false,
   onChange,
 }: {
   label: string;
@@ -112,16 +113,42 @@ function Slider({
   max: number;
   step?: number;
   suffix?: string;
+  /** Shown but inert while it would have no effect, so nothing reflows. */
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
+  // The thumb's value, owned here rather than read back from the style.
+  //
+  // `value` reaches this component through the query cache, and a cache write
+  // re-renders on react-query's schedule, not inside the input event. React
+  // restores a controlled input to its current prop as soon as the event
+  // returns, so every click and arrow key snapped the thumb (and the number)
+  // back to the old value for a render or two, and a drag fought its own
+  // previous position. Local state updates inside the event, so the input is
+  // never reset to a value the user has already left.
+  const [shown, setShown] = useState(value);
+  // Follow the style whenever it changes underneath: a preset, a reset, or
+  // the server clamping a value. Compared during render, not in an effect, so
+  // the thumb never paints one frame at the stale value.
+  const [synced, setSynced] = useState(value);
+  if (value !== synced) {
+    setSynced(value);
+    setShown(value);
+  }
+
   return (
-    <Field label={`${label} — ${value}${suffix ?? ""}`}>
+    <Field label={`${label} — ${shown}${suffix ?? ""}`}>
       <Range
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        value={shown}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          setShown(next);
+          onChange(next);
+        }}
       />
     </Field>
   );
@@ -130,20 +157,24 @@ function Slider({
 function Swatch({
   label,
   value,
+  disabled = false,
   onChange,
 }: {
   label: string;
   value: string;
+  /** Shown but inert while it would have no effect, so nothing reflows. */
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <Field label={label}>
-      <div className="flex items-center gap-2">
+      <div className={cn("flex items-center gap-2", disabled && "opacity-40")}>
         <input
           type="color"
           value={value}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
-          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent"
+          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent disabled:cursor-not-allowed"
         />
         <span className="font-mono text-xs text-muted-foreground">{value}</span>
       </div>
@@ -370,6 +401,15 @@ export function StylePanel({
             onChange={(text_color) => set({ text_color })}
           />
 
+          {/* Every control here stays mounted. They used to appear and vanish
+              with the values they depend on — the outline colour only while
+              there is an outline and no box, and so on — and in a two-column
+              grid that moves every control after them. Dragging Opacity off 0
+              removed the colour swatches above it, the slider jumped a row
+              (or a column) away from the pointer still dragging it, the
+              browser read the pointer's new offset as 0, the swatches came
+              back, and the thumb flickered between the two. Disabled instead,
+              so the layout never changes under a gesture. */}
           <Slider
             label="Outline"
             value={style.outline_width}
@@ -378,13 +418,12 @@ export function StylePanel({
             suffix="px"
             onChange={(outline_width) => set({ outline_width })}
           />
-          {style.outline_width > 0 && style.box_opacity === 0 && (
-            <Swatch
-              label="Outline colour"
-              value={style.outline_color}
-              onChange={(outline_color) => set({ outline_color })}
-            />
-          )}
+          <Swatch
+            label="Outline colour"
+            value={style.outline_color}
+            disabled={style.outline_width === 0 || style.box_opacity > 0}
+            onChange={(outline_color) => set({ outline_color })}
+          />
 
           <Slider
             label="Shadow"
@@ -394,13 +433,12 @@ export function StylePanel({
             suffix="px"
             onChange={(shadow) => set({ shadow })}
           />
-          {style.shadow > 0 && style.box_opacity === 0 && (
-            <Swatch
-              label="Shadow colour"
-              value={style.shadow_color}
-              onChange={(shadow_color) => set({ shadow_color })}
-            />
-          )}
+          <Swatch
+            label="Shadow colour"
+            value={style.shadow_color}
+            disabled={style.shadow === 0 || style.box_opacity > 0}
+            onChange={(shadow_color) => set({ shadow_color })}
+          />
           <Slider
             label="Opacity"
             value={Math.round(style.box_opacity * 100)}
@@ -409,29 +447,30 @@ export function StylePanel({
             suffix="%"
             onChange={(percent) => set({ box_opacity: percent / 100 })}
           />
-          {style.box_opacity > 0 && (
-            <>
-              <Swatch
-                label="Box colour"
-                value={style.box_color}
-                onChange={(box_color) => set({ box_color })}
-              />
-              <Slider
-                label="Padding"
-                value={style.box_padding}
-                min={0}
-                max={60}
-                suffix="px"
-                onChange={(box_padding) => set({ box_padding })}
-              />
-              {/* An opaque box replaces both the outline and the shadow in ASS,
-                  so saying so beats leaving two controls that do nothing. */}
-              <p className="text-[11px] text-muted-foreground sm:col-span-2">
-                A box replaces the outline and shadow — that&apos;s how it renders
-                on export.
-              </p>
-            </>
-          )}
+          <Swatch
+            label="Box colour"
+            value={style.box_color}
+            disabled={style.box_opacity === 0}
+            onChange={(box_color) => set({ box_color })}
+          />
+          <Slider
+            label="Padding"
+            value={style.box_padding}
+            min={0}
+            max={60}
+            suffix="px"
+            disabled={style.box_opacity === 0}
+            onChange={(box_padding) => set({ box_padding })}
+          />
+          {/* An opaque box replaces both the outline and the shadow in ASS,
+              so saying so beats leaving two controls that do nothing. Always
+              present, for the same reason as the controls above; it is what
+              explains why some of them are greyed out. */}
+          <p className="text-[11px] text-muted-foreground sm:col-span-2">
+            {style.box_opacity > 0
+              ? "A box replaces the outline and shadow — that's how it renders on export."
+              : "Raise Opacity to put a box behind the caption."}
+          </p>
         </Pane>
 
         <Pane hidden={tab !== "position"}>
