@@ -46,6 +46,12 @@ export function captionTextStyle(
 ): CSSProperties {
   const boxed = style.box_opacity > 0;
   const emphasisScale = override?.override_scale ?? 1;
+  // libass sizes a face so its whole cell (usWinAscent + usWinDescent) is the
+  // font size; CSS sizes the em. Without this the preview drew Poppins Bold
+  // 1.76x the size of the export — different wrapping, and every caption
+  // smaller on the video than in the editor. `?? 1` for a cached style from
+  // before the field existed.
+  const span = style.font_win_span || 1;
 
   // ASS Underline / StrikeOut, which are real fields in the Style line. The
   // decoration inherits `currentColor`, and so does libass — both draw the rule
@@ -62,7 +68,7 @@ export function captionTextStyle(
     // where `font` is only ever one of the nine built-ins. The lookup is kept
     // as a fallback for a cached style response from before this field existed.
     fontFamily: style.font_css_stack || font?.css_stack || "sans-serif",
-    fontSize: `${style.font_size * emphasisScale * scale}px`,
+    fontSize: `${(style.font_size * emphasisScale * scale) / span}px`,
     fontWeight: (override?.override_bold ?? style.bold) ? 700 : 400,
     fontStyle: style.italic ? "italic" : "normal",
     textDecorationLine: decoration || "none",
@@ -72,7 +78,9 @@ export function captionTextStyle(
     // ASS `Spacing`, in the same reference pixels as everything else here.
     letterSpacing: `${style.letter_spacing * scale}px`,
     color: override?.override_color ?? style.text_color,
-    lineHeight: 1.2,
+    // libass's line pitch is that same cell, so a wrapped caption's lines are
+    // as far apart here as in the export, and a box is as tall.
+    lineHeight: span,
     whiteSpace: "pre-wrap",
     display: "inline-block",
   };

@@ -57,6 +57,11 @@ export interface CaptionStyle {
    */
   font_family: string;
   font_css_stack: string;
+  /**
+   * The face's (usWinAscent + usWinDescent) / unitsPerEm. libass makes that
+   * span the font size; CSS makes the em the font size. Divide by it.
+   */
+  font_win_span: number;
 }
 
 export interface Font {

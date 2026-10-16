@@ -444,6 +444,37 @@ const CHECKS = {
     }
   },
 
+  // The preview draws a caption at the size libass will burn it: libass makes
+  // a face's whole cell (usWinAscent + usWinDescent) the font size, CSS makes
+  // the em the font size, so the preview's font-size is size x scale / span
+  // and its line-height is the span. Measured against the burn on dev: within
+  // 1% in width for Liberation Sans, Poppins and Lato (Poppins Bold was 1.76x
+  // before). Changes data: see editorVideo.
+  async "caption-size"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    await openEditor(page, base, id);
+    for (const font of ["sans", "poppins", "lato", "anton"]) {
+      const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_key: font, font_size: 80 } })).json();
+      await page.reload({ waitUntil: "networkidle" });
+      await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+      await page.locator("[data-caption-text]").waitFor();
+      const got = await page.evaluate(() => {
+        const t = document.querySelector("[data-caption-text]");
+        const frame = document.querySelector("video").parentElement.getBoundingClientRect();
+        const s = getComputedStyle(t);
+        return { size: parseFloat(s.fontSize), line: parseFloat(s.lineHeight), frameH: frame.height };
+      });
+      const scale = got.frameH / style.reference_height;
+      const expected = (style.font_size * scale) / style.font_win_span;
+      ok(`caption-size: ${font} served a win span`, style.font_win_span > 1, String(style.font_win_span));
+      ok(`caption-size: ${font} font-size = size x scale / span`, Math.abs(got.size - expected) < 0.05, `${got.size.toFixed(2)} vs ${expected.toFixed(2)}`);
+      ok(`caption-size: ${font} line height = the libass cell`, Math.abs(got.line - style.font_size * scale) < 0.1, `${got.line.toFixed(2)} vs ${(style.font_size * scale).toFixed(2)}`);
+    }
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.close();
+  },
+
   // The caption's grab handle: at least 24x24, the topmost thing at its own
   // centre, starts a drag by mouse and by touch with no jump, stays whole
   // inside the frame when the caption is at the very top, and a click on it

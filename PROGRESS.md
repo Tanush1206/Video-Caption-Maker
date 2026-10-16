@@ -923,6 +923,30 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   die Tomaten, etwas Salz | Add a cup of water." → "...| some salt and a cup
   of water."). Tests `tests/test_translation.py` (8; can't even import on
   the old code).
+- C3 burn per language, found two export bugs (both older than v1.0.7):
+  1. **No complex shaping in any burn.** FFmpeg's `subtitles` filter leaves
+     libass on simple shaping: Hindi "मिलते" burned as "मलिते", conjuncts as
+     bare viramas (धन्‌यवाद), Bengali "টমেটো" as "টমটে◌া" with a dotted
+     circle, Malayalam ൊ/ോ split. Hindi exports have looked like that since
+     v1.0. Compared side by side: `subtitles` and `ass:shaping=simple` broken,
+     `ass:shaping=complex` correct, same fonts. Fix: the burn uses the `ass`
+     filter with `shaping=complex`. Test `test_indic_scripts_are_shaped_in_the_burn`
+     (renders कि, ि's hook must be left of क) failed before.
+  2. **The preview drew every caption larger than the export.** libass
+     sizes a face so its whole win cell is the font size; CSS sizes the em.
+     The win span (already computed for catalogue fonts, never used) is 1.12
+     for Liberation Sans and 1.76 for Poppins Bold, so a Poppins caption was
+     1.76x larger in the editor, wrapping differently. Measured preview vs
+     burn on dev, before → after: Poppins ~1.76 → width ratio 1.008, height
+     0.964; Liberation Sans → 1.001 / 0.972; Lato → 0.993 / 0.985 (height
+     differences are anti-aliasing at the threshold). Fix: the style serves
+     `font_win_span`; the preview's font-size is size x scale / span and its
+     line-height is the span (libass's line pitch). Check `caption-size`;
+     A5 test pins box height = cell + padding.
+  Fonts: libass found every glyph in all 13 languages (no "fallback" or
+  "glyph" warnings), via fonts-noto-core (Bengali, Tamil, Malayalam Noto
+  Sans Bold) and Poppins (Devanagari); after the shaping fix all 13 render
+  correctly (`all-langs` sheet checked by eye).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
