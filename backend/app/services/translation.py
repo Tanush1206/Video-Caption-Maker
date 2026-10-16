@@ -78,6 +78,21 @@ M2M100_MODELS: dict[str, tuple[str, str]] = {
 M2M100_FILES = ["model.bin", "config.json", "shared_vocabulary.json", "sentencepiece.bpe.model"]
 M2M100_SIZES_MB = {"m2m100_1.2B": 1260, "m2m100_418M": 500}
 
+# The languages M2M100 can translate, as its own vocabulary names them
+# (`__xx__` tokens in shared_vocabulary.json, identical in both revisions
+# above). Every caption language must be in here: the core flow has to work
+# offline, so a language only Gemini could deliver is not offered. A test
+# holds LANGUAGES to it, and the loaded model is checked again at run time.
+M2M100_LANGUAGES = frozenset(
+    """
+    af am ar ast az ba be bg bn br bs ca ceb cs cy da de el en es et fa ff
+    fi fr fy ga gd gl gu ha he hi hr ht hu hy id ig ilo is it ja jv ka kk
+    km kn ko lb lg ln lo lt lv mg mk ml mn mr ms my ne nl no ns oc or pa pl
+    ps pt ro ru sd si sk sl so sq sr ss su sv sw ta th tl tn tr uk ur uz vi
+    wo xh yi yo zh zu
+    """.split()
+)
+
 # Captions per call to the local model. Progress is reported between chunks.
 LOCAL_CHUNK = 32
 

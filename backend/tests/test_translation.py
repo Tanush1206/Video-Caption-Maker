@@ -109,3 +109,16 @@ def test_decoding_is_capped_and_cannot_loop(monkeypatch):
     # Seven tokens in: the language tag, five words, </s>.
     assert options["max_decoding_length"] == 3 * 7 + 10
     assert options["no_repeat_ngram_size"] == 4
+
+
+def test_every_caption_language_translates_offline():
+    """
+    Each caption language is one M2M100 itself knows. The core flow has to
+    work without a network, so a language only Gemini could deliver is never
+    offered. Telugu is the one from the v1.0.7 list that M2M100 lacks.
+    """
+    from app.services.languages import LANGUAGES, NATIVE_NAMES
+
+    assert set(LANGUAGES) <= translation.M2M100_LANGUAGES
+    assert "te" not in translation.M2M100_LANGUAGES
+    assert set(NATIVE_NAMES) == set(LANGUAGES)

@@ -6,15 +6,46 @@ the editor shows. A second copy anywhere would eventually offer a language the
 pipeline cannot actually deliver.
 """
 
-# ISO 639-1, which is what Whisper's `language=` expects and what Gemini reads
-# happily in a prompt. Deliberately short: five languages that can be checked,
-# rather than the ninety-nine Whisper claims and nobody here has verified.
+# ISO 639-1, which is what Whisper's `language=` expects, what M2M100's
+# language tokens are named after, and what Gemini reads happily in a prompt.
+# Deliberately short: languages that were checked end to end — Whisper,
+# M2M100's own language list, a translation sweep and a burned-in export —
+# rather than the ninety-nine Whisper claims. Telugu is not in M2M100, and
+# Kannada, Gujarati and Punjabi came out of it unusable; see PROGRESS.md
+# (v1.0.7) for the samples. Arabic, Urdu and CJK need right-to-left or CJK
+# rendering first (docs/ROADMAP.md).
 LANGUAGES: dict[str, str] = {
     "en": "English",
     "hi": "Hindi",
     "fr": "French",
     "de": "German",
     "nl": "Dutch",
+    "bn": "Bengali",
+    "mr": "Marathi",
+    "ta": "Tamil",
+    "ml": "Malayalam",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "it": "Italian",
+    "ru": "Russian",
+}
+
+# Each language in its own name and script, which is how someone looking for
+# their language finds it in a list of fifteen.
+NATIVE_NAMES: dict[str, str] = {
+    "en": "English",
+    "hi": "हिन्दी",
+    "fr": "Français",
+    "de": "Deutsch",
+    "nl": "Nederlands",
+    "bn": "বাংলা",
+    "mr": "मराठी",
+    "ta": "தமிழ்",
+    "ml": "മലയാളം",
+    "es": "Español",
+    "pt": "Português",
+    "it": "Italiano",
+    "ru": "Русский",
 }
 
 # "Whatever is being spoken" — the default, and the only honest answer before
@@ -47,6 +78,11 @@ def is_spoken_language(value: str) -> bool:
 
 def is_caption_language(value: str) -> bool:
     return value == SAME or value in LANGUAGES
+
+
+def native_name(code: str) -> str | None:
+    """The language's name in itself, or None for "auto" and "same"."""
+    return NATIVE_NAMES.get(code)
 
 
 def label(code: str) -> str:
