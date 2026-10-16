@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStats } from "@/hooks/use-stats";
 import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
+import { useLanguageOptions } from "@/hooks/use-videos";
 import { formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
@@ -196,6 +197,7 @@ function ModelSection({ info }: { info: SystemInfo }) {
 
 function TranslationSection({ info }: { info: SystemInfo }) {
   const update = useUpdateSystemSettings();
+  const { data: languageOptions } = useLanguageOptions();
   const [key, setKey] = useState("");
   const gemini = info.translation_engine === "gemini";
 
@@ -227,9 +229,18 @@ function TranslationSection({ info }: { info: SystemInfo }) {
     <SettingsSection eyebrow="Caption languages" title="Translation" icon={Languages}>
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2">
         <span className="label-caps mr-1">Languages</span>
-        {["English", "Hindi", "French", "German", "Dutch"].map((language) => (
-          <Chip key={language}>{language}</Chip>
-        ))}
+        {/* Served, not listed here: this used to be five names typed into
+            the page, which the language list had already outgrown. */}
+        {(languageOptions?.caption ?? [])
+          .filter((option) => option.native)
+          .map((option) => (
+            <Chip key={option.code}>
+              <span lang={option.code}>{option.native}</span>
+              {option.native !== option.label && (
+                <span className="ml-1 text-muted-foreground">{option.label}</span>
+              )}
+            </Chip>
+          ))}
       </div>
 
       <div className="flex flex-col gap-3">

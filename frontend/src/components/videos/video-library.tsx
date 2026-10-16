@@ -26,7 +26,7 @@ const FIRST_STEPS = [
   },
   {
     title: "2. Pick a language",
-    body: "Captions in the language that is spoken, or translated into English, Hindi, French, German or Dutch.",
+    body: "Captions in the language that is spoken, or translated into another one on this computer.",
   },
   {
     title: "3. Export",
