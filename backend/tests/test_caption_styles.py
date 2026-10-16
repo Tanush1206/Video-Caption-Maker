@@ -331,6 +331,31 @@ async def test_malformed_colour_is_rejected(client, auth_headers, sample_video_b
 
 
 @pytest.mark.asyncio
+async def test_reset_and_presets_clear_a_hand_placement(client, auth_headers, sample_video_bytes):
+    """
+    Reset is "back to the defaults" and a preset names its own position, so
+    neither may leave a dragged caption where it was dragged.
+
+    Both did: `pos_x`/`pos_y` are nullable with no column default, so the
+    defaults read off the columns left them out, and so did every preset.
+    """
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    url = f"/api/videos/{video_id}/style"
+    placed = {"pos_x": 0.3, "pos_y": 0.2}
+
+    assert (await client.patch(url, headers=auth_headers, json=placed)).json()["pos_x"] == 0.3
+    reset = (await client.delete(url, headers=auth_headers)).json()
+    assert (reset["pos_x"], reset["pos_y"]) == (None, None)
+
+    for name in style_service.PRESETS:
+        await client.patch(url, headers=auth_headers, json=placed)
+        applied = (
+            await client.post(f"{url}/preset", headers=auth_headers, json={"name": name})
+        ).json()
+        assert (applied["pos_x"], applied["pos_y"]) == (None, None), name
+
+
+@pytest.mark.asyncio
 async def test_preset_and_reset(client, auth_headers, sample_video_bytes):
     video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
 

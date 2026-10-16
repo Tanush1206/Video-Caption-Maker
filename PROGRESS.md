@@ -811,11 +811,19 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
      under `\pos`. Fix: `width: max-content` (wrap at maxWidth only).
   2. **Baseline strut.** In free mode the box was a block, so the
      inline-block text sat on a line with descender room: the box was taller
-     than the text and the text centre sat above `n5\pos`'s point. Grab
+     than the text and the text centre sat above `\an5\pos`'s point. Grab
      jumped ~1.7 px; the saved y was off by 0.009 of the frame (375 px).
      Fix: the box is a flex container, like anchored mode.
   Check `caption-drag` (mouse + CDP touch, 1440/375, 16:9 and 9:16): 17 FAIL
   before, 0 after (56 PASS per video).
+- Found while testing A1: **Reset and presets kept a dragged position.**
+  `default_style_fields()` read defaults off the columns and skipped
+  nullable columns without one (`pos_x`/`pos_y`, `default=None` is "no
+  default" to SQLAlchemy), and the presets copied that set. So "Back to
+  defaults" and every preset left a hand-placed caption where it was, even
+  though each preset names its own `position`. Fix: nullable columns default
+  to None; presets clear `pos_x`/`pos_y`. Test
+  `test_reset_and_presets_clear_a_hand_placement` (failed before).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test

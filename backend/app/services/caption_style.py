@@ -146,6 +146,10 @@ _PRESET_BASELINE: dict = {
     "letter_spacing": 0,
     "uppercase": False,
     "box_padding": 8,
+    # Back on the preset's own anchor: a caption dragged somewhere by hand
+    # would otherwise ignore the `position` every preset sets.
+    "pos_x": None,
+    "pos_y": None,
 }
 
 PRESETS: dict[str, dict] = {
@@ -226,12 +230,17 @@ def default_style_fields() -> dict:
 
     Introspecting the columns keeps this in step with the model instead of
     repeating all fourteen values somewhere they can drift.
+
+    A nullable column with no default defaults to NULL, and is included as
+    None. Leaving those out is how a reset (and, through the preset test,
+    every preset) kept a hand-dragged `pos_x`/`pos_y`: SQLAlchemy records
+    `default=None` as no default at all.
     """
     skip = {"id", "video_id", "created_at", "updated_at"}
     return {
-        column.name: column.default.arg
+        column.name: column.default.arg if column.default is not None else None
         for column in CaptionStyle.__table__.columns
-        if column.name not in skip and column.default is not None
+        if column.name not in skip and (column.default is not None or column.nullable)
     }
 
 
