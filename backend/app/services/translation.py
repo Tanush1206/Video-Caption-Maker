@@ -81,6 +81,108 @@ M2M100_SIZES_MB = {"m2m100_1.2B": 1260, "m2m100_418M": 500}
 # Captions per call to the local model. Progress is reported between chunks.
 LOCAL_CHUNK = 32
 
+# How many captions one sentence may span before it is translated in parts
+# anyway, and how long it may get. Long enough for the two- and three-way
+# splits the transcriber makes (captions are capped at ~84 characters), short
+# enough that one runaway sentence cannot swallow a paragraph.
+SENTENCE_MAX_CAPTIONS = 4
+SENTENCE_MAX_CHARS = 400
+
+# What ends a sentence, in the scripts captions arrive in: Latin and Cyrillic
+# punctuation, the Devanagari danda (Hindi, Marathi) and double danda.
+SENTENCE_END = (".", "!", "?", "…", "।", "॥", '"', "”", "»")
+
+
+def sentence_groups(texts: list[str]) -> list[list[int]]:
+    """
+    Indices of `texts`, grouped into the sentences they belong to.
+
+    The transcriber splits long sentences into captions of a readable length,
+    so a caption is often a fragment — "until they are soft." after "First,
+    chop two onions and fry them slowly". M2M100 translates one input at a
+    time with no idea what came before, so each fragment came back as a
+    sentence of its own: capitalised, sometimes with its own full stop, and
+    with German or Dutch verbs moved to the wrong half. Grouping lets the
+    model see the whole sentence.
+
+    A group runs until a caption ends a sentence, or the limits above. Blank
+    captions are never grouped; they are passed through on their own.
+    """
+    groups: list[list[int]] = []
+    current: list[int] = []
+    chars = 0
+    for i, text in enumerate(texts):
+        stripped = text.strip()
+        if not stripped:
+            if current:
+                groups.append(current)
+                current, chars = [], 0
+            groups.append([i])
+            continue
+        current.append(i)
+        chars += len(stripped)
+        if (
+            stripped.endswith(SENTENCE_END)
+            or len(current) >= SENTENCE_MAX_CAPTIONS
+            or chars >= SENTENCE_MAX_CHARS
+        ):
+            groups.append(current)
+            current, chars = [], 0
+    if current:
+        groups.append(current)
+    return groups
+
+
+def split_like(translated: str, parts: list[str]) -> list[str] | None:
+    """
+    Split one translated sentence back into as many captions as it came from.
+
+    Each caption gets a share of the words in proportion to how much of the
+    source sentence it held, because that is what keeps the text on screen
+    roughly in step with the speech its caption is timed to. A cut lands on
+    a word boundary, and on one just after punctuation when there is one
+    within two words of the ideal point — "a little salt," then "and a cup of
+    water" rather than "a little" then "salt, and a cup".
+
+    None when there are fewer words than captions: the caller then translates
+    those captions one by one instead.
+    """
+    words = translated.split()
+    count = len(parts)
+    if count == 1:
+        return [translated.strip()]
+    if len(words) < count:
+        return None
+
+    lengths = [len(part.strip()) for part in parts]
+    total = sum(lengths) or 1
+    # Character offset at the end of each word, as a fraction of the whole.
+    ends, running = [], 0
+    for word in words:
+        running += len(word) + 1
+        ends.append(running)
+    word_total = ends[-1]
+
+    cuts: list[int] = []  # index of the word each part ends after
+    share = 0
+    for k in range(count - 1):
+        share += lengths[k]
+        ideal = share / total * word_total
+        lowest = (cuts[-1] + 1) if cuts else 0
+        highest = len(words) - (count - 1 - k) - 1  # leave a word for each later part
+        best = min(range(lowest, highest + 1), key=lambda w: abs(ends[w] - ideal))
+        for nearby in (best, best - 1, best + 1, best - 2, best + 2):
+            if lowest <= nearby <= highest and words[nearby][-1] in ",;:.!?।":
+                best = nearby
+                break
+        cuts.append(best)
+
+    out, start = [], 0
+    for cut in [*cuts, len(words) - 1]:
+        out.append(" ".join(words[start : cut + 1]))
+        start = cut + 1
+    return out
+
 _translator = None
 _tokenizer = None
 _languages: set[str] = set()
@@ -236,11 +338,14 @@ def translate_locally(
     on_download: model_store.Progress | None = None,
 ) -> list[str]:
     """
-    Translate line by line with M2M100. Raises on failure.
+    Translate with M2M100, a sentence at a time. Raises on failure.
 
     M2M100 needs to be told the source language, so this takes Whisper's
-    detection. Each caption is translated on its own — the model has no
-    notion of neighbouring lines, which is the main thing Gemini does better.
+    detection. It has no notion of neighbouring lines, so captions that make
+    up one sentence are joined, translated together, and split back over the
+    same captions (`sentence_groups`, `split_like`). Each caption keeps its own
+    timing; only the words move. A sentence whose translation will not split
+    that many ways is translated caption by caption instead, as it always was.
     """
     if not source:
         raise UnsupportedLanguage("The spoken language is unknown")
@@ -252,37 +357,57 @@ def translate_locally(
         if code not in _languages:
             raise UnsupportedLanguage(f"M2M100 cannot translate {code!r}")
 
-    out: list[str] = []
-    for start in range(0, len(texts), LOCAL_CHUNK):
-        chunk = texts[start : start + LOCAL_CHUNK]
+    def decode(lines: list[str]) -> list[str]:
+        return _decode(translator, tokenizer, lines, source, target)
+
+    out = list(texts)
+    groups = sentence_groups(texts)
+    done = 0
+    for start in range(0, len(groups), LOCAL_CHUNK):
         # Blank lines go straight through; the model would invent something.
-        indices = [i for i, text in enumerate(chunk) if text.strip()]
-        sources = [
-            [f"__{source}__", *tokenizer.encode(chunk[i], out_type=str), "</s>"] for i in indices
-        ]
-        results = (
-            translator.translate_batch(
-                sources,
-                target_prefix=[[f"__{target}__"]] * len(sources),
-                beam_size=4,
-                max_batch_size=16,
-                # Captions are a line or two. A runaway decode on a garbled
-                # line should stop near the length of a caption, not at 1024.
-                max_decoding_length=200,
-                repetition_penalty=1.1,
-            )
-            if sources
-            else []
-        )
-        translated = list(chunk)
-        for i, result in zip(indices, results):
-            tokens = result.hypotheses[0][1:]  # drop the target-language token
-            text = tokenizer.decode(tokens).strip()
-            translated[i] = text or chunk[i]
-        out.extend(translated)
+        chunk = [g for g in groups[start : start + LOCAL_CHUNK] if texts[g[0]].strip()]
+        joined = [" ".join(texts[i].strip() for i in group) for group in chunk]
+        unsplit: list[int] = []
+        for group, text in zip(chunk, decode(joined)):
+            pieces = split_like(text, [texts[i] for i in group]) if text else None
+            if pieces is None:
+                unsplit.extend(group)
+                continue
+            for i, piece in zip(group, pieces):
+                out[i] = piece or texts[i]
+        for i, text in zip(unsplit, decode([texts[i] for i in unsplit])):
+            out[i] = text or texts[i]
+        done += sum(len(g) for g in groups[start : start + LOCAL_CHUNK])
         if on_progress:
-            on_progress(min(100, round(len(out) / len(texts) * 100)))
+            on_progress(min(100, round(done / len(texts) * 100)))
     return out
+
+
+def _decode(translator, tokenizer, lines: list[str], source: str, target: str) -> list[str]:
+    """
+    One batch through the model, guarded against its two failure modes.
+
+    On a language it has seen little of, M2M100 can run away — a 20-word
+    caption came back as a 60-word news paragraph it remembered — or loop on a
+    phrase. So the output may be at most three times the source's length in
+    tokens (plus a little, for the scripts that need more pieces per word),
+    and no four tokens may repeat.
+    """
+    if not lines:
+        return []
+    sources = [[f"__{source}__", *tokenizer.encode(line, out_type=str), "</s>"] for line in lines]
+    longest = max(len(tokens) for tokens in sources)
+    results = translator.translate_batch(
+        sources,
+        target_prefix=[[f"__{target}__"]] * len(sources),
+        beam_size=4,
+        max_batch_size=16,
+        max_decoding_length=min(256, 3 * longest + 10),
+        repetition_penalty=1.1,
+        no_repeat_ngram_size=4,
+    )
+    # Drop the target-language token the output starts with.
+    return [tokenizer.decode(result.hypotheses[0][1:]).strip() for result in results]
 
 
 # ── Gemini ─────────────────────────────────────────────────────────────────

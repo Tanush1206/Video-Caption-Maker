@@ -761,12 +761,12 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
 - [x] A3 Style sliders (opacity and the rest): reproduce, fix, test.
 - [x] A4 Keyboard placement: arrow keys move a focused caption, Shift = far.
 - [x] A5 Burn test: rendered MP4 caption position and opacity match preview.
-- [ ] B1 Translation sweep, all pairs of en/hi/fr/de/nl through M2M100
+- [x] B1 Translation sweep, all pairs of en/hi/fr/de/nl through M2M100
       (and Gemini if a key is set): script, completeness, punctuation, wrap.
-- [ ] B2 Fixes without changing models (context, wrapping, script/fonts).
-- [ ] B3 Record a sample per pair and the weak pairs.
-- [ ] C1 Verify M2M100's language list for bn pa mr gu ta kn ml te es pt it ru.
-- [ ] C2 Quality check per new language; reject unusable ones.
+- [x] B2 Fixes without changing models (context, wrapping, script/fonts).
+- [x] B3 Record a sample per pair and the weak pairs.
+- [x] C1 Verify M2M100's language list for bn pa mr gu ta kn ml te es pt it ru.
+- [x] C2 Quality check per new language; reject unusable ones.
 - [ ] C3 Fonts: burn-in per new script (fonts-noto-core already has
       Bengali, Gurmukhi, Devanagari, Gujarati, Tamil, Kannada, Malayalam,
       Telugu; Cyrillic/Latin via DejaVu/Noto).
@@ -791,6 +791,19 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   clamped like a drag and saved through the same debounced update.
 - The transport shortcuts (arrows seek 5 s, space plays) now ignore a key a
   focused control already handled (`defaultPrevented`).
+- B2: captions that form one sentence are translated together and split
+  back over the same captions (word boundaries, preferring punctuation within
+  two words). Timings unchanged. Decoding capped at 3x the source tokens + 10
+  and no repeated 4-grams.
+- B (Gemini): a key is set on dev, but all 31 sweep requests failed with 429
+  RESOURCE_EXHAUSTED (and some 503/504). Changing the Gemini model is
+  Tanush's call, so Gemini was not swept; the app falls back to M2M100 and
+  says so. Raise in the final report.
+- C1/C2 language decisions (M2M100 1.2B, two 8-line texts: a cooking clip
+  and a general "set up the app" text, each round-tripped to English):
+  added bn mr ml ta es pt it ru; rejected te (not in M2M100's 103 language
+  tokens, either model), kn gu pa (clearly unusable, samples below). Done
+  under the brief's own rules (unsupported / unusable → don't add, report).
 - Editor checks live in `scripts/ui-check/checks.js` (Playwright against a
   running app, like the existing checks); they need a completed video and
   reset its style before and after. `VCM_CHECK_VIDEO` picks the video.
@@ -863,6 +876,53 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   boxed. After: box centre (0.299, 0.249) for (0.3, 0.25); opacity ratio
   0.6 within 0.03. Failed before ("no box was drawn"), passes after.
   Backend 352 passed, 1 skipped; ruff clean.
+- B1/B3 sweep (all 20 pairs of en/hi/fr/de/nl + en→11 new, local 1.2B on
+  dev CPU, 27 s and 41 s). Sample = the split sentence "Then add the
+  tomatoes, a little salt, | and a cup of water.", after B2:
+  | Pair | Sample | Verdict |
+  |---|---|---|
+  | en→fr | Puis ajoutez les tomates, un peu de sel \| et une tasse d'eau. | good |
+  | en→de | Dann die Tomaten, ein wenig Salz und eine \| Tasse Wasser hinzufügen. | good; split inside a phrase |
+  | en→nl | Voeg dan de tomaten toe, een beetje zout \| en een kopje water. | good |
+  | en→hi | फिर टमाटर, थोड़ा नमक और एक गिलास \| पानी जोड़ें। | weak (onions→"apples/soap", fry→"freeze", thick→"fat") |
+  | fr→en | Then add the tomatoes, a little salt, \| and a cup of water. | good; idioms literal ("faites-les revenir"→"turn them back") |
+  | fr→de | Dann fügen Sie die Tomaten, ein wenig Salz und eine \| Tasse Wasser hinzu. | good; same idiom |
+  | fr→nl | Voeg vervolgens de tomaten, wat zout en een \| kopje water toe. | good; same idiom |
+  | fr→hi | फिर टमाटर, थोड़ा नमक और एक कप \| पानी जोड़ें। | weak (as en→hi) |
+  | de→en | Then add the tomatoes, \| some salt and a cup of water. | good |
+  | de→fr | Ensuite, ajouter les tomates, \| un peu de sel et une tasse d'eau. | good |
+  | de→nl | Voeg vervolgens de tomaten, \| wat zout en een kopje water toe. | good |
+  | de→hi | फिर टमाटर, \| कुछ नमक और एक कप पानी जोड़ें। | weak (as en→hi) |
+  | nl→en | Then add the tomatoes, a little salt \| and a cup of water. | good |
+  | nl→fr | Ajouter les tomates, un peu de sel \| et une tasse d'eau. | good |
+  | nl→de | Dann fügen Sie die Tomaten, ein wenig Salz \| und eine Tasse Wasser hinzu. | good |
+  | nl→hi | फिर टमाटर, थोड़ा नमक और एक \| कप पानी जोड़ें। | weak (as en→hi) |
+  | hi→en | Then add tomatoes, \| a little salt and a cup of water. | weak as a source (प्याज़ "onion"→"pieces", गाढ़ा "thick"→"hot") |
+  | hi→fr | Puis versez des tomates, \| un peu de sel et une tasse d'eau. | weak source (as hi→en) |
+  | hi→de | Dann Tomat, ein wenig Salz \| und eine Tasse Wasser gießen. | weak source; "Töpfe" (pots) for onions |
+  | hi→nl | Voeg dan tomaten, \| een beetje zout en een kopje water toe. | weak source (as hi→en) |
+  | en→es | Luego añade los tomates, un poco de sal \| y una taza de agua. | good |
+  | en→pt | Em seguida, adicione os tomates, um pouco de \| sal e uma xícara de água. | good; split inside a phrase |
+  | en→it | Poi aggiungere i pomodori, un po 'di sale \| e una tazza d'acqua. | good (apostrophe spacing) |
+  | en→ru | Затем добавьте помидоры, \| немного соли и стакан воды. | good |
+  | en→bn | এরপর টমেটো, সামান্য লবণ এবং একটি \| কাপ পানি যোগ করুন। | weak: everyday text 7/8 right; cooking nouns wrong (onions→"soap", fry→"cool") |
+  | en→mr | थोडा काढलेला टोमॅटोचा गर आणि थोडी साखर घालून \| मिश्रण एकत्र करावे. | weak: everyday 8/8; cooking 4/8 (onions→"sugar", fry→"freeze") |
+  | en→ml | അതിനുശേഷം ഒരു കുപ്പി വെള്ളം, \| കുറച്ചു മുളപ്പവും ചേർക്കുക. | weak: everyday 7/8; cooking 3/8 ("a bottle of water", eggs) |
+  | en→ta | பின்னர், மழை பெய்யும், \| சிறிது தண்ணீர் சேர்க்கவும். | weakest added: everyday 6/8 (one English word left); cooking 3/8 ("rain", first line "Return of Christ's sister") |
+  | en→pa | ਪਾਲਤੂ ਦੋਸਤਾਨਾ ਜਾਨਵਰ ਲਈ ਤਿਆਰ ਕੀਤਾ ਗਿਆ ਹੈ, \| ਜੋ ਕਿ ਇੱਕ ਛੋਟੇ ਫੀਚਰ ਹੈ. | REJECTED: "designed for pet friendly animals"; everyday 3/8, one line reverses its meaning ("videos can be removed at any time") |
+  | en→gu | આ ઉપરાંત, તમે એકાઉન્ટ્સ, બ્રોડબેન્ડ્સ અને ફ્લેટ્સને \| ડાઉનલોડ કરી શકો છો. | REJECTED: "you can download accounts, broadbands and flats"; crawl junk "આ પણ વાંચો:" (Read also:), English copied |
+  | en→kn | ಕಲಬುರಗಿ ಸ 11:ಬರುವ ವರ್ಷದ ಅಕ್ಟೋಬರ್ 2 ರೊಳಗೆ… \| …ರಮೇಶ ಜಿಗಜಿಣಗಿ ಹೇಳಿದರು. | REJECTED: a remembered news story about sanitation (same paragraph on 3 captions) |
+  Why weak: Hindi and the Indian languages are low-resource in M2M100; its
+  training data is web crawl, which is where "Read also:" and the news
+  paragraph come from. Weak pairs keep the script, timing and line count;
+  nouns are what go wrong.
+- B2 (`translation.py`): sentence grouping + split-back, decode guards.
+  Before/after on the sweep: continuations no longer capitalised or given
+  their own full stop ("Bis sie weich sind." → "bis sie weich sind."),
+  German/Dutch verbs land at the end of the sentence they belong to ("Dann
+  die Tomaten, etwas Salz | Add a cup of water." → "...| some salt and a cup
+  of water."). Tests `tests/test_translation.py` (8; can't even import on
+  the old code).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
