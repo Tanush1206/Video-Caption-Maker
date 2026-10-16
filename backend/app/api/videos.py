@@ -264,15 +264,19 @@ async def language_options(user: CurrentUser) -> LanguageOptions:
     """
     return LanguageOptions(
         spoken=[
-            LanguageOption(code=code, label=languages.label(code))
+            LanguageOption(
+                code=code, label=languages.label(code), native=languages.native_name(code)
+            )
             for code in (languages.AUTO, *languages.LANGUAGES)
         ],
         caption=[
-            LanguageOption(code=code, label=languages.label(code))
+            LanguageOption(
+                code=code, label=languages.label(code), native=languages.native_name(code)
+            )
             for code in (languages.SAME, *languages.LANGUAGES)
         ],
         # Always true. English comes from Whisper's own translate pass, and the
-        # other four from M2M100, which runs on this machine with no key. A
+        # others from M2M100, which runs on this machine with no key. A
         # Gemini key only changes which engine translates, never whether one
         # can. This used to read the env key alone, and the editor disabled
         # four of the five languages on every install without one.

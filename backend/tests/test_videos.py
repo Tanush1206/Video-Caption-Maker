@@ -511,4 +511,19 @@ async def test_every_caption_language_is_available_without_a_gemini_key(
     assert response.status_code == 200
     body = response.json()
     assert body["translation_available"] is True
-    assert [o["code"] for o in body["caption"]] == ["same", "en", "hi", "fr", "de", "nl"]
+    assert [o["code"] for o in body["caption"]] == [
+        "same", "en", "hi", "fr", "de", "nl", "bn", "mr", "ta", "ml", "es", "pt", "it", "ru",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_language_options_carry_each_name_in_its_own_language(client, auth_headers):
+    """The pickers search and show the native name, so the API has to serve it."""
+    body = (await client.get("/api/videos/languages", headers=auth_headers)).json()
+    native = {o["code"]: o["native"] for o in body["caption"]}
+
+    assert native["same"] is None
+    assert native["bn"] == "বাংলা"
+    assert native["ru"] == "Русский"
+    assert all(native[code] for code in native if code != "same")
+    assert {o["code"]: o["native"] for o in body["spoken"]}["auto"] is None

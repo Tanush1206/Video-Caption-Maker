@@ -102,7 +102,10 @@ class TranscribeRequest(BaseModel):
 
 class LanguageOption(BaseModel):
     code: str
+    #: The English name ("Bengali"), or "Auto-detect" / "Same as spoken".
     label: str
+    #: The name in the language itself ("বাংলা"); null for auto and same.
+    native: str | None = None
 
 
 class LanguageOptions(BaseModel):
