@@ -475,6 +475,54 @@ const CHECKS = {
     await page.close();
   },
 
+  // Indic captions are drawn in the bundled Noto faces, the same files the
+  // export burns with, whatever the caption font and whatever the operating
+  // system has; Latin words in the same caption stay in the caption font.
+  // Read-only: the video and its captions are answered here.
+  async "script-fonts"(browser, base) {
+    const page = await browser.newPage();
+    const listing = await (await page.request.get(`${base}/api/videos?limit=50`)).json();
+    const video = listing.items.find((v) => v.status === "completed") ?? listing.items[0];
+    if (!video) throw new Error("needs at least one video");
+    const samples = [
+      ["Noto Sans Devanagari", "हमारा सूप tomato"],
+      ["Noto Sans Bengali", "আমরা স্যুপ tomato"],
+      ["Noto Sans Tamil", "நாம் சூப் tomato"],
+      ["Noto Sans Malayalam", "നമുക്ക് സൂപ്പ് tomato"],
+    ];
+    await page.route(`**/api/videos/${video.id}`, async (route) => {
+      const body = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...body, status: "completed", stage: null, error_message: null } });
+    });
+    await page.route(`**/api/videos/${video.id}/captions`, (route) =>
+      route.fulfill({
+        json: {
+          total: samples.length,
+          items: samples.map(([, text], i) => ({
+            id: i + 1, video_id: video.id, sequence: i, start_ms: i * 2000, end_ms: i * 2000 + 1900, text,
+            confidence: -0.2, override_color: null, override_bold: null, override_scale: null,
+          })),
+        },
+      })
+    );
+    await page.goto(`${base}/editor/${video.id}`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("DOM.enable"); await cdp.send("CSS.enable");
+    for (const [i, [family, text]] of samples.entries()) {
+      await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, i * 2 + 1);
+      await page.waitForFunction((t) => document.querySelector("[data-caption-text]")?.textContent === t, text);
+      await page.evaluate(() => document.fonts.ready);
+      const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+      const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-caption-text]" });
+      const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+      const names = fonts.map((f) => `${f.familyName}:${f.glyphCount}`).join(", ");
+      ok(`script-fonts: ${family} draws its script`, fonts.some((f) => f.familyName === family && f.glyphCount > 0), names);
+      ok(`script-fonts: ${family} leaves Latin to the caption font`, fonts.some((f) => !f.familyName.startsWith("Noto Sans ") && f.glyphCount >= 6), names);
+    }
+    await page.close();
+  },
+
   // The caption's grab handle: at least 24x24, the topmost thing at its own
   // centre, starts a drag by mouse and by touch with no jump, stays whole
   // inside the frame when the caption is at the very top, and a click on it

@@ -767,7 +767,7 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
 - [x] B3 Record a sample per pair and the weak pairs.
 - [x] C1 Verify M2M100's language list for bn pa mr gu ta kn ml te es pt it ru.
 - [x] C2 Quality check per new language; reject unusable ones.
-- [ ] C3 Fonts: burn-in per new script (fonts-noto-core already has
+- [x] C3 Fonts: burn-in per new script (fonts-noto-core already has
       Bengali, Gurmukhi, Devanagari, Gujarati, Tamil, Kannada, Malayalam,
       Telugu; Cyrillic/Latin via DejaVu/Noto).
 - [ ] C4 Searchable language pickers (language step, editor, settings) with
@@ -947,6 +947,19 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   "glyph" warnings), via fonts-noto-core (Bengali, Tamil, Malayalam Noto
   Sans Bold) and Poppins (Devanagari); after the shaping fix all 13 render
   correctly (`all-langs` sheet checked by eye).
+- C3 script fonts: Indic text was drawn by two different fallbacks — libass
+  picked Poppins (Devanagari) or Noto (the others) and sized it by the
+  *fallback's* win span; the browser used the OS (Nirmala UI on Windows) at
+  the caption font's em. Now both use Noto Sans Devanagari/Bengali/Tamil/
+  Malayalam, vendored in frontend/public/fonts (byte-identical to the
+  image's fonts-noto-core 20201225, OFL, 1.25 MB): ASS wraps each script run
+  in `n<Noto>s<size x noto span / caption span>` so its em is the caption
+  font's; CSS lists the faces first with `unicode-range`. Measured Hindi
+  caption, preview vs burn: Poppins w 0.985 / h 1.014, Sans w 1.014 /
+  h 1.013. Tests: `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`,
+  `test_indic_text_is_burned_at_the_caption_fonts_em` (ratio 1.0 before,
+  0.634 = span ratio after); check `script-fonts` (CDP: which font drew the
+  glyphs).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
