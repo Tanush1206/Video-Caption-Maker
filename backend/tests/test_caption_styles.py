@@ -151,6 +151,9 @@ def test_backcolour_follows_whichever_thing_is_being_drawn():
     # than drawn in the box's colour on top of the box.
     assert boxed["BackColour"] == "&H40FF0000"
     assert boxed["Shadow"] == 0
+    # And the box itself: libass fills a BorderStyle 3 box with OutlineColour.
+    assert boxed["OutlineColour"] == "&H40FF0000"
+    assert shadowed["OutlineColour"] != "&H40FF0000"
 
 
 def test_shadow_and_tracking_scale_with_the_frame():

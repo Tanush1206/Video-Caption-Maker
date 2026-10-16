@@ -523,6 +523,107 @@ async def test_captions_are_actually_drawn_into_the_pixels(
     )
 
 
+def _frame(path, at_seconds: float, width: int, height: int):
+    """One decoded frame as a height x width greyscale array."""
+    import numpy as np
+
+    raw = subprocess.run(
+        [
+            "ffmpeg", "-v", "error",
+            "-ss", str(at_seconds), "-i", str(path),
+            "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-",
+        ],
+        capture_output=True,
+        timeout=120,
+        check=True,
+    ).stdout
+    return np.frombuffer(raw, dtype=np.uint8).reshape(height, width)
+
+
+@pytest.mark.asyncio
+async def test_burned_caption_sits_where_the_preview_puts_it(
+    client, auth_headers, sample_video_bytes, tmp_path
+):
+    """
+    A hand-placed caption is burned at the point the editor showed it, and
+    its box at the opacity the editor showed.
+
+    The preview centres the caption's box on (pos_x, pos_y) of the frame
+    (`translate(-50%, -50%)` at `left`/`top`), and draws the box at
+    `box_opacity` over the video. So on a black source, a white box must be
+    centred on that fraction of the frame, and its level relative to a fully
+    opaque box must be `box_opacity` — measured from the rendered pixels, not
+    from the ASS file that asked for them.
+    """
+    import numpy as np
+    from sqlalchemy import select
+
+    from app.models.export import Export
+    from app.models.video import Video
+    from app.services import storage
+    from app.workers.export import _run
+
+    width, height = 640, 360
+    video_id = await make_video(client, auth_headers, sample_video_bytes)
+    await seed_captions(video_id)
+    black = tmp_path / "black.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d=2:r=15",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            str(black),
+        ],
+        capture_output=True, timeout=120, check=True,
+    )
+    async with AsyncSessionLocal() as session:
+        video = (await session.execute(select(Video).where(Video.id == video_id))).scalar_one()
+        storage.resolve(video.storage_path).write_bytes(black.read_bytes())
+
+    placed = {
+        "pos_x": 0.3, "pos_y": 0.25, "alignment": "center",
+        "text_color": "#000000", "box_color": "#FFFFFF", "box_padding": 12,
+        "outline_width": 0, "shadow": 0, "font_size": 60,
+    }
+
+    async def render(opacity: float):
+        response = await client.patch(
+            f"/api/videos/{video_id}/style", headers=auth_headers,
+            json={**placed, "box_opacity": opacity},
+        )
+        assert response.status_code == 200, response.text
+        created = (
+            await client.post(
+                f"/api/videos/{video_id}/exports", headers=auth_headers, json={"format": "mp4"}
+            )
+        ).json()
+        assert "error" not in await _run(created["id"])
+        async with AsyncSessionLocal() as session:
+            path = storage.resolve((await session.get(Export, created["id"])).storage_path)
+        # A caption covers 0-400 ms.
+        return _frame(path, 0.2, width, height).astype(float)
+
+    opaque, partial = await render(1.0), await render(0.6)
+    background = float(np.median(opaque))  # most of the frame is untouched black
+
+    # The box: everything clearly lighter than the background.
+    box = opaque > background + 0.5 * (opaque.max() - background)
+    rows, cols = np.where(box)
+    assert rows.size > 0, f"no box was drawn (max {opaque.max()}, background {background}, partial max {partial.max()})"
+    centre_x = (cols.min() + cols.max() + 1) / 2 / width
+    centre_y = (rows.min() + rows.max() + 1) / 2 / height
+    assert abs(centre_x - placed["pos_x"]) < 0.01, f"box centred at x={centre_x:.3f}"
+    assert abs(centre_y - placed["pos_y"]) < 0.01, f"box centred at y={centre_y:.3f}"
+
+    # Its level, on the box's own pixels (the black letters excluded).
+    level_opaque = float(np.median(opaque[box])) - background
+    level_partial = float(np.median(partial[box])) - background
+    assert abs(level_partial / level_opaque - 0.6) < 0.03, (
+        f"box drawn at {level_partial / level_opaque:.3f} of opaque, asked for 0.6"
+    )
+
+
 @pytest.mark.asyncio
 async def test_render_fails_loudly_when_the_source_is_gone(
     client, auth_headers, exportable

@@ -760,7 +760,7 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
       a drag, touch), test.
 - [x] A3 Style sliders (opacity and the rest): reproduce, fix, test.
 - [x] A4 Keyboard placement: arrow keys move a focused caption, Shift = far.
-- [ ] A5 Burn test: rendered MP4 caption position and opacity match preview.
+- [x] A5 Burn test: rendered MP4 caption position and opacity match preview.
 - [ ] B1 Translation sweep, all pairs of en/hi/fr/de/nl through M2M100
       (and Gemini if a key is set): script, completeness, punctuation, wrap.
 - [ ] B2 Fixes without changing models (context, wrapping, script/fonts).
@@ -852,6 +852,17 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   `caption-keyboard` (1%/10% steps, clamped, saved, no scroll, no seek,
   keeps focus): both FAIL on the old code (no handle); all four caption
   checks + sliders: 202/202 (16:9) and 201+1 → 202/202 (9:16) after.
+- A5 burn test `test_burned_caption_sits_where_the_preview_puts_it`: renders
+  a white box at pos (0.3, 0.25) on a black clip through the real export
+  task and measures the decoded frame. **It found an export bug:** at
+  BorderStyle 3 libass paints the box with OutlineColour, and we sent the
+  box colour/opacity in BackColour. Every burned box was the *outline*
+  colour (black by default) at 100%, whatever Box colour and Opacity said;
+  the YouTube preset's 75% box rendered solid. The default (black box,
+  black outline) hid it. Fix: OutlineColour = box colour at box_opacity when
+  boxed. After: box centre (0.299, 0.249) for (0.3, 0.25); opacity ratio
+  0.6 within 0.03. Failed before ("no box was drawn"), passes after.
+  Backend 352 passed, 1 skipped; ruff clean.
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test

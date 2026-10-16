@@ -385,11 +385,22 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
         "Underline": -1 if style.underline else 0,
         "StrikeOut": -1 if style.strikeout else 0,
         "PrimaryColour": to_ass_colour(style.text_color),
-        "OutlineColour": to_ass_colour(style.outline_color),
+        # At BorderStyle 3 libass paints the box in OutlineColour, not
+        # BackColour — measured on the rendered pixels: a box asked for in
+        # white came out black (the outline colour) and fully opaque, so every
+        # burned box was the outline colour at 100% whatever the panel said,
+        # and the YouTube preset's 75% box was solid. Unboxed, it is the
+        # stroke colour, as it says.
+        "OutlineColour": (
+            to_ass_colour(style.box_color, style.box_opacity)
+            if boxed
+            else to_ass_colour(style.outline_color)
+        ),
         #
-        # BackColour is two different things depending on BorderStyle: the box
-        # fill at 3, the drop-shadow colour at 1. One field, so it has to follow
-        # whichever is actually being drawn.
+        # BackColour is two different things depending on BorderStyle: the
+        # box's own shadow at 3 (never drawn: Shadow is 0 with a box), the
+        # drop-shadow colour at 1. Given the box colour when boxed so a viewer
+        # that reads it as the box fill agrees with libass.
         #
         # Getting this wrong is invisible rather than loud. Leaving it as the
         # box colour at box_opacity means an unboxed style hands the shadow an
