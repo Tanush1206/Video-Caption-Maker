@@ -32,8 +32,16 @@ async function openEditor(page, base, id) {
   const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
   const first = captions.items.find((c) => c.end_ms - c.start_ms > 1000) ?? captions.items[0];
   await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (first.start_ms + first.end_ms) / 2000);
-  await page.locator("[data-caption-text]").waitFor();
+  await waitForCaption(page, first.text);
 }
+
+/**
+ * Until the overlay shows `text`. Right after a seek it still shows the
+ * caption from where the playhead was, and measuring that one (a different
+ * width) makes every geometry check wrong.
+ */
+const waitForCaption = (page, text) =>
+  page.waitForFunction((t) => document.querySelector("[data-caption-text]")?.textContent === t, text);
 
 const styleOf = async (page, base, id) => (await page.request.get(`${base}/api/videos/${id}/style`)).json();
 
@@ -55,7 +63,7 @@ const previewSignature = (page) =>
     const text = document.querySelector("[data-caption-text]");
     const s = getComputedStyle(text);
     const r = text.getBoundingClientRect();
-    const b = getComputedStyle(text.parentElement);
+    const b = getComputedStyle(text.closest("[data-caption-box]"));
     return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, b.padding, b.maxWidth].join("|");
   });
 
@@ -228,7 +236,9 @@ const CHECKS = {
           const el = sliders.nth(i);
           // Greyed out while it has no effect (Padding without a box).
           if (await el.isDisabled()) continue;
-          await el.scrollIntoViewIfNeeded();
+          // Centred, not just "in view": on a phone the bottom of the
+          // viewport is under the editor's fixed action bar.
+          await el.evaluate((e) => e.scrollIntoView({ block: "center" }));
           const label = el.locator("xpath=ancestor::label[1]");
           const name = (await label.innerText()).split(" —")[0];
           const [min, max, step] = ["min", "max", "step"].map(async (a) => Number(await el.getAttribute(a)));
@@ -270,7 +280,7 @@ const CHECKS = {
           // inside half a second.
           const updated = await page.waitForFunction((b) => {
             const t = document.querySelector("[data-caption-text]"); const s = getComputedStyle(t); const r = t.getBoundingClientRect();
-            const p = getComputedStyle(t.parentElement);
+            const p = getComputedStyle(t.closest("[data-caption-box]"));
             return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, p.padding, p.maxWidth].join("|") !== b;
           }, before, { timeout: 500 }).then(() => true, () => false);
           ok(`${at}: ${tab}/${name} preview updates`, updated);
@@ -358,16 +368,125 @@ const CHECKS = {
         ok(`${at}: a drag does not toggle playback`, await page.evaluate(() => document.querySelector("video").paused));
 
         const time = await page.evaluate(() => document.querySelector("video").currentTime);
+        const shownText = dropped.text && (await page.evaluate(() => document.querySelector("[data-caption-text]").textContent));
         await page.reload({ waitUntil: "networkidle" });
         await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
         await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, time);
-        await page.locator("[data-caption-text]").waitFor();
+        await waitForCaption(page, shownText);
         const reloaded = await captionGeometry(page);
         const rx = (reloaded.text.cx - reloaded.frame.x) / reloaded.frame.w, ry = (reloaded.text.cy - reloaded.frame.y) / reloaded.frame.h;
         ok(`${at}: same place after a reload`, near(rx, fx, 0.004) && near(ry, fy, 0.004), `${rx.toFixed(3)},${ry.toFixed(3)} vs ${fx.toFixed(3)},${fy.toFixed(3)}`);
         await page.request.delete(`${base}/api/videos/${id}/style`);
         await context.close();
       }
+    }
+  },
+
+  // The caption's grab handle: at least 24x24, the topmost thing at its own
+  // centre, starts a drag by mouse and by touch with no jump, stays whole
+  // inside the frame when the caption is at the very top, and a click on it
+  // focuses it without toggling playback. Changes data: see editorVideo.
+  async "caption-handle"(browser, base) {
+    for (const width of [1440, 375]) {
+      for (const kind of ["mouse", "touch"]) {
+        const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: kind === "touch" });
+        const page = await context.newPage();
+        const id = await editorVideo(page, base);
+        await openEditor(page, base, id);
+        const at = `caption-handle@${width}/${kind}`;
+        const handle = page.getByRole("button", { name: "Move caption" });
+        await handle.scrollIntoViewIfNeeded();
+        const box = await handle.boundingBox();
+        ok(`${at}: hit area at least 24x24`, box && box.width >= 24 && box.height >= 24, box && `${box.width}x${box.height}`);
+        const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+        const onTop = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[aria-label="Move caption"]'), { x: cx, y: cy });
+        ok(`${at}: not covered`, onTop);
+
+        const start = await captionGeometry(page);
+        const drag = await pointer(page, kind);
+        await drag.down(cx, cy);
+        await drag.move(cx + 30, cy - 40);
+        await page.waitForTimeout(80);
+        const moved = await captionGeometry(page);
+        ok(`${at}: dragging the handle moves the caption with no jump`, near(moved.text.cx - start.text.cx, 30) && near(moved.text.cy - start.text.cy, -40), `${(moved.text.cx - start.text.cx).toFixed(1)},${(moved.text.cy - start.text.cy).toFixed(1)}`);
+        const after = await handle.boundingBox();
+        ok(`${at}: the handle moves with the caption`, near(after.x - box.x, 30) && near(after.y - box.y, -40));
+        // Up past the top: the caption stops at the edge and the handle
+        // swaps to its lower edge rather than being cut off.
+        await drag.move(cx + 30, start.frame.y - 400);
+        await page.waitForTimeout(80);
+        await drag.up();
+        await page.waitForTimeout(150);
+        const top = await handle.boundingBox();
+        const g = await captionGeometry(page);
+        ok(`${at}: whole handle inside the frame at the top`, top.y >= g.frame.y - 0.5 && top.y + top.height <= g.frame.y + g.frame.h + 0.5, `handle y ${top.y.toFixed(1)}, frame y ${g.frame.y.toFixed(1)}`);
+
+        // A press without a move: focus, not play. In view first: a portrait
+        // frame is taller than the window, and its top may be scrolled off.
+        await handle.scrollIntoViewIfNeeded();
+        const h = await handle.boundingBox();
+        if (kind === "mouse") await page.mouse.click(h.x + h.width / 2, h.y + h.height / 2);
+        else await page.touchscreen.tap(h.x + h.width / 2, h.y + h.height / 2);
+        await page.waitForTimeout(150);
+        ok(`${at}: a click on the handle leaves playback alone`, await page.evaluate(() => document.querySelector("video").paused));
+        if (kind === "mouse") ok(`${at}: a click on the handle focuses it`, await handle.evaluate((e) => e === document.activeElement));
+        await page.request.delete(`${base}/api/videos/${id}/style`);
+        await context.close();
+      }
+    }
+  },
+
+  // Arrow keys on the focused handle move the caption 1% of the frame, Shift
+  // 10%; the move is saved, the page doesn't scroll, and the caption stays
+  // inside the frame however many presses. Changes data: see editorVideo.
+  async "caption-keyboard"(browser, base) {
+    for (const width of [1440, 375]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const id = await editorVideo(page, base);
+      await openEditor(page, base, id);
+      const at = `caption-keyboard@${width}`;
+      const handle = page.getByRole("button", { name: "Move caption" });
+      await handle.scrollIntoViewIfNeeded();
+      await handle.focus();
+      const scroll = await page.evaluate(() => scrollY);
+      const playhead = await page.evaluate(() => document.querySelector("video").currentTime);
+      const g0 = await captionGeometry(page);
+      const f0 = { x: (g0.text.cx - g0.frame.x) / g0.frame.w, y: (g0.text.cy - g0.frame.y) / g0.frame.h };
+      await page.keyboard.press("ArrowUp");
+      await page.waitForTimeout(100);
+      const g1 = await captionGeometry(page);
+      ok(`${at}: ArrowUp moves up 1% of the frame`, near(g1.text.cy - g0.text.cy, -g0.frame.h * 0.01, 1), `${(g1.text.cy - g0.text.cy).toFixed(1)} vs ${(-g0.frame.h * 0.01).toFixed(1)}`);
+      await page.keyboard.press("Shift+ArrowUp");
+      await page.waitForTimeout(100);
+      const g2 = await captionGeometry(page);
+      ok(`${at}: Shift+ArrowUp moves up 10%`, near(g2.text.cy - g1.text.cy, -g0.frame.h * 0.1, 1.5), `${(g2.text.cy - g1.text.cy).toFixed(1)} vs ${(-g0.frame.h * 0.1).toFixed(1)}`);
+      // Across, predicted with the same clamp the editor applies: a wide
+      // caption has little room to move sideways.
+      const lo = g2.frame.x + g2.text.w / 2, hi = g2.frame.x + g2.frame.w - g2.text.w / 2;
+      const clampX = (x) => Math.max(lo, Math.min(hi, x));
+      const afterRight = clampX(g2.text.cx + g2.frame.w * 0.01);
+      const expectedX = clampX(afterRight - g2.frame.w * 0.1);
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("Shift+ArrowLeft");
+      await page.waitForTimeout(100);
+      const g3 = await captionGeometry(page);
+      ok(`${at}: ArrowRight then Shift+ArrowLeft, clamped to the frame`, near(g3.text.cx, expectedX, 1.5), `${g3.text.cx.toFixed(1)} vs ${expectedX.toFixed(1)}`);
+      ok(`${at}: arrows don't scroll the page`, (await page.evaluate(() => scrollY)) === scroll);
+      // The editor's transport shortcuts seek on the arrows; not while the
+      // handle has them.
+      ok(`${at}: arrows on the handle don't seek the video`, (await page.evaluate(() => document.querySelector("video").currentTime)) === playhead);
+      ok(`${at}: the handle keeps focus`, await handle.evaluate((e) => e === document.activeElement));
+      for (let k = 0; k < 15; k++) await page.keyboard.press("Shift+ArrowDown");
+      for (let k = 0; k < 15; k++) await page.keyboard.press("Shift+ArrowRight");
+      await page.waitForTimeout(150);
+      const g4 = await captionGeometry(page);
+      ok(`${at}: stays inside the frame`, g4.text.x + g4.text.w <= g4.frame.x + g4.frame.w + 1 && g4.text.y + g4.text.h <= g4.frame.y + g4.frame.h + 1);
+      await page.waitForTimeout(800);
+      const saved = await styleOf(page, base, id);
+      const fx = (g4.text.cx - g4.frame.x) / g4.frame.w, fy = (g4.text.cy - g4.frame.y) / g4.frame.h;
+      ok(`${at}: the keyboard move is saved`, near(saved.pos_x, fx, 0.005) && near(saved.pos_y, fy, 0.005), `${saved.pos_x?.toFixed(3)},${saved.pos_y?.toFixed(3)} vs ${fx.toFixed(3)},${fy.toFixed(3)} (from ${f0.x.toFixed(3)},${f0.y.toFixed(3)})`);
+      await page.request.delete(`${base}/api/videos/${id}/style`);
+      await page.close();
     }
   },
 };

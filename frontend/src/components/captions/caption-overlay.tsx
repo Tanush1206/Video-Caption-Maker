@@ -1,5 +1,6 @@
 "use client";
 
+import { GripHorizontal } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { useInjectedFontFace } from "@/hooks/use-fonts";
@@ -17,6 +18,7 @@ import {
   freePosition,
   scaleFor,
 } from "@/lib/caption-style";
+import { cn } from "@/lib/utils";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 
@@ -33,6 +35,13 @@ const BUILT_IN = new Set([
 
 /** Far enough to mean "move this" rather than "I clicked". */
 const DRAG_THRESHOLD = 4;
+
+/** Arrow-key steps for the handle, as fractions of the frame. */
+const KEY_STEP = 0.01;
+const KEY_STEP_LARGE = 0.1;
+
+/** The handle's hit area, in CSS pixels. WCAG 2.5.8 asks for 24. */
+const HANDLE_SIZE = 28;
 
 interface CaptionOverlayProps {
   caption: Caption | null;
@@ -82,6 +91,9 @@ export function CaptionOverlay({
   /** The text itself, which is what gets measured — see `textBox`. */
   const textEl = useRef<HTMLSpanElement>(null);
   const readout = useRef<HTMLDivElement>(null);
+  /** The grab handle and the box it sits on — see `placeHandle`. */
+  const handle = useRef<HTMLButtonElement>(null);
+  const holder = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   const [dragging, setDragging] = useState(false);
 
@@ -94,6 +106,13 @@ export function CaptionOverlay({
   const live = useRef<FreePlacement | null>(null);
   /** Whether this press has travelled far enough to be a drag at all. */
   const moved = useRef(false);
+  /**
+   * Where the arrow keys last put the caption. The next press builds on this
+   * rather than on the pixels, because the pixels follow the style a render
+   * later and a quick second press would measure the old position and lose
+   * the first one. Forgotten when the style moves the caption any other way.
+   */
+  const keyed = useRef<FreePlacement | null>(null);
 
   // Unconditionally called with possibly-undefined arguments rather than behind
   // an `if`: a hook cannot be conditional, and the hook itself no-ops on a
@@ -124,6 +143,15 @@ export function CaptionOverlay({
 
   const scale = style ? scaleFor(height, style.reference_height) : 0;
 
+  // The arrow keys' running position only means something while the caption
+  // is where they left it. A drag forgets it on pointer-down and leaving the
+  // handle forgets it on blur; the placement grid, a preset and a reset all
+  // put the caption back on an anchor, which forgets it here.
+  const anchored = style ? style.pos_x == null || style.pos_y == null : true;
+  useLayoutEffect(() => {
+    if (anchored) keyed.current = null;
+  }, [anchored]);
+
   /**
    * Re-assert the live drag position after any render that happened mid-drag.
    *
@@ -134,10 +162,33 @@ export function CaptionOverlay({
    * purpose: this has to run after *every* render, not after a chosen few.
    */
   useLayoutEffect(() => {
-    if (!dragging || !style) return;
-    const node = boxEl.current;
-    if (node && live.current) applyFreePosition(node, live.current, style);
+    if (dragging && style) {
+      const node = boxEl.current;
+      if (node && live.current) applyFreePosition(node, live.current, style, scale);
+    }
+    placeHandle();
   });
+
+  /**
+   * Keep the whole handle inside the frame.
+   *
+   * It sits centred on the caption's top edge, so a caption at the very top
+   * of the frame would leave half of it outside — and the player clips
+   * (`overflow: hidden`), cutting a 28px target to 14 exactly where someone is
+   * most likely to want to grab it. So it is pushed down by however much would
+   * be cut off. Flipping it to the bottom edge instead is not enough: a
+   * one-line caption on a phone is ~12px tall, less than the handle. Written
+   * to the DOM rather than kept in state, because it is decided from layout
+   * and has to follow a drag that React is deliberately not told about.
+   */
+  function placeHandle() {
+    const node = handle.current;
+    const box = holder.current?.getBoundingClientRect();
+    const rect = frame.current?.getBoundingClientRect();
+    if (!node || !box || !rect) return;
+    const overhang = HANDLE_SIZE / 2 - (box.top - rect.top);
+    node.style.top = `${Math.max(0, overhang)}px`;
+  }
 
   /**
    * The caption's rendered text box, as fractions of the frame.
@@ -233,13 +284,15 @@ export function CaptionOverlay({
     );
 
     live.current = next;
-    applyFreePosition(node, next, style);
+    applyFreePosition(node, next, style, scale);
+    placeHandle();
     if (readout.current) {
       readout.current.textContent = `${Math.round(next.pos_x * 100)}% · ${Math.round(next.pos_y * 100)}%`;
     }
   }
 
   function handlePointerDown(event: React.PointerEvent) {
+    keyed.current = null;
     const node = frame.current;
     if (!node || !style || !onPlace) return;
 
@@ -316,8 +369,47 @@ export function CaptionOverlay({
     // A press that never moved is a click, and on a video a click means play.
     // The drag surface covers the whole frame, so without this the <video>
     // underneath never sees it and the player stops responding to clicks.
-    if (!dragged) onToggle?.();
-    else if (placement) onPlace?.(placement);
+    // A click on the handle is not a click on the video: it focuses the
+    // handle, ready for the arrow keys, and leaves playback alone.
+    if (!dragged) {
+      if (event.currentTarget !== handle.current) onToggle?.();
+    } else if (placement) onPlace?.(placement);
+  }
+
+  /**
+   * Arrow keys on the focused handle move the caption; Shift moves it ten
+   * times as far. Each press is a placement like the end of a drag, clamped
+   * the same way and saved through the same debounced update.
+   */
+  function handleKeyDown(event: React.KeyboardEvent) {
+    const node = frame.current;
+    if (!node || !style || !onPlace) return;
+    const delta = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    }[event.key];
+    if (!delta) return;
+    // Arrows would otherwise scroll the page as well.
+    event.preventDefault();
+
+    const rect = node.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const { anchor, size } = measure(rect);
+    const from = keyed.current ?? anchor;
+    const step = event.shiftKey ? KEY_STEP_LARGE : KEY_STEP;
+    const next = clampPlacement(
+      from.pos_x + delta[0] * step,
+      from.pos_y + delta[1] * step,
+      size,
+      style.alignment
+    );
+    keyed.current = next;
+    // Drawn now, like a drag frame, rather than when the cache re-renders.
+    if (boxEl.current) applyFreePosition(boxEl.current, next, style, scale);
+    placeHandle();
+    onPlace(next);
   }
 
   /**
@@ -393,17 +485,57 @@ export function CaptionOverlay({
       {style && (
         <div
           ref={boxEl}
+          data-caption-box
           className="pointer-events-none"
           style={captionBoxStyle(style, scale)}
           // Only meaningful once the caption is free-placed: an anchored box is
           // the whole frame, and announcing that as a position would be a lie.
           data-placed={placed || undefined}
         >
-          {caption && height > 0 && (
-            <span ref={textEl} data-caption-text style={captionTextStyle(style, font, scale, caption)}>
-              {caption.text}
-            </span>
-          )}
+          {/* The caption and its handle. Always rendered, even in a gap
+              between captions, so the handle stays where the caption will be
+              and there is always something to grab. */}
+          <div ref={holder} className="relative flex">
+            {caption && height > 0 && (
+              <span ref={textEl} data-caption-text style={captionTextStyle(style, font, scale, caption)}>
+                {caption.text}
+              </span>
+            )}
+            {draggable && (
+              <button
+                ref={handle}
+                type="button"
+                aria-label="Move caption"
+                title="Drag to move the caption · arrow keys to nudge it (Shift for bigger steps)"
+                // On the anchor's side of the top edge: centred for a centred
+                // caption, at the corner for a left- or right-aligned one, so
+                // it marks the point the caption is placed by.
+                style={{
+                  left: `${ANCHOR_SHIFT[style.alignment] * 100}%`,
+                  width: HANDLE_SIZE,
+                  height: HANDLE_SIZE,
+                  pointerEvents: "auto",
+                  touchAction: "none",
+                }}
+                className={cn(
+                  "absolute top-0 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full",
+                  "border-2 border-white/90 bg-primary text-primary-foreground shadow-lg",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+                  dragging ? "cursor-grabbing" : "cursor-grab"
+                )}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+                onKeyDown={handleKeyDown}
+                onBlur={() => {
+                  keyed.current = null;
+                }}
+              >
+                <GripHorizontal aria-hidden="true" className="size-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

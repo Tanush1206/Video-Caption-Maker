@@ -30,6 +30,11 @@ export function usePlayerShortcuts(playback: Playback) {
       if (isTyping(event.target) || event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
+      // A focused control that already used the key — the caption's grab
+      // handle moves the caption with the arrows — says so with
+      // preventDefault, and the transport stays out of it. React's handlers
+      // run at the root, before this listener on window sees the event.
+      if (event.defaultPrevented) return;
 
       switch (event.key) {
         case " ":

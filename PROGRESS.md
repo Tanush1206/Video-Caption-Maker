@@ -755,11 +755,11 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
 ### Backlog
 - [x] A1 Caption drag on the video: reproduce in Playwright (mouse, touch,
       1440/375), fix, test. (Keyboard is A4; themes in the D screenshots.)
-- [ ] A2 Drag handle "dot": there is no dot today (the whole frame is the
+- [x] A2 Drag handle "dot": there is no dot today (the whole frame is the
       drag surface). Add one per the brief (>= 24x24 hit area, on top, starts
       a drag, touch), test.
 - [x] A3 Style sliders (opacity and the rest): reproduce, fix, test.
-- [ ] A4 Keyboard placement: arrow keys move a focused caption, Shift = far.
+- [x] A4 Keyboard placement: arrow keys move a focused caption, Shift = far.
 - [ ] A5 Burn test: rendered MP4 caption position and opacity match preview.
 - [ ] B1 Translation sweep, all pairs of en/hi/fr/de/nl through M2M100
       (and Gemini if a key is set): script, completeness, punctuation, wrap.
@@ -781,6 +781,16 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
 - A3: controls that don't apply (outline/shadow colour with a box or at 0,
   box colour and padding without a box) stay visible and disabled, instead
   of appearing and vanishing. Hint line under them says why.
+- A2: the handle follows the mockup (video_caption_editor_3: a grip on the
+  caption's top edge): a 28x28 round button with a grip icon, always shown
+  (touch has no hover), at the anchor's point of the top edge, pushed down
+  just enough to stay whole at the top of the frame. A click on it focuses
+  it and does not play/pause; the rest of the frame still drags and still
+  plays on click.
+- A4: arrow keys move the focused handle 1% of the frame, Shift 10%,
+  clamped like a drag and saved through the same debounced update.
+- The transport shortcuts (arrows seek 5 s, space plays) now ignore a key a
+  focused control already handled (`defaultPrevented`).
 - Editor checks live in `scripts/ui-check/checks.js` (Playwright against a
   running app, like the existing checks); they need a completed video and
   reset its style before and after. `VCM_CHECK_VIDEO` picks the video.
@@ -824,6 +834,24 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   though each preset names its own `position`. Fix: nullable columns default
   to None; presets clear `pos_x`/`pos_y`. Test
   `test_reset_and_presets_clear_a_hand_placement` (failed before).
+- A2/A4 handle and keyboard. Found on the way:
+  1. **First drag frames didn't move a caption vertically.** Until the
+     cache re-rendered (~150 ms on dev) the box was still the full-bleed
+     anchored container, and writing `left`/`top` to it shrank the container
+     while the caption stayed pinned to its bottom. `applyFreePosition` now
+     writes the whole free-mode box.
+  2. **Arrow keys on the handle also seeked the video 5 s** (window-level
+     transport shortcuts skip only text fields). Fixed as above.
+  3. **Quick key presses were lost**: each press measured pixels that hadn't
+     re-rendered yet. Presses now build on the last position sent.
+  4. **Checks measured the wrong caption** right after a seek (the overlay
+     shows the old one for a moment): the checks now wait for the caption
+     that belongs to the seek time.
+  Checks `caption-handle` (hit area, not covered, mouse/touch drag with no
+  jump, handle follows, whole at the top, click focuses without playing) and
+  `caption-keyboard` (1%/10% steps, clamped, saved, no scroll, no seek,
+  keeps focus): both FAIL on the old code (no handle); all four caption
+  checks + sliders: 202/202 (16:9) and 201+1 → 202/202 (9:16) after.
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test

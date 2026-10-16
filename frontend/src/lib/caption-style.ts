@@ -218,15 +218,21 @@ export function captionBoxStyle(style: CaptionStyle, scale: number): CSSProperti
  * the style panel, the caption list — at pointer-event rate rather than at
  * frame rate, and that is what made dragging feel like it was catching.
  *
- * Deliberately writes the same three properties `captionBoxStyle` sets in free
- * mode, so the hand-off at the end of the drag is a no-op rather than a jump.
+ * Writes the whole free-mode box, exactly what `captionBoxStyle` would return
+ * for this placement, so the hand-off when React catches up is a no-op rather
+ * than a jump. The whole box and not just left/top: the first frames of a
+ * drag (or the first arrow key) arrive while the style in the cache is still
+ * anchored, and an anchored box is a full-bleed flex container — `top` on it
+ * shrinks the container while the caption stays pinned to its bottom edge, so
+ * the caption did not move vertically until the next render.
  */
 export function applyFreePosition(
   node: HTMLElement,
   placement: { pos_x: number; pos_y: number },
-  style: CaptionStyle
+  style: CaptionStyle,
+  scale: number
 ): void {
-  node.style.left = `${placement.pos_x * 100}%`;
-  node.style.top = `${placement.pos_y * 100}%`;
-  node.style.transform = anchorTransform(style);
+  const css = captionBoxStyle({ ...style, ...placement }, scale);
+  node.removeAttribute("style");
+  Object.assign(node.style, css);
 }
