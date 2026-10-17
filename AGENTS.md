@@ -120,6 +120,21 @@ anything.**
 19. **Give time estimates for long operations** (image pulls, model
     downloads, E2E runs) instead of waiting silently.
 
+### Test data
+20. **Every test run deletes the videos it created when it finishes**, in the
+    dev stack and in the installed app alike: E2E runs (`scripts/e2e.py`),
+    ui-check runs, uploads made by hand to try something, and the copies a
+    run makes along the way.
+    - Note each video's id as you create it, and delete exactly those ids;
+      never pick videos to delete by name or date alone.
+    - Delete through the API (`DELETE /api/videos/{id}`), never in the
+      database or on disk, so the video's files, captions and exports go
+      too.
+    - Never delete a video you did not create. If you can't tell whether
+      you did, leave it and ask.
+    - Report that you did it: how many, which ids, and the count that
+      remains.
+
 ## Quick commands
 
 ```bash
