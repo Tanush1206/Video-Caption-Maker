@@ -104,7 +104,7 @@ export function captionPaintStyle(
   };
 
   if (boxed) {
-    // ASS BorderStyle 3: an opaque box replaces the outline entirely, so the
+    // A box replaces the outline entirely, in the burn too, so the
     // stroke is deliberately not applied here as well. Uniform padding,
     // because libass pads equally on all four sides.
     css.backgroundColor = hexToRgba(style.box_color, style.box_opacity);

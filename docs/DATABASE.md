@@ -234,7 +234,7 @@ Sizes are in **reference pixels against a 1080-px-high canvas**
 | `shadow` | integer | no | ORM 0 | offset in reference px, no blur |
 | `shadow_color` | varchar(7) | no | ORM `#000000` | |
 | `box_color` | varchar(7) | no | ORM `#000000` | |
-| `box_opacity` | double | no | ORM 0.0 | 0 = no box (ASS BorderStyle 1); > 0 = box (BorderStyle 3) |
+| `box_opacity` | double | no | ORM 0.0 | 0 = no box; > 0 = a box drawn under the text, replacing the outline and shadow |
 | `box_padding` | integer | no | ORM 8 | `BOX_PADDING_MIN` |
 | `underline`, `strikeout` | boolean | no | ORM false | |
 | `letter_spacing` | integer | no | ORM 0 | ASS `Spacing` |

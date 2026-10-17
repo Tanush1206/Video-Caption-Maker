@@ -26,7 +26,7 @@ export interface CaptionStyle {
   box_color: string;
   /** 0 disables the box; the server also flips ASS BorderStyle on this. */
   box_opacity: number;
-  /** Only drawn when `box_opacity` is above 0, matching ASS BorderStyle 3. */
+  /** Only drawn when `box_opacity` is above 0; the burn draws the same rectangle. */
   box_padding: number;
   /** How the lines justify against each other and sit in the box. */
   alignment: Alignment;
