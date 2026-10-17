@@ -953,7 +953,7 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   the caption font's em. Now both use Noto Sans Devanagari/Bengali/Tamil/
   Malayalam, vendored in frontend/public/fonts (byte-identical to the
   image's fonts-noto-core 20201225, OFL, 1.25 MB): ASS wraps each script run
-  in `n<Noto>s<size x noto span / caption span>` so its em is the caption
+  in `\fn<Noto>\fs<size x noto span / caption span>` so its em is the caption
   font's; CSS lists the faces first with `unicode-range`. Measured Hindi
   caption, preview vs burn: Poppins w 0.985 / h 1.014, Sans w 1.014 /
   h 1.013. Tests: `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`,
@@ -981,7 +981,111 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   number). Known limitation (PRD §10); `caption-wrap` now checks 2-3 lines
   (0.90 on 16:9, 0.87 on 9:16) and that balance is applied.
 
-### Definition of done (2026-10-17)
+### Caption box (reopened 2026-10-17, release held)
+Brief: caption placement still wrong (right edge wraps to one word per line,
+left/top cut off, bottom with padding 0 overflows). Replace it with a box of
+its own width, Max lines with a font shrink, the centre as the position, a
+3% safe area for the whole painted box, snapping, one layout rule shared by
+the preview and the burn, and a migration for old styles.
+
+Where the screenshots came from: the one-word-per-line wrap at the right
+edge is 1.0.6 behaviour (the installed app was 1.0.6; v1.0.7's
+`width: max-content` had removed it). The rest reproduced on the v1.0.7
+code in the dev stack (scratch Playwright, box padding 0/40, outline +
+shadow, 16:9 and 9:16): the box was clamped by its *text* rectangle to the
+frame edge, so at the left and top the padding, outline and shadow were
+outside the frame (text at 0.0 px from the edge), and at the bottom with
+padding 0 the outline overflowed. libass placed and wrapped by its own
+rules (anchor + margins, or `\pos` + MarginL/R), the browser by its own.
+
+- [x] B1 One layout rule: `services/caption_layout.py` (HarfBuzz widths on
+      the files libass uses) and its line-for-line copy
+      `lib/caption-layout.ts` (canvas `measureText`). Box width (default
+      0.80 landscape/square, 0.85 portrait), balanced wrap, long words broken
+      at cluster boundaries, Max lines shrink in 2% steps to 70% then one
+      extra line, centre, slide into the 3% safe area by the painted
+      rectangle (padding or outline, shadow, 0.1 em glyph overhang + 2 px
+      antialiasing, measured). The ASS gets `\an5\pos`, `\fs` and `\N`
+      lines per event, WrapStyle 2, zero margins.
+- [x] B2 Model + migration `c8f2a6d41e93`: `box_width`, `max_lines`;
+      `pos_x`/`pos_y` = box centre, NOT NULL; `position`, `margin_v`,
+      `margin_h` dropped. Conversion tested (anchored top-left, boxed
+      bottom, centred and left-aligned hand placements).
+- [x] B3 Editor: overlay draws the layout (lines as blocks, `white-space:
+      pre`), width handles on the box's edges (mouse, touch, keys), snapping
+      with guides, safe-area guides, readout; Position tab: Placement,
+      Alignment, Max width, Max lines.
+- [x] B5 Burned box drawn, not BorderStyle 3: by eye the four-corner burns
+      showed a Hindi box as a row of overlapping translucent boxes (libass
+      boxes each font run; each Hindi word is a run in its script font).
+      Now a `\p1` rectangle of the layout's size on layer 0 under the text.
+      Test `test_a_translucent_box_is_one_even_rectangle` (box levels 243 to
+      255 before, one level after).
+- [x] B4 Tests: `test_caption_layout.py` (grid in the layout and in burned
+      pixels, 48 tests), `test_caption_styles.py` (round trip, bounds,
+      nulls, presets/Reset, migration); ui-check `caption-safe-area`,
+      `caption-width`, `caption-snap`, `layout-parity`, and the existing
+      caption checks moved to the safe area.
+
+Decisions (not covered by the brief, made here):
+- **The layout is computed by us, not by either renderer** (DECISIONS D16).
+  The browser copy is checked against the backend by `layout-parity` rather
+  than fetched per frame, so width handles stay live.
+- **A drag saves the centre it asked for, kept inside 0..1**, not the
+  clamped one: a caption dragged against an edge saves "against that edge",
+  and shorter captions sit against it too. Keys save the drawn centre, so a
+  press against an edge never walks into a dead zone.
+- **Width handles move both edges** (the centre stays), so dragging one
+  edge doesn't also move the caption.
+- **Snap distance 8 px** to the frame's centre lines; the safe area needs no
+  snap (the clamp holds the box there) and shows a guide.
+- **Top / Middle / Bottom at 12% / 50% / 88%** of the height. The default
+  is Bottom (0.88); presets keep their own row.
+- **Migration:** an anchored caption gets the centre of a one-line caption
+  (margin + padding or outline + half the font size in from the edge); left
+  and right alignment add half the default width (0.40); the side margin is
+  read against 1920 px (the video's shape isn't stored). Existing captions
+  get the default width (brief), so a caption that used nearly the full
+  width may take one more line.
+- **uharfbuzz goes in its own Dockerfile layer**, not pyproject.toml:
+  changing pyproject/constraints rebuilds the deps layer, and every install
+  would download 0.8 GB (CPU) or 2.3 GB (CUDA) on update for a 2 MB wheel.
+  Fold it into pyproject.toml the next time dependencies change.
+- **API:** a null on any NOT NULL style field is now a 422 (it was a 500);
+  `box_width: null` means the default width.
+
+Measured:
+- `layout-parity`: preview lines identical to the burn's, rectangle within
+  0.5% of the frame, 18/18 configurations (3 aspects x 3 looks x 2 sizes x
+  5 texts).
+- `caption-safe-area`: 36/36 (13 positions incl. 4 drags far outside x 5
+  texts, per configuration).
+- Burned pixels (`test_caption_layout.py`): every caption inside the safe
+  area and inside its layout rectangle; a box's edges within 2.5 px (1% of
+  the width for Devanagari, whose libass box is 0.8% wider than the
+  HarfBuzz advances).
+
+### Definition of done, caption box (2026-10-17)
+- [x] Every test in the brief fails before and passes after: the grid in
+      the layout and burned pixels (`test_caption_layout.py`), in the
+      preview (`caption-safe-area` 36/36), width unchanged when dragged,
+      handles and slider, Max lines and the shrink (`caption-width`), mouse,
+      touch and keyboard (`caption-drag`, `caption-handle`,
+      `caption-keyboard`, `caption-width`), parity (`layout-parity` 18/18).
+- [x] Backend 415 passed, 1 skipped; ruff clean; frontend lint, type-check,
+      `npm test` 3/3; production frontend build OK.
+- [x] ui-check: 263/263 on 16:9 and 263/263 on 9:16 (after the check fix),
+      54/54 read-only; axe 0 on the editor at 375/1440 x light/dark with the
+      Position tab and the width handles showing.
+- [x] GPU E2E (RTX 5080, CUDA dev image rebuilt with the uharfbuzz layer):
+      soup-169 x same,hi,mr,ru,es,ml and soup-916 x same,hi,es, SRT, VTT
+      and MP4 each: ALL PASSED.
+- [x] Burned MP4 per corner, 16:9 and 9:16 (Hindi, box at 60%, width 50%),
+      checked by eye: every box whole, 3% in from both edges, one even box.
+- [x] Docs: PRD F5 and limitations, DESIGN_SYSTEM, DECISIONS D16, API,
+      DATABASE (migration 14), ARCHITECTURE, TESTING; CHANGELOG v1.0.7.
+
+### Definition of done (2026-10-17, before the caption box)
 - [x] A, B, C done, each fix with a test that fails before (see Done).
 - [x] Backend 369 passed, 1 skipped; ruff clean; frontend lint, type-check,
       `npm test` 3/3; production frontend build OK.
@@ -1006,8 +1110,12 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
 - Tanush: push, wait for CI, tag v1.0.7 (commands in the final report).
 - After the tag: release checklist (docs/TESTING.md §6), `vcm update` the
   Windows install, measure the download with `update_layers.py` (expected
-  ~14 MB), check data, version, guard.
+  ~16 MB), check data, version, guard, and that migration `c8f2a6d41e93`
+  ran (old styles converted, captions where they were).
 - Gemini: the dev key's quota for the configured model is exhausted (429).
   Switching the Gemini model is Tanush's call.
-- Test videos left in the dev database (ids 7424 onwards, the soup clips and
-  their E2E copies). Delete them from the dev UI if wanted.
+- Test videos left in the dev database (ids 7424 onwards, the soup clips,
+  their E2E copies and a 1:1 test-pattern clip, 7486). Delete them from the
+  dev UI if wanted.
+- When the dependencies next change: move uharfbuzz from its Dockerfile
+  layer into pyproject.toml/constraints.txt.

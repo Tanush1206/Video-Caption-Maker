@@ -9,13 +9,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.0.7] - 2026-10-17
 
 Caption placement and styling fixed and made to match the export exactly,
-better local translation, and eight more caption languages. No migration.
-Expected update from 1.0.6: about 14 MB (backend: app code, the vendored
-fonts and their cache, ~5 MB; frontend: the app and its fonts, ~9 MB); the
-dependency layers are unchanged. Measured with `update_layers.py` after
-release.
+better local translation, and eight more caption languages. **One
+migration** (`c8f2a6d41e93`), run automatically on start: every saved caption
+position is converted to the new caption box (below), so existing videos keep
+their place. Expected update from 1.0.6: about 16 MB (backend: app code, the
+vendored fonts and their cache, and a 2 MB HarfBuzz layer, ~7 MB; frontend:
+the app and its fonts, ~9 MB); the dependency layers are unchanged. Measured
+with `update_layers.py` after release.
 
 ### Added
+- **The caption box.** A caption is now a box with its own width, as in
+  VEED and broadcast captions:
+  - text wraps at the box's width, never at its distance to an edge, and the
+    width doesn't change wherever the box is dragged;
+  - drag the handles on the box's left and right edges, or use the new
+    **Max width** slider (20–94%; default 80% landscape, 85% portrait);
+  - **Max lines** (1, 2 or 3; default 2): a caption that needs more is drawn
+    smaller, down to 70%, then gets one extra line; text is never cut, and a
+    word longer than the box is broken;
+  - every caption, whatever its length, is kept 3% inside every edge of the
+    frame, with its padding, outline and shadow;
+  - snapping with guide lines at the frame's centre and at the safe area;
+  - **Top / Middle / Bottom** and **Left / Centre / Right** replace the
+    nine-cell placement grid and the edge and side margins
+  (`5d74af5`, `af1ed90`, `247403e`, `64d079a`, `93abaa5`).
 - **Eight caption languages:** Bengali, Marathi, Tamil, Malayalam, Spanish,
   Portuguese, Italian and Russian, all translated locally by M2M100 and
   burned with correct shaping. Each was checked against M2M100's own
@@ -45,8 +62,15 @@ release.
   Bold) and wrapped differently. Now within about 1% in width (`d42bc07`,
   `13413c3`). **Captions will look smaller in the editor than before; that
   is the size they always had in exports.**
-- **Wrapped lines are balanced in the preview**, as libass balances them in
-  the export (`fdeb305`).
+- **The preview and the export lay captions out with one rule.** The lines,
+  size and position are worked out once (the same rule in the backend and,
+  line for line, in the editor) and handed to libass, which no longer wraps
+  or places captions on its own. Measured the same lines and the same box
+  within 0.5% of the frame for 16:9, 9:16 and 1:1 video (`af1ed90`,
+  `247403e`).
+- **Existing captions get the default width** (80% of a landscape frame),
+  so a long caption that filled nearly the whole width before may now take
+  one more line.
 - **Indic text uses the same font and size in the preview and the export**
   (`0edbf20`), and so does Russian in a caption font without Cyrillic, which
   burned about 1.3x the size of the Latin beside it (`0900c29`, `6ed3501`).
@@ -58,7 +82,13 @@ release.
   Controls that have no effect are now greyed out instead of removed
   (`1fbd57d`).
 - **A dragged caption could leave the frame and change size** near the
-  edges, and jumped a few pixels on grab (`8445fda`).
+  edges, and jumped a few pixels on grab (`8445fda`). Dragged to the right
+  edge it wrapped to one word per line (1.0.6); at the left or top its box,
+  outline or shadow was cut off, and a box with padding 0 overflowed the
+  bottom. Fixed by the caption box (`af1ed90`, `64d079a`).
+- **A translucent box behind Hindi (or any caption mixing fonts) burned as
+  overlapping boxes**, darker where they overlapped. The box is now drawn as
+  one rectangle under the text, exactly the one the editor shows.
 - **Reset and every preset kept a dragged caption's position** (`688506f`).
 - **The first frames of a drag didn't move the caption vertically**, and
   arrow keys on the editor also seeked the video (`7100933`).
