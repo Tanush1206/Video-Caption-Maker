@@ -747,7 +747,7 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.0.7 (in progress)
+## v1.0.7 (done, not tagged)
 Brief: fix caption dragging, the drag handle and the style sliders; improve
 translation quality; add 12 caption languages. Definition of done and rules
 are in Tanush's brief of 2026-10-15; this section is the resume point.
@@ -770,11 +770,11 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
 - [x] C3 Fonts: burn-in per new script (fonts-noto-core already has
       Bengali, Gurmukhi, Devanagari, Gujarati, Tamil, Kannada, Malayalam,
       Telugu; Cyrillic/Latin via DejaVu/Noto).
-- [ ] C4 Searchable language pickers (language step, editor, settings) with
+- [x] C4 Searchable language pickers (language step, editor, settings) with
       native + English names.
-- [ ] C5 Backend config/validation, API, frontend, tests, PRD, README.
-- [ ] C6 ROADMAP: Arabic, Urdu (RTL), Chinese, Japanese, Korean (CJK).
-- [ ] D  DoD checks: suites, E2E on GPU (new Indian + European), burn per
+- [x] C5 Backend config/validation, API, frontend, tests, PRD, README.
+- [x] C6 ROADMAP: Arabic, Urdu (RTL), Chinese, Japanese, Korean (CJK).
+- [x] D  DoD checks: suites, E2E on GPU (new Indian + European), burn per
       language, screenshots + axe, docs, CHANGELOG v1.0.7.
 
 ### Decisions
@@ -981,6 +981,33 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   number). Known limitation (PRD §10); `caption-wrap` now checks 2-3 lines
   (0.90 on 16:9, 0.87 on 9:16) and that balance is applied.
 
+### Definition of done (2026-10-17)
+- [x] A, B, C done, each fix with a test that fails before (see Done).
+- [x] Backend 369 passed, 1 skipped; ruff clean; frontend lint, type-check,
+      `npm test` 3/3; production frontend build OK.
+- [x] GPU E2E (RTX 5080, dev worker with the GPU override): soup-169 x
+      same,en,hi,fr,de,nl,bn,mr,ta,ml,es,pt,it,ru, every one with SRT, VTT
+      and MP4: ALL PASSED; after the Cyrillic fix, soup-916 x ru,hi,ml,es
+      ALL PASSED. All translations ran locally (Gemini quota exhausted).
+- [x] Burned MP4 per caption language: the 14 E2E exports stacked and
+      checked by eye; shaping correct in every script, no missing glyphs.
+- [x] Screenshots 375/1440 x light/dark: dashboard, settings, search,
+      editor (16:9, 9:16, Russian), language step (plain and searched),
+      editor language picker (open, searched), style panel with a box,
+      caption handle focused; axe 0 everywhere, no console errors or
+      overflow.
+- [x] Docs (PRD, README, API, DATABASE, ARCHITECTURE, TESTING,
+      DESIGN_SYSTEM, DECISIONS D14/D15, ROADMAP) and CHANGELOG v1.0.7.
+- [x] Backlog empty. Installed app back on 3000, dev stack stopped.
+- ui-check totals at the end: 216/216 (16:9), 216/216 (9:16 after the
+  wrap check change), 54/54 read-only.
+
 ### Next
-- A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
-  video, explore with Playwright.
+- Tanush: push, wait for CI, tag v1.0.7 (commands in the final report).
+- After the tag: release checklist (docs/TESTING.md §6), `vcm update` the
+  Windows install, measure the download with `update_layers.py` (expected
+  ~14 MB), check data, version, guard.
+- Gemini: the dev key's quota for the configured model is exhausted (429).
+  Switching the Gemini model is Tanush's call.
+- Test videos left in the dev database (ids 7424 onwards, the soup clips and
+  their E2E copies). Delete them from the dev UI if wanted.
