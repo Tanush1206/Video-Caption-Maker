@@ -2,7 +2,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.caption_style import REFERENCE_HEIGHT, Alignment, VerticalPosition
 from app.services import font_library
-from app.services.caption_style import FONTS_BY_KEY, PRESETS, font_win_span, get_font
+from app.services.caption_style import (
+    FONTS_BY_KEY,
+    PRESETS,
+    font_win_span,
+    get_font,
+    script_fonts,
+)
 
 # #RRGGBB only. Short form (#FFF) and named colours are rejected rather than
 # normalised: the ASS conversion slices fixed byte positions out of this string,
@@ -57,6 +63,11 @@ class CaptionStyleRead(BaseModel):
     # libass makes that span the font size, CSS makes the em the font size,
     # so the preview divides by this (see caption_style.font_win_span).
     font_win_span: float = 1.0
+    # The faces the preview must list before the caption font, each limited to
+    # its script by unicode-range: the same faces the burn names per run
+    # (caption_style.script_fonts). Cyrillic is in it only for a caption font
+    # that has no Cyrillic of its own.
+    script_font_stack: str = ""
 
     @model_validator(mode="after")
     def resolve_font(self) -> "CaptionStyleRead":
@@ -64,6 +75,9 @@ class CaptionStyleRead(BaseModel):
         self.font_family = font.render_name
         self.font_css_stack = font.css_stack
         self.font_win_span = round(font_win_span(self.font_key, self.bold), 4)
+        self.script_font_stack = ", ".join(
+            f'"{family}"' for family, _ in script_fonts(self.font_key, self.bold)
+        )
         return self
 
 

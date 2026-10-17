@@ -11,16 +11,17 @@ the words in the database, which are the words Whisper heard.
 
 import json
 import re
+from functools import lru_cache
 from collections.abc import Sequence
 
 from app.models.caption import Caption
 from app.models.caption_style import CaptionStyle
 from app.services.caption_style import (
-    SCRIPT_FONTS,
     font_win_span,
     get_font,
     scale_for,
     script_font_span,
+    script_fonts,
     to_ass_free_alignment,
     to_ass_inline_colour,
     to_ass_style_block,
@@ -162,10 +163,9 @@ def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> list[
 # A run: characters of one script, with the joiners (ZWNJ, ZWJ) that shape
 # them and any spaces *between* two of them — so a sentence is one run, not
 # one per word, and a space before Latin text is left to the caption font.
-_SCRIPT_RUNS = [
-    (family, re.compile(rf"[{chars}](?:[{chars}\u200c\u200d]|\s+(?=[{chars}]))*"))
-    for family, chars in SCRIPT_FONTS
-]
+@lru_cache(maxsize=16)
+def _run_pattern(chars: str) -> re.Pattern:
+    return re.compile(rf"[{chars}](?:[{chars}\u200c\u200d]|\s+(?=[{chars}]))*")
 
 
 def _script_runs(text: str, style: CaptionStyle, size: int) -> str:
@@ -180,7 +180,8 @@ def _script_runs(text: str, style: CaptionStyle, size: int) -> str:
     """
     primary = get_font(style.font_key).render_name
     primary_span = font_win_span(style.font_key, style.bold)
-    for family, pattern in _SCRIPT_RUNS:
+    for family, chars in script_fonts(style.font_key, style.bold):
+        pattern = _run_pattern(chars)
         scaled = round(size * script_font_span(family, style.bold) / primary_span, 1)
 
         def wrap(match: re.Match, family: str = family, scaled: float = scaled) -> str:

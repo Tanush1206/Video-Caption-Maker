@@ -125,21 +125,78 @@ SCRIPT_FONTS: tuple[tuple[str, str], ...] = (
 )
 
 
+# Cyrillic (Russian) the same way, but only for a caption font that has none:
+# Poppins (the default), Anton, Bebas Neue and Barlow Condensed don't, while
+# Lato, Liberation and DejaVu do and keep drawing it themselves.
+CYRILLIC_FONT: tuple[str, str] = ("Noto Sans", "\u0400-\u052F")
+
+
+def script_fonts(key: str, bold: bool) -> tuple[tuple[str, str], ...]:
+    """The script faces to use for this caption font, in both renderers."""
+    if covers(key, bold, 0x0416):  # Ж
+        return SCRIPT_FONTS
+    return (*SCRIPT_FONTS, CYRILLIC_FONT)
+
+
+def font_file(key: str, bold: bool) -> Path | None:
+    """The file libass will draw this caption font from."""
+    if key not in FONTS_BY_KEY:
+        weight = "bold" if bold else "regular"
+        for path in (font_library.cached_path(key, weight), font_library.cached_path(key, "regular")):
+            if path.exists():
+                return path
+        return None
+    path = _fc_match(get_font(key).render_name, bold)
+    return Path(path) if path else None
+
+
+@lru_cache(maxsize=128)
+def _charset(path: Path) -> tuple[tuple[int, int], ...]:
+    """The code points a font file covers, as fontconfig reads them."""
+    try:
+        out = subprocess.run(
+            ["fc-query", "--format", "%{charset}", str(path)],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    ranges = []
+    for part in out.split():
+        lo, _, hi = part.partition("-")
+        try:
+            ranges.append((int(lo, 16), int(hi or lo, 16)))
+        except ValueError:
+            continue
+    return tuple(ranges)
+
+
+def covers(key: str, bold: bool, codepoint: int) -> bool:
+    """Whether the caption font itself has a glyph for `codepoint`."""
+    path = font_file(key, bold)
+    return path is not None and any(lo <= codepoint <= hi for lo, hi in _charset(path))
+
+
 def script_font_span(family: str, bold: bool) -> float:
     """The win span of a script font, for sizing it to the caption font's em."""
     return _installed_span(family, bold) or 1.0
 
 
 @lru_cache(maxsize=64)
-def _installed_span(render_name: str, bold: bool) -> float | None:
-    """The win span of the face fontconfig hands libass for this family."""
+def _fc_match(family: str, bold: bool) -> str | None:
+    """The file fontconfig hands libass for this family and weight."""
     try:
-        path = subprocess.run(
-            ["fc-match", "-f", "%{file}", f"{render_name}:weight={200 if bold else 80}"],
+        return subprocess.run(
+            ["fc-match", "-f", "%{file}", f"{family}:weight={200 if bold else 80}"],
             capture_output=True, text=True, timeout=10, check=True,
-        ).stdout.strip()
+        ).stdout.strip() or None
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+@lru_cache(maxsize=64)
+def _installed_span(render_name: str, bold: bool) -> float | None:
+    """The win span of the face fontconfig hands libass for this family."""
+    path = _fc_match(render_name, bold)
     return font_library.span_of(Path(path)) if path else None
 
 

@@ -992,3 +992,64 @@ def test_indic_text_is_burned_at_the_caption_fonts_em(tmp_path):
 
     expected = font_win_span("sans", True) / font_win_span("poppins", True)
     assert ink_height("poppins") / ink_height("sans") == pytest.approx(expected, abs=0.03)
+
+
+def test_cyrillic_gets_noto_only_when_the_caption_font_has_none():
+    """
+    Russian in Poppins (the default, no Cyrillic) is drawn in Noto Sans at
+    Poppins's em, as the preview draws it; in Lato, which has Cyrillic, Lato
+    draws it and nothing is wrapped.
+    """
+    from app.services.caption_style import covers, script_fonts
+
+    assert not covers("poppins", True, 0x0416)
+    assert covers("lato", True, 0x0416)
+    assert ("Noto Sans", "Ѐ-ԯ") in script_fonts("poppins", True)
+    assert all(family != "Noto Sans" for family, _ in script_fonts("lato", True))
+
+    def line(font_key: str) -> str:
+        style = a_style(font_key=font_key, bold=True, font_size=54)
+        caption = Caption(video_id=1, sequence=0, start_ms=0, end_ms=1000, text="Сначала два лука", confidence=-0.1)
+        return subtitles.to_ass([caption], style, 1280, 720).splitlines()[-1]
+
+    fn = chr(92) + "fn"
+    assert f"{{{fn}Noto Sans" in line("poppins")
+    assert line("lato").endswith(",,Сначала два лука")
+
+
+def test_cyrillic_is_burned_at_the_caption_fonts_em(tmp_path):
+    """
+    The same Russian word under two caption fonts without Cyrillic comes out
+    in the ratio of their win spans (Noto Sans at each one's em). Before, it
+    was the same size under both: libass sized the fallback by its own span.
+    """
+    import numpy as np
+
+    from app.services import rendering
+    from app.services.caption_style import font_win_span
+
+    width, height = 640, 360
+    source = tmp_path / "black.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d=1:r=5",
+            "-f", "lavfi", "-i", "sine=duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            str(source),
+        ],
+        capture_output=True, timeout=120, check=True,
+    )
+
+    def ink_height(font_key: str) -> int:
+        style = a_style(font_key=font_key, bold=False, font_size=300, outline_width=0, shadow=0, box_opacity=0.0)
+        caption = Caption(video_id=1, sequence=0, start_ms=0, end_ms=1000, text="Шуба", confidence=-0.1)
+        ass = tmp_path / f"{font_key}.ass"
+        ass.write_text(subtitles.to_ass([caption], style, width, height), encoding="utf-8")
+        burned = tmp_path / f"{font_key}.mp4"
+        rendering.burn_captions(source, ass, burned, duration_ms=1000)
+        rows = np.where((_frame(burned, 0.5, width, height) > 128).any(axis=1))[0]
+        return rows.max() - rows.min() + 1
+
+    expected = font_win_span("bebas-neue", False) / font_win_span("poppins", False)
+    assert ink_height("poppins") / ink_height("bebas-neue") == pytest.approx(expected, abs=0.03)
