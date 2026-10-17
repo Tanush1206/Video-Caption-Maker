@@ -218,16 +218,46 @@ the speech model for every video until changed back.
 - **The preview is the export** (v1.0.7, measured against burned frames):
   - a caption is drawn at libass's size: the preview divides the font size
     by the face's win span (`font_win_span`) and uses it as the line height;
-  - wrapped lines are balanced, as libass's WrapStyle 0 balances them;
+  - one layout rule decides each caption's lines, size and position, in the
+    backend (`services/caption_layout.py`) for the burn and in a line-for-line
+    copy in the editor (`lib/caption-layout.ts`); libass is handed the lines
+    and never wraps or places on its own;
   - Devanagari, Bengali, Tamil and Malayalam are drawn in bundled Noto faces
     in both renderers, at the caption font's em, with complex shaping in the
     burn;
-  - a dragged caption keeps its size and stays inside the frame; a burned
-    box sits on `pos_x`/`pos_y` in its own colour and opacity.
-- **Placement:** drag the caption anywhere on the frame or by its grab
+  - a burned box sits where the editor drew it, in its own colour and opacity.
+- **The caption box** (v1.0.7):
+  - a caption is a box with its own **width**, a fraction of the video's
+    width: 80% for landscape and square, 85% for portrait by default. Text
+    wraps at that width (minus the padding), never at its distance to an
+    edge, and the width never changes because of where the box is;
+  - the width is set by dragging the handles on the box's left and right
+    edges (mouse, touch, or arrow keys when focused; both edges move,
+    keeping the centre) and by the **Max width** slider (20–94%); the two
+    stay in sync;
+  - **Max lines** (1, 2 or 3; default 2): a caption that needs more lines at
+    that width is drawn smaller, in 2% steps, down to 70% of the chosen
+    size; if it still doesn't fit it gets one extra line, at the largest
+    size that fits in it, and past that keeps every line it needs. Text is
+    never cut. A word wider than the box is broken (never before a mark or
+    after a virama);
+  - the position is the box's **centre** (`pos_x`, `pos_y`);
+  - each caption's whole painted rectangle (lines, box padding or outline,
+    shadow, and glyph overhang) is slid inside a **safe area** 3% from every
+    edge, after layout, every time: while dragging, with the keys, after a
+    font, size, padding or width change, and for every caption of the video
+    on its own. It slides; it never shrinks or rewraps because of an edge;
+  - **snapping:** while dragging, the box snaps when its centre comes within
+    8 px of the frame's horizontal or vertical centre, with a guide line;
+    a guide also shows at the safe area's edge the box is pushed against;
+  - **Top / Middle / Bottom** centre the box horizontally at 12%, 50% or 88%
+    of the height; presets and Reset centre it at the bottom (or middle) with
+    the default width and line count.
+- **Moving it:** drag the caption anywhere on the frame or by its grab
   handle (a 28 px dot on its top edge, mouse or touch); with the handle
-  focused, arrow keys move it 1% of the frame and Shift+arrow 10%. The
-  placement grid, a preset and Reset all put it back on an anchor.
+  focused, arrow keys move it 1% of the frame and Shift+arrow 10%. A drag
+  saves the centre it asked for (inside the frame), so a caption dragged
+  against an edge saves "against that edge" and a shorter one sits there too.
 - **Sliders** move with the pointer, the arrow keys and a click; controls
   that have no effect (a colour with nothing to colour) stay in place,
   greyed out, rather than appearing and disappearing.
@@ -411,9 +441,10 @@ From the README "Known limitations" and PROGRESS.md:
   and Malayalam are the weakest added, and Hindi is weaker as a source than
   as a target. Samples per pair are in PROGRESS.md (v1.0.7). Gemini, with a
   key and quota, is much better.
-- **A caption of more than six lines wraps differently in the preview.**
-  Chrome balances at most six lines; libass balances any number. Only at a
-  very large size on a portrait video; captions are ~84 characters at most.
+- **Text can sit a pixel or two higher or lower inside its line in the
+  preview than in the export.** The lines, the size and the box are the
+  same (one layout rule); each renderer places the baseline within the line
+  by its own font metrics.
 - **Languages left out (v1.0.7):** Telugu is not in M2M100; Kannada, Gujarati
   and Punjabi came out of it unusable (invented text, wrong script); Arabic
   and Urdu need right-to-left rendering, Chinese, Japanese and Korean need

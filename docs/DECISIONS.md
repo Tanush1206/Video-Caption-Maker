@@ -512,7 +512,47 @@ in whatever font the viewer's OS had.
 **Trade-offs.** A caption is now drawn smaller in the editor than before
 v1.0.7 — at the size it always had in the MP4. `text-wrap: balance` and
 libass's smart wrap are close, not identical (measured 60/63% against
-61/64% of the frame).
+61/64% of the frame). *Superseded for wrapping and placement by D16.*
+
+---
+
+## D16. One layout rule for the caption box, computed by us, not by either renderer
+
+**Date:** v1.0.7 (2026-10-17)
+
+**Context.** Placement still failed after D15: a caption was positioned by
+an anchor plus margins, or by `\pos` with libass wrapping at the margins
+and the browser at whatever space was left. Dragged to an edge it wrapped to
+one word per line (1.0.6) or hung out of the frame with its padding, outline
+or shadow cut off (1.0.7 before this), and a box with padding 0 overflowed
+the bottom. Two renderers each wrapping and placing by their own rules
+cannot be made to agree by tuning one of them.
+
+**Decision.** The model is the one VEED, AutoCaptions and broadcast
+captions use: a box with its own width (`box_width`, default 80% landscape /
+85% portrait), a line limit with a font shrink (`max_lines`, down to 70%, then
+one extra line), placed by its centre (`pos_x`/`pos_y`), and slid inside a 3%
+safe area by its whole painted rectangle, per caption. One function computes
+the lines, size and position — `services/caption_layout.py`, measuring with
+HarfBuzz on the files libass draws with — and the burn hands libass its
+output (`\N` breaks, `\fs`, `\an5\pos`, WrapStyle 2, zero margins). The
+editor runs a line-for-line copy (`lib/caption-layout.ts`, canvas
+`measureText`) and draws the lines itself, `white-space: pre`. A migration
+converts every saved anchor and placement to the equivalent centre.
+
+**Alternatives.**
+- Keep libass wrapping and teach the preview its rules: libass's wrap is
+  not specified, and D15 showed the browser can only approximate it.
+- Ask the server for every layout: exact, but a round trip per frame of a
+  width drag; the copy is checked against the server instead
+  (`layout-parity`).
+- Clamp in the browser only: the burn would still place by its own rules.
+
+**Trade-offs.** The layout exists twice and must be changed in both places;
+`layout-parity` and `test_caption_layout.py` catch a drift. Existing
+captions get the default width, so a caption that filled ~94% of a
+landscape frame before may now take one more line. The baseline inside a
+line can differ by a pixel or two between the renderers.
 
 ## Decisions recorded
 
