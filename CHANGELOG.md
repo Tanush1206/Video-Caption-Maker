@@ -6,6 +6,80 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.7] - 2026-10-17
+
+Caption placement and styling fixed and made to match the export exactly,
+better local translation, and eight more caption languages. No migration.
+Expected update from 1.0.6: about 12 MB (backend: app code, the vendored
+fonts and their cache, ~4 MB; frontend: the app and its fonts, ~9 MB); the
+dependency layers are unchanged. Measured with `update_layers.py` after
+release.
+
+### Added
+- **Eight caption languages:** Bengali, Marathi, Tamil, Malayalam, Spanish,
+  Portuguese, Italian and Russian, all translated locally by M2M100 and
+  burned with correct shaping. Each was checked against M2M100's own
+  language list, a translation sweep and a burned export (`2df958e`).
+- **Searchable language pickers** showing each language's own name and its
+  English one: the language step gains a search field over its cards, and
+  the editor's Redo language becomes a searchable picker (`2548aeb`,
+  `8403e17`). Settings lists the served languages (`c8dc44a`).
+- **A grab handle on the caption** (the dot from the editor mockup): drag
+  it by mouse or touch, or focus it and move the caption with the arrow keys
+  (1% of the frame, Shift 10%) (`7100933`).
+- **Noto Sans Devanagari, Bengali, Tamil and Malayalam** bundled (OFL), so
+  the preview and the export draw those scripts from the same files
+  (`af21ba2`, `40113f6`).
+
+### Changed
+- **Local translation works a sentence at a time.** Captions that make up
+  one sentence are translated together and split back over the same
+  captions, so continuations are no longer capitalised as new sentences and
+  German or Dutch verbs land in the right caption. Timings are unchanged.
+  Output is capped at three times the source length and may not repeat a
+  phrase, which stops runaway output (`8a03582`).
+- **The preview draws captions at the size the export burns them.** libass
+  makes the font size the font's whole cell; the browser made it the em, so
+  captions were up to 1.76x larger in the editor than in the MP4 (Poppins
+  Bold) and wrapped differently. Now within about 1% in width (`d42bc07`,
+  `13413c3`). **Captions will look smaller in the editor than before; that
+  is the size they always had in exports.**
+- **Wrapped lines are balanced in the preview**, as libass balances them in
+  the export (`fdeb305`).
+- **Indic text uses the same font and size in the preview and the export**
+  (`0edbf20`).
+
+### Fixed
+- **Style sliders snapped back and jumped while dragged.** A click or arrow
+  key reset the thumb to the old value for a render; dragging Opacity off 0
+  moved the slider out from under the pointer as other controls appeared.
+  Controls that have no effect are now greyed out instead of removed
+  (`1fbd57d`).
+- **A dragged caption could leave the frame and change size** near the
+  edges, and jumped a few pixels on grab (`8445fda`).
+- **Reset and every preset kept a dragged caption's position** (`688506f`).
+- **The first frames of a drag didn't move the caption vertically**, and
+  arrow keys on the editor also seeked the video (`7100933`).
+- **Burned caption boxes ignored their colour and opacity:** every box came
+  out in the outline colour at 100% (the YouTube preset's 75% box was solid)
+  (`489d6f3`).
+- **Indic scripts were burned unshaped:** Hindi vowel signs after their
+  consonant, conjuncts broken, Bengali/Tamil/Malayalam vowels split round a
+  dotted circle. The burn now uses complex shaping (`9cf0b84`).
+
+### Not added, and why
+- **Telugu:** not in M2M100's language list, and Gemini-only languages are
+  not offered.
+- **Kannada, Gujarati, Punjabi:** M2M100's output was unusable (invented
+  text, wrong script, a reversed meaning). Samples in PROGRESS.md.
+- **Arabic, Urdu** (right-to-left) and **Chinese, Japanese, Korean** (CJK
+  fonts and line breaking): planned, see docs/ROADMAP.md.
+
+### Known limitations
+- Translation into the Indian languages is weak locally: script, timing and
+  sentence shape are right, everyday nouns often aren't; Tamil and Malayalam
+  most. A sentence split back over captions can break inside a phrase.
+
 ## [1.0.6] - 2026-10-15
 
 A security fix in the frontend only; no backend code change and no
@@ -258,6 +332,7 @@ search, dashboard) were built in Milestones 1–10; see `docs/MILESTONES.md`.
   to `/data`, so dev vectors were lost on recreate. Both compose files are
   fixed (`4384ff2`).
 
+[1.0.7]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Tanush1206/Video-Caption-Maker/compare/v1.0.3...v1.0.4
