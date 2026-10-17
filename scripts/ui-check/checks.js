@@ -483,14 +483,9 @@ const CHECKS = {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const id = await editorVideo(page, base);
     await openEditor(page, base, id);
-    await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_size: 130 } });
-    await page.reload({ waitUntil: "networkidle" });
-    await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
     const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
     const long = captions.items.reduce((a, b) => (b.text.length > a.text.length ? b : a));
-    await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (long.start_ms + long.end_ms) / 2000);
-    await waitForCaption(page, long.text);
-    const widths = await page.evaluate(() => {
+    const lineWidths = () => page.evaluate(() => {
       const range = document.createRange();
       range.selectNodeContents(document.querySelector("[data-caption-text]"));
       const byLine = new Map();
@@ -501,7 +496,22 @@ const CHECKS = {
       }
       return [...byLine.values()].map(([lo, hi]) => hi - lo);
     });
+    // Chrome balances blocks of up to six lines and leaves longer ones as
+    // they are (a documented limit of text-wrap: balance), and five lines of
+    // whole words can't be even anyway — so the size is brought down until
+    // the caption wraps into two or three lines on this frame.
+    let widths = [];
+    for (const size of [130, 100, 80, 60, 45]) {
+      await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_size: size } });
+      await page.reload({ waitUntil: "networkidle" });
+      await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+      await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (long.start_ms + long.end_ms) / 2000);
+      await waitForCaption(page, long.text);
+      widths = await lineWidths();
+      if (widths.length <= 3) break;
+    }
     ok("caption-wrap: the long caption wraps", widths.length >= 2, `${widths.length} lines`);
+    ok("caption-wrap: text-wrap is balance", (await page.locator("[data-caption-text]").evaluate((e) => getComputedStyle(e).textWrap || getComputedStyle(e).textWrapStyle)).includes("balance"));
     const ratio = Math.min(...widths) / Math.max(...widths);
     ok("caption-wrap: lines are balanced like the export's", ratio > 0.8, `${widths.map((w) => w.toFixed(0)).join(" / ")} (min/max ${ratio.toFixed(2)})`);
     await page.request.delete(`${base}/api/videos/${id}/style`);

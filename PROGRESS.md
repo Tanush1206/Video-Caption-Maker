@@ -976,6 +976,10 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   preview vs burn width: Poppins 0.993, Lato 0.999. Tests
   `test_cyrillic_gets_noto_only_when_the_caption_font_has_none`,
   `test_cyrillic_is_burned_at_the_caption_fonts_em` (both fail without).
+- Wrap limit found on the 9:16 run: at size 130 a caption wrapped to 7
+  lines, and Chrome's `text-wrap: balance` only balances up to 6 (libass any
+  number). Known limitation (PRD §10); `caption-wrap` now checks 2-3 lines
+  (0.90 on 16:9, 0.87 on 9:16) and that balance is applied.
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test

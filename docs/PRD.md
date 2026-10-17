@@ -411,6 +411,9 @@ From the README "Known limitations" and PROGRESS.md:
   and Malayalam are the weakest added, and Hindi is weaker as a source than
   as a target. Samples per pair are in PROGRESS.md (v1.0.7). Gemini, with a
   key and quota, is much better.
+- **A caption of more than six lines wraps differently in the preview.**
+  Chrome balances at most six lines; libass balances any number. Only at a
+  very large size on a portrait video; captions are ~84 characters at most.
 - **Languages left out (v1.0.7):** Telugu is not in M2M100; Kannada, Gujarati
   and Punjabi came out of it unusable (invented text, wrong script); Arabic
   and Urdu need right-to-left rendering, Chinese, Japanese and Korean need
