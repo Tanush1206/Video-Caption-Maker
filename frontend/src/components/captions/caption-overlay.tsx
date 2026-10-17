@@ -1,23 +1,22 @@
 "use client";
 
 import { GripHorizontal } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useInjectedFontFace } from "@/hooks/use-fonts";
 import {
-  ANCHOR_SHIFT,
-  anchorFromStyle,
-  clampPlacement,
-  type BoxFraction,
-  type FreePlacement,
-} from "@/lib/caption-drag";
-import {
-  applyFreePosition,
-  captionBoxStyle,
-  captionTextStyle,
-  freePosition,
-  scaleFor,
-} from "@/lib/caption-style";
+  MAX_BOX_WIDTH,
+  MIN_BOX_WIDTH,
+  SAFE_AREA,
+  boxWidthOf,
+  clearMeasurements,
+  fontsFor,
+  ink,
+  layoutCaption,
+  type Frame,
+  type Layout,
+} from "@/lib/caption-layout";
+import { captionLineStyle, captionPaintStyle } from "@/lib/caption-style";
 import { cn } from "@/lib/utils";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
@@ -36,507 +35,498 @@ const BUILT_IN = new Set([
 /** Far enough to mean "move this" rather than "I clicked". */
 const DRAG_THRESHOLD = 4;
 
-/** Arrow-key steps for the handle, as fractions of the frame. */
+/** Arrow-key steps, as fractions of the frame. */
 const KEY_STEP = 0.01;
 const KEY_STEP_LARGE = 0.1;
+const WIDTH_STEP = 0.01;
+const WIDTH_STEP_LARGE = 0.05;
 
-/** The handle's hit area, in CSS pixels. WCAG 2.5.8 asks for 24. */
+/** How close the centre has to come to the frame's middle to snap to it, in CSS px. */
+const SNAP_PX = 8;
+
+/** The handles' hit area, in CSS pixels. WCAG 2.5.8 asks for 24. */
 const HANDLE_SIZE = 28;
+const EDGE_HANDLE_WIDTH = 24;
+
+export type Placement = Partial<Pick<CaptionStyle, "pos_x" | "pos_y" | "box_width">>;
 
 interface CaptionOverlayProps {
   caption: Caption | null;
   style: CaptionStyle | undefined;
   font: Font | undefined;
-  /** Place the caption by hand. Omitted where the overlay is read-only. */
-  onPlace?: (placement: FreePlacement) => void;
+  /** The video's own size, which the layout works in. Unknown until metadata. */
+  frameSize?: Frame | null;
+  /** Move or resize the caption box. Omitted where the overlay is read-only. */
+  onPlace?: (placement: Placement) => void;
   /** Play/pause, for a press that turned out to be a click rather than a drag. */
   onToggle?: () => void;
 }
 
-/** Everything a drag needs to know, captured once when the pointer goes down. */
+/** What a gesture in flight is doing, captured when the pointer goes down. */
 interface Grab {
+  kind: "move" | "width";
   pointerX: number;
   pointerY: number;
-  /** Where the caption's anchor was at the moment it was grabbed. */
-  anchorX: number;
-  anchorY: number;
-  /** The frame, measured once — a drag cannot resize the player. */
+  /** Where the box's centre was drawn when it was grabbed, as fractions. */
+  startX: number;
+  startY: number;
   frame: DOMRect;
-  size: BoxFraction;
 }
 
+/** A gesture's live result, drawn without saving until it ends. */
+interface Live {
+  center?: { x: number; y: number };
+  boxWidth?: number;
+  snapX?: boolean;
+  snapY?: boolean;
+}
+
+const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
+const round3 = (value: number) => Math.round(value * 1000) / 1000;
+
 /**
- * The styled caption drawn over the video.
+ * The styled caption drawn over the video, laid out by the same rule as the
+ * burn (lib/caption-layout.ts) in the video's own pixels and drawn scaled to
+ * the player, so what's on screen is what the MP4 gets.
  *
- * This is the thing Milestone 8 has to reproduce, so it measures its own
- * rendered height rather than using the video's pixel dimensions. The player is
- * usually smaller than the file it is playing, and a caption has to take up the
- * same fraction of the frame at either size — otherwise the preview looks right
- * on screen and comes out twice the size in the export.
- *
- * Two elements, not one. The outer div is the frame: full-bleed, unpadded, and
- * the thing that gets measured. The inner div is the caption, positioned inside
- * it. They used to be the same element, which is what let the caption's own
- * margins feed back into the scale computed from its height.
+ * The box is placed by its centre and keeps its width wherever it is
+ * dragged: the layout slides it inside the safe area instead of letting an
+ * edge shrink or rewrap it. Three handles: the grip on its top edge (drag, or
+ * arrow keys) and the left and right edges of its wrap box (drag, or arrow
+ * keys) for the width, which the Max width slider also sets.
  */
 export function CaptionOverlay({
   caption,
   style,
   font,
+  frameSize,
   onPlace,
   onToggle,
 }: CaptionOverlayProps) {
   const frame = useRef<HTMLDivElement>(null);
-  const boxEl = useRef<HTMLDivElement>(null);
-  /** The text itself, which is what gets measured — see `textBox`. */
-  const textEl = useRef<HTMLSpanElement>(null);
-  const readout = useRef<HTMLDivElement>(null);
-  /** The grab handle and the box it sits on — see `placeHandle`. */
   const handle = useRef<HTMLButtonElement>(null);
-  const holder = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(0);
-  const [dragging, setDragging] = useState(false);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [live, setLive] = useState<Live | null>(null);
+  const [dragging, setDragging] = useState<Grab["kind"] | null>(null);
+  /** Bumped when a face finishes loading, so the layout measures it again. */
+  const [, setFontsVersion] = useState(0);
 
-  /** Null between drags. Set on pointer-down, read on every move. */
   const grab = useRef<Grab | null>(null);
-  /** The newest pointer position, waiting for a frame to be drawn on. */
   const latest = useRef<{ x: number; y: number } | null>(null);
   const painting = useRef<number | null>(null);
-  /** Where the drag has got to. Committed to the server on release. */
-  const live = useRef<FreePlacement | null>(null);
-  /** Whether this press has travelled far enough to be a drag at all. */
+  const pending = useRef<Live | null>(null);
   const moved = useRef(false);
   /**
    * Where the arrow keys last put the caption. The next press builds on this
-   * rather than on the pixels, because the pixels follow the style a render
-   * later and a quick second press would measure the old position and lose
-   * the first one. Forgotten when the style moves the caption any other way.
+   * rather than on the cache, which follows a render later, so a quick
+   * second press doesn't measure the old position and lose the first.
    */
-  const keyed = useRef<FreePlacement | null>(null);
+  const keyed = useRef<{ x: number; y: number } | null>(null);
+  const keyedWidth = useRef<number | null>(null);
 
-  // Unconditionally called with possibly-undefined arguments rather than behind
-  // an `if`: a hook cannot be conditional, and the hook itself no-ops on a
-  // built-in or a style that has not loaded.
   const libraryKey = style && !BUILT_IN.has(style.font_key) ? style.font_key : undefined;
   useInjectedFontFace(libraryKey, style?.font_family);
 
   // useLayoutEffect: measure before paint, or the first caption renders at a
   // scale of zero and visibly jumps.
-  //
-  // This observes the *frame*, which has no padding of its own, so the height it
-  // reports is the frame's height and nothing else. The border-box reading is
-  // kept because it is the correct one, but the loop it was fixing is now gone
-  // by construction — the element carrying the margins is no longer this one.
   useLayoutEffect(() => {
     const node = frame.current;
     if (!node) return;
-
     const observer = new ResizeObserver(([entry]) => {
-      const border = entry.borderBoxSize?.[0]?.blockSize;
-      setHeight(border ?? entry.target.getBoundingClientRect().height);
+      const box = entry.borderBoxSize?.[0];
+      const rect = entry.target.getBoundingClientRect();
+      setSize({ width: box?.inlineSize ?? rect.width, height: box?.blockSize ?? rect.height });
     });
     observer.observe(node);
-    setHeight(node.getBoundingClientRect().height);
-
+    const rect = node.getBoundingClientRect();
+    setSize({ width: rect.width, height: rect.height });
     return () => observer.disconnect();
   }, []);
 
-  const scale = style ? scaleFor(height, style.reference_height) : 0;
-
-  // The arrow keys' running position only means something while the caption
-  // is where they left it. A drag forgets it on pointer-down and leaving the
-  // handle forgets it on blur; the placement grid, a preset and a reset all
-  // put the caption back on an anchor, which forgets it here.
-  const anchored = style ? style.pos_x == null || style.pos_y == null : true;
-  useLayoutEffect(() => {
-    if (anchored) keyed.current = null;
-  }, [anchored]);
-
-  /**
-   * Re-assert the live drag position after any render that happened mid-drag.
-   *
-   * A drag writes the caption's position straight to the DOM, which React knows
-   * nothing about — so a render it did not cause (the playhead moving on to the
-   * next caption, most often) would repaint the box from the style in the cache
-   * and yank it back to wherever the drag started. No dependency array on
-   * purpose: this has to run after *every* render, not after a chosen few.
-   */
-  useLayoutEffect(() => {
-    if (dragging && style) {
-      const node = boxEl.current;
-      if (node && live.current) applyFreePosition(node, live.current, style, scale);
-    }
-    placeHandle();
-  });
-
-  /**
-   * Keep the whole handle inside the frame.
-   *
-   * It sits centred on the caption's top edge, so a caption at the very top
-   * of the frame would leave half of it outside — and the player clips
-   * (`overflow: hidden`), cutting a 28px target to 14 exactly where someone is
-   * most likely to want to grab it. So it is pushed down by however much would
-   * be cut off. Flipping it to the bottom edge instead is not enough: a
-   * one-line caption on a phone is ~12px tall, less than the handle. Written
-   * to the DOM rather than kept in state, because it is decided from layout
-   * and has to follow a drag that React is deliberately not told about.
-   */
-  function placeHandle() {
-    const node = handle.current;
-    const box = holder.current?.getBoundingClientRect();
-    const rect = frame.current?.getBoundingClientRect();
-    if (!node || !box || !rect) return;
-    const overhang = HANDLE_SIZE / 2 - (box.top - rect.top);
-    node.style.top = `${Math.max(0, overhang)}px`;
-  }
-
-  /**
-   * The caption's rendered text box, as fractions of the frame.
-   *
-   * The *text* element, not the box around it. In free placement the two are
-   * nearly the same, but an anchored caption is laid out by a full-bleed flex
-   * container whose element is the whole frame — measuring that would report
-   * the frame and say nothing about where the words are.
-   *
-   * Null when there is no caption on screen, which is most of a video.
-   */
-  function textBox(rect: DOMRect): BoxFraction | null {
-    const box = textEl.current?.getBoundingClientRect();
-    if (!box || box.width === 0 || box.height === 0) return null;
-    return { width: box.width / rect.width, height: box.height / rect.height };
-  }
-
-  /** The caption's current anchor and size, as fractions of the frame. */
-  function measure(rect: DOMRect): { anchor: FreePlacement; size: BoxFraction } {
-    const size = textBox(rect) ?? { width: 0, height: 0 };
-    const box = textEl.current?.getBoundingClientRect();
-
-    // Read the anchor off the pixels, whichever mode the style is in.
-    //
-    // Deriving it from `pos_x`/`pos_y` would be right too, but only in free
-    // placement — and the case that matters is the *first* drag, when the
-    // caption is still anchored. Doing it this way means picking a caption up
-    // never moves it, instead of moving it by half its own height, which is
-    // what computing the anchor from the margins alone would do: those say
-    // where the caption's *edge* is, and the anchor is its centre.
-    if (box && size.width > 0 && style) {
-      return {
-        anchor: {
-          pos_x:
-            (box.left - rect.left) / rect.width + ANCHOR_SHIFT[style.alignment] * size.width,
-          pos_y: (box.top - rect.top) / rect.height + size.height / 2,
-        },
-        size,
-      };
-    }
-
-    // Nothing on screen to measure — a gap between captions. Fall back to the
-    // fields doing the positioning. Any error here is invisible by definition,
-    // and the drag about to happen overwrites it.
-    const current = style ? freePosition(style) : null;
-    if (current) return { anchor: { pos_x: current.x, pos_y: current.y }, size };
-
-    return {
-      anchor: style
-        ? anchorFromStyle(
-            style.position,
-            style.alignment,
-            style.margin_v,
-            style.margin_h,
-            rect.width / rect.height,
-            style.reference_height
-          )
-        : { pos_x: 0.5, pos_y: 0.5 },
-      size,
+  // Widths measured before a face loaded are the fallback's. Load the faces
+  // this caption needs, then measure again.
+  const text = caption?.text ?? "";
+  const fontKey = style ? fontsFor(style).join("|") : "";
+  useEffect(() => {
+    if (!style || typeof document === "undefined" || !document.fonts) return;
+    let cancelled = false;
+    Promise.all(fontsFor(style).map((f) => document.fonts.load(f, text || "A").catch(() => [])))
+      .then((loaded) => {
+        if (cancelled || !loaded.some((faces) => faces.length)) return;
+        clearMeasurements();
+        setFontsVersion((v) => v + 1);
+      });
+    return () => {
+      cancelled = true;
     };
+    // `style` is read through fontKey: the faces, not every field.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontKey, text]);
+
+  const stored = style ? `${style.pos_x},${style.pos_y},${style.box_width}` : "";
+
+  // The layout works in the video's pixels; until the metadata says what they
+  // are, the player's own size has the right shape.
+  const video: Frame =
+    frameSize && frameSize.width > 0 && frameSize.height > 0 ? frameSize : size;
+  const scale = video.height > 0 ? size.height / video.height : 0;
+  const ready = Boolean(style && size.height > 0 && scale > 0);
+
+  const layoutFor = (options: Live | null): Layout | null =>
+    ready && style
+      ? layoutCaption(caption?.text ?? "", style, video, {
+          overrideScale: caption?.override_scale,
+          bold: caption?.override_bold,
+          center: options?.center,
+          boxWidth: options?.boxWidth,
+        })
+      : null;
+  const layout = layoutFor(live);
+
+  // Keep the grip inside the frame: it sits on the box's top edge, and a box
+  // against the top of the safe area would leave half of it clipped.
+  const gripTop = layout ? Math.max(HANDLE_SIZE / 2, layout.y * scale) : 0;
+  const gripX = layout
+    ? style?.alignment === "left"
+      ? layout.x * scale
+      : style?.alignment === "right"
+        ? (layout.x + layout.width) * scale
+        : layout.centerX * scale
+    : 0;
+
+  function frameRect(): DOMRect | null {
+    const rect = frame.current?.getBoundingClientRect();
+    return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+  }
+
+  /** The centre and width being drawn now, as fractions. */
+  function current(): { x: number; y: number; width: number } {
+    const l = layout;
+    if (!l || !style) return { x: 0.5, y: 0.5, width: 0.8 };
+    return { x: l.centerX / video.width, y: l.centerY / video.height, width: l.boxWidth / video.width };
   }
 
   /**
-   * Draw the drag, at frame rate, without telling React.
-   *
-   * The old version called `onPlace` on every pointer event, and `onPlace`
-   * writes the style into the query cache — so a mouse reporting at 1000Hz
-   * re-rendered the player, the style panel and the caption list a thousand
-   * times a second to move one box. That is the whole of the "jittery and
-   * laggy" complaint: not a slow renderer, just far too many renders.
+   * Draw the gesture at frame rate. Only this overlay re-renders: the style
+   * in the cache (and so the player, the panel and the caption list) is
+   * written once, when the gesture ends.
    */
   function paint() {
     painting.current = null;
     const g = grab.current;
     const pointer = latest.current;
-    const node = boxEl.current;
-    if (!g || !pointer || !node || !style) return;
-
-    // A caption that was not on screen when the drag started has no size, so
-    // nothing was clamping it to the frame. It can appear mid-drag — the
-    // playhead runs on into the next caption while the pointer is still down —
-    // so take the measurement the moment there is something to measure.
-    if (g.size.width === 0) {
-      const appeared = textBox(g.frame);
-      if (appeared) g.size = appeared;
+    if (!g || !pointer || !style) return;
+    if (g.kind === "move") {
+      let x = g.startX + (pointer.x - g.pointerX) / g.frame.width;
+      let y = g.startY + (pointer.y - g.pointerY) / g.frame.height;
+      // Snap to the frame's centre lines.
+      const snapX = Math.abs(x - 0.5) * g.frame.width < SNAP_PX;
+      const snapY = Math.abs(y - 0.5) * g.frame.height < SNAP_PX;
+      if (snapX) x = 0.5;
+      if (snapY) y = 0.5;
+      pending.current = { center: { x, y }, snapX, snapY };
+    } else {
+      const centre = g.frame.left + g.startX * g.frame.width;
+      const width = clamp((2 * Math.abs(pointer.x - centre)) / g.frame.width, MIN_BOX_WIDTH, MAX_BOX_WIDTH);
+      pending.current = { boxWidth: width };
     }
-
-    const next = clampPlacement(
-      g.anchorX + (pointer.x - g.pointerX) / g.frame.width,
-      g.anchorY + (pointer.y - g.pointerY) / g.frame.height,
-      g.size,
-      style.alignment
-    );
-
-    live.current = next;
-    applyFreePosition(node, next, style, scale);
-    placeHandle();
-    if (readout.current) {
-      readout.current.textContent = `${Math.round(next.pos_x * 100)}% · ${Math.round(next.pos_y * 100)}%`;
-    }
+    setLive(pending.current);
   }
 
-  function handlePointerDown(event: React.PointerEvent) {
+  function start(kind: Grab["kind"], event: React.PointerEvent) {
     keyed.current = null;
-    const node = frame.current;
-    if (!node || !style || !onPlace) return;
-
-    const rect = node.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-
-    // Pointer capture, so a fast drag that leaves the video — or the window —
-    // keeps delivering moves to this element instead of silently ending.
+    keyedWidth.current = null;
+    const rect = frameRect();
+    if (!rect || !style || !onPlace) return;
+    event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-
-    const { anchor, size } = measure(rect);
-    grab.current = {
-      pointerX: event.clientX,
-      pointerY: event.clientY,
-      anchorX: anchor.pos_x,
-      anchorY: anchor.pos_y,
-      frame: rect,
-      size,
-    };
-    live.current = anchor;
+    const now = current();
+    grab.current = { kind, pointerX: event.clientX, pointerY: event.clientY, startX: now.x, startY: now.y, frame: rect };
+    pending.current = null;
     moved.current = false;
   }
 
-  function handlePointerMove(event: React.PointerEvent) {
+  function handleMove(event: React.PointerEvent) {
     const g = grab.current;
     if (!g) return;
-
     if (!moved.current) {
       const far =
         Math.abs(event.clientX - g.pointerX) > DRAG_THRESHOLD ||
         Math.abs(event.clientY - g.pointerY) > DRAG_THRESHOLD;
       if (!far) return;
       moved.current = true;
-
-      // The one render a drag needs: it switches an anchored caption into free
-      // placement, at the exact anchor it was already drawing at, so nothing
-      // moves. Without it the box is still a full-bleed flex container and
-      // writing `left`/`top` to it would do nothing at all.
-      setDragging(true);
-      if (live.current) onPlace?.(live.current);
+      setDragging(g.kind);
     }
-
     latest.current = { x: event.clientX, y: event.clientY };
-    // Coalesce: a pointer can report several times per frame, and only the last
-    // position of a frame is worth drawing.
     if (painting.current === null) painting.current = requestAnimationFrame(paint);
   }
 
-  /** Shared by release and cancel: stop drawing and forget the drag. */
-  function endDrag(event: React.PointerEvent) {
-    // Guarded, because `pointerdown` can bail before capturing — a zero-sized
-    // frame, or a style that has not loaded — and releasing a capture that was
-    // never taken throws NotFoundError.
+  /** The finished gesture as a patch: the centre the box is drawn at, or the width. */
+  function commit(result: Live | null) {
+    if (!result || !onPlace) return;
+    if (result.boxWidth !== undefined) {
+      onPlace({ box_width: round3(result.boxWidth) });
+      return;
+    }
+    if (result.center) {
+      // Where the pointer asked for, kept inside the frame: every caption is
+      // slid inside the safe area by its own size, so one dragged against an
+      // edge saves "against that edge" and a shorter caption sits there too.
+      onPlace({
+        pos_x: round3(clamp(result.center.x, 0, 1)),
+        pos_y: round3(clamp(result.center.y, 0, 1)),
+      });
+    }
+  }
+
+  /** Release or cancel: stop drawing, and save the result if it was a drag. */
+  function end(event: React.PointerEvent) {
+    const g = grab.current;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-
     if (painting.current !== null) {
       cancelAnimationFrame(painting.current);
       painting.current = null;
+      if (latest.current && g) paint();
     }
-
+    const dragged = moved.current;
+    const result = pending.current;
+    moved.current = false;
     grab.current = null;
     latest.current = null;
-    setDragging(false);
+    setDragging(null);
+    if (dragged) commit(result);
+    // The cache catches up a render later; until it has, the drawn result is
+    // held, or the box would flick back to where the gesture started.
+    if (!dragged) setLive(null);
   }
 
-  function handlePointerUp(event: React.PointerEvent) {
-    const dragged = moved.current;
-    const placement = live.current;
-    moved.current = false;
-    endDrag(event);
+  // Let go of the held result once the style has caught up — or moved for
+  // another reason (a preset, a reset, the slider), and the arrow keys'
+  // running position with it.
+  useEffect(() => {
+    if (grab.current) return;
+    setLive(null);
+  }, [stored]);
+  useEffect(() => {
+    keyed.current = null;
+    keyedWidth.current = null;
+    // Only when the style changed underneath the keys, not when they changed it.
+  }, [style?.alignment, style?.max_lines, style?.font_size]);
 
+  function handleSurfaceDown(event: React.PointerEvent) {
+    keyed.current = null;
+    start("move", event);
+  }
+
+  function handleSurfaceUp(event: React.PointerEvent) {
     // A press that never moved is a click, and on a video a click means play.
-    // The drag surface covers the whole frame, so without this the <video>
-    // underneath never sees it and the player stops responding to clicks.
-    // A click on the handle is not a click on the video: it focuses the
-    // handle, ready for the arrow keys, and leaves playback alone.
-    if (!dragged) {
-      if (event.currentTarget !== handle.current) onToggle?.();
-    } else if (placement) onPlace?.(placement);
+    // On a handle it isn't: it focuses the handle, ready for the arrow keys.
+    const clicked = !moved.current && grab.current !== null;
+    end(event);
+    if (clicked) onToggle?.();
   }
 
-  /**
-   * Arrow keys on the focused handle move the caption; Shift moves it ten
-   * times as far. Each press is a placement like the end of a drag, clamped
-   * the same way and saved through the same debounced update.
-   */
-  function handleKeyDown(event: React.KeyboardEvent) {
-    const node = frame.current;
-    if (!node || !style || !onPlace) return;
-    const delta = {
-      ArrowLeft: [-1, 0],
-      ArrowRight: [1, 0],
-      ArrowUp: [0, -1],
-      ArrowDown: [0, 1],
-    }[event.key];
-    if (!delta) return;
-    // Arrows would otherwise scroll the page as well.
+  /** Arrow keys on the grip move the box's centre; Shift moves it ten times as far. */
+  function handleMoveKey(event: React.KeyboardEvent) {
+    const delta = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+    if (!delta || !style || !onPlace || !ready) return;
     event.preventDefault();
-
-    const rect = node.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const { anchor, size } = measure(rect);
-    const from = keyed.current ?? anchor;
+    const from = keyed.current ?? current();
     const step = event.shiftKey ? KEY_STEP_LARGE : KEY_STEP;
-    const next = clampPlacement(
-      from.pos_x + delta[0] * step,
-      from.pos_y + delta[1] * step,
-      size,
-      style.alignment
-    );
+    const asked = { x: from.x + delta[0] * step, y: from.y + delta[1] * step };
+    // Built on where the box is *drawn*, so a press against an edge doesn't
+    // walk the saved centre off into a dead zone the next press must undo.
+    const drawn = layoutFor({ center: asked });
+    if (!drawn) return;
+    const next = { x: clamp(drawn.centerX / video.width, 0, 1), y: clamp(drawn.centerY / video.height, 0, 1) };
     keyed.current = next;
-    // Drawn now, like a drag frame, rather than when the cache re-renders.
-    if (boxEl.current) applyFreePosition(boxEl.current, next, style, scale);
-    placeHandle();
-    onPlace(next);
+    setLive({ center: next });
+    onPlace({ pos_x: round3(next.x), pos_y: round3(next.y) });
   }
 
-  /**
-   * The gesture was taken away — the browser claiming it for a scroll, or the
-   * pointer being disconnected. Not a click, so it must not toggle playback,
-   * and not a completed drag either. Whatever the caption reached is left
-   * where it is: the move that got it there was already saved on the way in.
-   */
-  function handlePointerCancel(event: React.PointerEvent) {
-    const dragged = moved.current;
-    const placement = live.current;
-    moved.current = false;
-    endDrag(event);
-    if (dragged && placement) onPlace?.(placement);
+  /** Arrow keys on an edge handle: outward widens, inward narrows. */
+  function handleWidthKey(side: "left" | "right", event: React.KeyboardEvent) {
+    const outward = side === "left" ? "ArrowLeft" : "ArrowRight";
+    const inward = side === "left" ? "ArrowRight" : "ArrowLeft";
+    const sign =
+      event.key === outward || event.key === "ArrowUp" ? 1 : event.key === inward || event.key === "ArrowDown" ? -1 : 0;
+    if (!sign || !style || !onPlace || !ready) return;
+    event.preventDefault();
+    const from = keyedWidth.current ?? current().width;
+    const next = clamp(from + sign * (event.shiftKey ? WIDTH_STEP_LARGE : WIDTH_STEP), MIN_BOX_WIDTH, MAX_BOX_WIDTH);
+    keyedWidth.current = next;
+    setLive({ boxWidth: next });
+    onPlace({ box_width: round3(next) });
   }
 
   const draggable = Boolean(onPlace && style);
-  const placed = style ? freePosition(style) !== null : false;
+  const painted = layout && caption ? ink(layout) : null;
+  // Which safe-area edges the box is pressed against, for the guides.
+  const against = painted
+    ? {
+        left: painted.x <= SAFE_AREA * video.width + 0.5,
+        right: painted.x + painted.width >= (1 - SAFE_AREA) * video.width - 0.5,
+        top: painted.y <= SAFE_AREA * video.height + 0.5,
+        bottom: painted.y + painted.height >= (1 - SAFE_AREA) * video.height - 0.5,
+      }
+    : null;
+  const widthPercent = style ? Math.round((live?.boxWidth ?? boxWidthOf(style, video)) * 100) : 0;
 
   return (
     <div ref={frame} className="pointer-events-none absolute inset-0">
       {/*
-        The whole frame is the handle, not the caption.
-
-        Dragging the caption text meant aiming at one line of type — and at
-        nothing at all when the playhead sits in a gap between captions, which
-        is most of a video.
-
-        It no longer *jumps* to the pointer, though. The caption moves by the
-        distance the pointer moves, from wherever it already was, so grabbing it
-        anywhere picks it up exactly where it sits. Landing the caption under
-        the cursor was the old behaviour and it made every drag start with a
-        lurch, including the ones that were only ever going to be a click.
+        The whole frame is a drag surface for the box, not just the caption:
+        aiming at one line of type is hard, and in a gap between captions there
+        is nothing to aim at. The box moves by the distance the pointer moves,
+        from wherever it already was, so grabbing it never makes it jump.
       */}
       {draggable && (
         <div
-          className={dragging ? "absolute inset-0 cursor-grabbing" : "absolute inset-0 cursor-grab"}
+          className={dragging === "move" ? "absolute inset-0 cursor-grabbing" : "absolute inset-0 cursor-grab"}
           style={{ pointerEvents: "auto", touchAction: "none" }}
           title="Drag to place the caption · click to play"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
+          onPointerDown={handleSurfaceDown}
+          onPointerMove={handleMove}
+          onPointerUp={handleSurfaceUp}
+          onPointerCancel={(event) => end(event)}
         />
       )}
 
-      {/* Centre lines, shown only while dragging. Not a grid and not a snap
-          target — there is nothing to snap to any more. They are here because
-          "is this actually centred" is the one question a freehand drag cannot
-          answer by eye, and the answer used to be guaranteed by the format. */}
+      {/* Guides while dragging: the frame's centre lines when the box snaps to
+          them, and the safe area's edge when the box is pressed against it. */}
       {dragging && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/25" />
-          <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/25" />
+        <div aria-hidden="true" data-caption-guides className="pointer-events-none absolute inset-0">
+          {live?.snapX && <span data-guide="center-x" className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-primary" />}
+          {live?.snapY && <span data-guide="center-y" className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-primary" />}
+          {against?.left && <span data-guide="safe-left" className="absolute inset-y-0 w-px bg-white/60" style={{ left: `${SAFE_AREA * 100}%` }} />}
+          {against?.right && <span data-guide="safe-right" className="absolute inset-y-0 w-px bg-white/60" style={{ right: `${SAFE_AREA * 100}%` }} />}
+          {against?.top && <span data-guide="safe-top" className="absolute inset-x-0 h-px bg-white/60" style={{ top: `${SAFE_AREA * 100}%` }} />}
+          {against?.bottom && <span data-guide="safe-bottom" className="absolute inset-x-0 h-px bg-white/60" style={{ bottom: `${SAFE_AREA * 100}%` }} />}
         </div>
       )}
 
-      {/* Where this drag has got to. Without it the only feedback is the
-          caption moving, which does not tell you whether you have landed on
-          "halfway across" or a percent off it. Top-left so it is never under
-          the cursor doing the dragging.
-
-          Its text is written by `paint`, not by React — putting it in state
-          would reintroduce exactly the per-event render the drag avoids. */}
-      {dragging && (
+      {/* Where this gesture has got to: the centre, or the width. */}
+      {dragging && layout && (
         <div
-          ref={readout}
           aria-hidden="true"
           className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/75 px-2 py-1 font-mono text-[11px] tabular-nums text-white shadow-lg"
-        />
+        >
+          {dragging === "width"
+            ? `width ${widthPercent}%`
+            : `${Math.round((layout.centerX / video.width) * 100)}% · ${Math.round((layout.centerY / video.height) * 100)}%`}
+        </div>
       )}
 
-      {style && (
+      {layout && caption && style && (
         <div
-          ref={boxEl}
           data-caption-box
+          data-caption-text
           className="pointer-events-none"
-          style={captionBoxStyle(style, scale)}
-          // Only meaningful once the caption is free-placed: an anchored box is
-          // the whole frame, and announcing that as a position would be a lie.
-          data-placed={placed || undefined}
+          style={captionPaintStyle(style, font, layout, scale, caption)}
         >
-          {/* The caption and its handle. Always rendered, even in a gap
-              between captions, so the handle stays where the caption will be
-              and there is always something to grab. */}
-          <div ref={holder} className="relative flex">
-            {caption && height > 0 && (
-              <span ref={textEl} data-caption-text style={captionTextStyle(style, font, scale, caption)}>
-                {caption.text}
+          {/* A space between lines, which collapses away between two blocks,
+              so the caption's text reads as a sentence to a screen reader. */}
+          {layout.lines.map((line, i) => (
+            <Fragment key={i}>
+              {i > 0 && " "}
+              <span data-caption-line style={captionLineStyle(line.pitch, scale)}>
+                {line.segments.map((s) => s.text).join("")}
               </span>
-            )}
-            {draggable && (
-              <button
-                ref={handle}
-                type="button"
-                aria-label="Move caption"
-                title="Drag to move the caption · arrow keys to nudge it (Shift for bigger steps)"
-                // On the anchor's side of the top edge: centred for a centred
-                // caption, at the corner for a left- or right-aligned one, so
-                // it marks the point the caption is placed by.
-                style={{
-                  left: `${ANCHOR_SHIFT[style.alignment] * 100}%`,
-                  width: HANDLE_SIZE,
-                  height: HANDLE_SIZE,
-                  pointerEvents: "auto",
-                  touchAction: "none",
-                }}
-                className={cn(
-                  "absolute top-0 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full",
-                  "border-2 border-white/90 bg-primary text-primary-foreground shadow-lg",
-                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
-                  dragging ? "cursor-grabbing" : "cursor-grab"
-                )}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerCancel}
-                onKeyDown={handleKeyDown}
-                onBlur={() => {
-                  keyed.current = null;
-                }}
-              >
-                <GripHorizontal aria-hidden="true" className="size-3.5" />
-              </button>
-            )}
-          </div>
+            </Fragment>
+          ))}
         </div>
+      )}
+
+      {/* The wrap box and its width handles: dashed while it's being changed. */}
+      {draggable && layout && caption && (
+        <>
+          <div
+            aria-hidden="true"
+            data-caption-wrap-box
+            className={cn(
+              "pointer-events-none absolute rounded-sm border border-dashed",
+              dragging === "width" ? "border-white/80" : "border-white/0"
+            )}
+            style={{
+              left: layout.boxLeft * scale,
+              top: layout.y * scale,
+              width: layout.boxWidth * scale,
+              height: layout.height * scale,
+            }}
+          />
+          {(["left", "right"] as const).map((side) => (
+            <button
+              key={side}
+              type="button"
+              role="slider"
+              aria-label={`Caption width, ${side} edge`}
+              aria-orientation="horizontal"
+              aria-valuemin={MIN_BOX_WIDTH * 100}
+              aria-valuemax={MAX_BOX_WIDTH * 100}
+              aria-valuenow={widthPercent}
+              aria-valuetext={`${widthPercent}% of the frame`}
+              title="Drag to change the caption's width · arrow keys too"
+              data-width-handle={side}
+              style={{
+                left: (side === "left" ? layout.boxLeft : layout.boxLeft + layout.boxWidth) * scale,
+                top: (layout.y + layout.height / 2) * scale,
+                width: EDGE_HANDLE_WIDTH,
+                height: Math.max(HANDLE_SIZE, Math.min(48, layout.height * scale)),
+                pointerEvents: "auto",
+                touchAction: "none",
+              }}
+              className={cn(
+                "group absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              )}
+              onPointerDown={(event) => start("width", event)}
+              onPointerMove={handleMove}
+              onPointerUp={(event) => end(event)}
+              onPointerCancel={(event) => end(event)}
+              onKeyDown={(event) => handleWidthKey(side, event)}
+              onBlur={() => {
+                keyedWidth.current = null;
+              }}
+            >
+              <span className="h-full w-1.5 rounded-full border border-white/90 bg-primary shadow-lg" />
+            </button>
+          ))}
+        </>
+      )}
+
+      {draggable && layout && (
+        <button
+          ref={handle}
+          type="button"
+          aria-label="Move caption"
+          title="Drag to move the caption · arrow keys to nudge it (Shift for bigger steps)"
+          style={{
+            left: gripX,
+            top: gripTop,
+            width: HANDLE_SIZE,
+            height: HANDLE_SIZE,
+            pointerEvents: "auto",
+            touchAction: "none",
+          }}
+          className={cn(
+            "absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full",
+            "border-2 border-white/90 bg-primary text-primary-foreground shadow-lg",
+            "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+            dragging === "move" ? "cursor-grabbing" : "cursor-grab"
+          )}
+          onPointerDown={(event) => start("move", event)}
+          onPointerMove={handleMove}
+          onPointerUp={(event) => end(event)}
+          onPointerCancel={(event) => end(event)}
+          onKeyDown={handleMoveKey}
+          onBlur={() => {
+            keyed.current = null;
+          }}
+        >
+          <GripHorizontal aria-hidden="true" className="size-3.5" />
+        </button>
       )}
     </div>
   );

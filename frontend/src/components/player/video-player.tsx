@@ -5,10 +5,9 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-import { CaptionOverlay } from "@/components/captions/caption-overlay";
+import { CaptionOverlay, type Placement } from "@/components/captions/caption-overlay";
 import type { Playback } from "@/hooks/use-playback";
 import { streamKeys, streamUrl, useStreamTicket } from "@/hooks/use-stream";
-import type { FreePlacement } from "@/lib/caption-drag";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 import type { Video } from "@/types/video";
@@ -21,8 +20,8 @@ interface VideoPlayerProps {
   /** Undefined until the style loads; the overlay copes by drawing nothing. */
   style: CaptionStyle | undefined;
   font: Font | undefined;
-  /** Drag the caption to place it anywhere on the frame. */
-  onPlace?: (placement: FreePlacement) => void;
+  /** Drag the caption box to move it, or its edges to change its width. */
+  onPlace?: (placement: Placement) => void;
 }
 
 export function VideoPlayer({
@@ -154,6 +153,7 @@ export function VideoPlayer({
         caption={activeCaption}
         style={style}
         font={font}
+        frameSize={intrinsic}
         onPlace={onPlace}
         onToggle={playback.toggle}
       />
