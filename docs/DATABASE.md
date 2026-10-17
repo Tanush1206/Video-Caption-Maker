@@ -1,6 +1,6 @@
 # Database
 
-Data model as of Alembic head **`b4e7c2d91a36`** (v1.0.4; unchanged in v1.0.5). The column lists
+Data model as of Alembic head **`c8f2a6d41e93`** (v1.0.7). The column lists
 below come from `\d` on a running v1.0.4 install's Postgres, cross-checked
 against `backend/app/models/*.py`.
 
@@ -123,10 +123,11 @@ erDiagram
         int font_size
         varchar7 text_color
         float box_opacity
-        caption_vertical_position position
         caption_alignment alignment
-        float pos_x "nullable"
-        float pos_y "nullable"
+        float pos_x
+        float pos_y
+        float box_width "nullable"
+        int max_lines
     }
     exports {
         int id PK
@@ -238,10 +239,10 @@ Sizes are in **reference pixels against a 1080-px-high canvas**
 | `underline`, `strikeout` | boolean | no | ORM false | |
 | `letter_spacing` | integer | no | ORM 0 | ASS `Spacing` |
 | `uppercase` | boolean | no | ORM false | applied to the burn and the preview, **never** to stored text or SRT/VTT |
-| `position` | enum `caption_vertical_position` | no | ORM `bottom` | `top` `middle` `bottom` |
-| `alignment` | enum `caption_alignment` | no | ORM `center` | `left` `center` `right` |
-| `margin_v`, `margin_h` | integer | no | ORM 60 | reference px; `margin_h` also sets the wrap width |
-| `pos_x`, `pos_y` | double | yes | | free placement as a 0..1 fraction of the frame; NULL = anchored |
+| `alignment` | enum `caption_alignment` | no | ORM `center` | `left` `center` `right`: how lines justify in the box |
+| `pos_x`, `pos_y` | double | no | ORM 0.5, 0.88 | the caption box's centre, 0..1 of the frame; each caption is slid inside the 3% safe area at layout (`services/caption_layout.py`) |
+| `box_width` | double | yes | | the box's width, 0..1 of the frame's width; NULL = 0.80 (landscape, square) or 0.85 (portrait) |
+| `max_lines` | integer | no | `2` | 1-3; past it the font shrinks to 70%, then one more line |
 | `created_at`, `updated_at` | timestamptz | no | `now()` | |
 
 Presets (`youtube`, `tiktok`, `minimal`) and the defaults live in
@@ -293,7 +294,6 @@ Keys in use (`backend/app/services/app_settings.py`):
 | `video_status` | `pending`, `processing`, `completed`, `failed` |
 | `export_status` | `pending`, `processing`, `completed`, `failed` |
 | `export_format` | `srt`, `vtt`, `json`, `mp4` |
-| `caption_vertical_position` | `top`, `middle`, `bottom` |
 | `caption_alignment` | `left`, `center`, `right` |
 
 ## 4. Naming conventions
@@ -334,7 +334,8 @@ date is the commit that introduced the file.
 | 10 | `e5b2c8a41f37` | 2026-10-07 | add `exports.height` |
 | 11 | `f1c93d05a827` | 2026-10-07 | add `videos.spoken_language` (`auto`), `videos.caption_language` (`same`) |
 | 12 | `a9d3e6f20b14` | 2026-10-07 | create `app_settings`; add `videos.stage_detail`, `videos.notice` |
-| 13 | `b4e7c2d91a36` | 2026-10-11 | add `recovery_attempts` to `videos` and `exports` (head; shipped in v1.0.2) |
+| 13 | `b4e7c2d91a36` | 2026-10-11 | add `recovery_attempts` to `videos` and `exports` (shipped in v1.0.2) |
+| 14 | `c8f2a6d41e93` | 2026-10-17 | caption box (v1.0.7, head): add `box_width`, `max_lines`; `pos_x`/`pos_y` become the box centre, NOT NULL; drop `position`, `margin_v`, `margin_h` and enum `caption_vertical_position`. **Converts** every row: an anchored caption gets the centre a one-line caption had (margin + padding or outline + half the font size in from its edge, or the middle); a left/right-aligned one is half the default width (0.40) further in, the side margin read against 1920 px; a centred hand placement keeps its centre. Downgrade restores the columns at their defaults, keeping the centre as a hand placement |
 
 ## 6. Migration rules
 

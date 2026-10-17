@@ -308,17 +308,17 @@ Enum: `left`, `center`, `right`
 | `box_color` | string | yes |  |
 | `box_opacity` | number | yes |  |
 | `box_padding` | integer | yes |  |
-| `position` | [VerticalPosition](#verticalposition) | yes |  |
 | `alignment` | [Alignment](#alignment) | yes |  |
-| `margin_v` | integer | yes |  |
-| `margin_h` | integer | yes |  |
-| `pos_x` | number \| null | no |  |
-| `pos_y` | number \| null | no |  |
+| `pos_x` | number | yes | the caption box's centre, 0..1 of the frame (v1.0.7) |
+| `pos_y` | number | yes | as `pos_x` |
+| `box_width` | number \| null | no | the box's width, 0..1 of the frame's width; null = 0.80 (landscape, square) or 0.85 (portrait) (v1.0.7) |
+| `max_lines` | integer | no | default `2` (v1.0.7) |
 | `reference_height` | integer | no | default `1080` |
 | `font_family` | string | no | default `""` |
 | `font_css_stack` | string | no | default `""` |
 | `script_font_stack` | string | no | default `""`. CSS families the preview lists before the caption font, each limited to its script by `unicode-range`: the Indic Noto faces, plus `"Noto Sans"` when the caption font has no Cyrillic. The same faces the burn uses (v1.0.7) |
 | `font_win_span` | number | no | default `1.0`. The caption face's (usWinAscent + usWinDescent) / unitsPerEm. libass makes that span the font size, CSS the em, so the preview draws at `font_size × scale / font_win_span` with that line height (v1.0.7) |
+| `script_fonts` | [ScriptFont](#scriptfont)[] | no | default `[]`. The faces of `script_font_stack` as data, for the editor's copy of the layout rule (v1.0.7) |
 
 ### CaptionStyleUpdate
 
@@ -340,12 +340,14 @@ Enum: `left`, `center`, `right`
 | `box_color` | string \| null | no | pattern ^#(?:[0-9a-fA-F]{6})$ |
 | `box_opacity` | number \| null | no | minimum 0, maximum 1 |
 | `box_padding` | integer \| null | no | minimum 0, maximum 60 |
-| `position` | [VerticalPosition](#verticalposition) \| null | no |  |
 | `alignment` | [Alignment](#alignment) \| null | no |  |
-| `margin_v` | integer \| null | no | minimum 0, maximum 500 |
-| `margin_h` | integer \| null | no | minimum 0, maximum 500 |
 | `pos_x` | number \| null | no | minimum 0, maximum 1 |
 | `pos_y` | number \| null | no | minimum 0, maximum 1 |
+| `box_width` | number \| null | no | minimum 0.2, maximum 0.94; an explicit null is the default width again |
+| `max_lines` | integer \| null | no | minimum 1, maximum 3 |
+
+An explicit `null` for any field but `box_width` is a `422` (v1.0.7): those
+columns are NOT NULL.
 
 ### CaptionUpdate
 
@@ -516,6 +518,14 @@ Enum: `pending`, `processing`, `completed`, `failed`
 |---|---|---|---|
 | `name` | string | yes |  |
 
+### ScriptFont
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `family` | string | yes | e.g. `Noto Sans Devanagari` |
+| `chars` | string | yes | the characters it draws, as the body of a regex character class |
+| `span` | number | yes | its win span, which sets the height of a line it is on |
+
 ### SearchResponse
 
 | Field | Type | Required | Constraints / default |
@@ -630,10 +640,6 @@ Enum: `pending`, `processing`, `completed`, `failed`
 | Field | Type | Required | Constraints / default |
 |---|---|---|---|
 | `full_name` | string \| null | no | maxLength 255 |
-
-### VerticalPosition
-
-Enum: `top`, `middle`, `bottom`
 
 ### VideoList
 

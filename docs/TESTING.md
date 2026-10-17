@@ -138,7 +138,8 @@ cd scripts/ui-check && npm ci && npx playwright install chromium
 node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
 node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step script-fonts
-VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap   # change that video's style
+VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
+VCM_SAFE_VIDEOS=<16:9 id>,<9:16 id>,<1:1 id> node checks.js http://localhost:3000 caption-safe-area layout-parity   # the same; layout-parity needs the dev stack
 node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes data: test installs only
 ```
 
@@ -160,11 +161,15 @@ what the 9:16 run is for.
 | `checks.js language-step` | the language step lacks a card per served language, or its search by English name, own name or code doesn't filter the cards, or a found language can't be chosen. Read-only (a file is picked, never uploaded) |
 | `checks.js script-fonts` | an Indic caption isn't drawn in its bundled Noto face (Chromium's own report of the fonts used), or the Latin words in it are. Read-only |
 | `checks.js style-sliders` | any style slider at 375 or 1440 px doesn't follow a drag, moves while dragged, ignores a click or an arrow key, shows a different number, doesn't update the preview within 0.5 s, or doesn't survive a reload |
-| `checks.js caption-drag` | the caption, dragged by mouse or touch at 375 or 1440 px, jumps on grab or release, doesn't follow the pointer, leaves the frame or changes size past any edge, isn't saved where it was dropped, toggles playback, or moves on reload |
+| `checks.js caption-drag` | the caption, dragged by mouse or touch at 375 or 1440 px, jumps on grab or release, doesn't follow the pointer, leaves the safe area or changes size past any edge, isn't saved where it was dropped, toggles playback, or moves on reload |
 | `checks.js caption-handle` | the grab handle is under 24x24, covered, doesn't drag the caption by mouse or touch with no jump, isn't whole inside the frame at the top, or a click on it plays the video or doesn't focus it |
-| `checks.js caption-keyboard` | arrow keys on the handle don't move the caption 1% (Shift 10%) clamped to the frame, scroll the page, seek the video, lose focus, or aren't saved |
-| `checks.js caption-size` | the preview's font-size isn't size × scale / the served win span, or its line height isn't libass's cell |
-| `checks.js caption-wrap` | a wrapped caption's lines aren't balanced (shortest / longest ≤ 0.8), as libass balances them |
+| `checks.js caption-keyboard` | arrow keys on the handle don't move the caption 1% (Shift 10%) inside the safe area, scroll the page, seek the video, lose focus, or aren't saved |
+| `checks.js caption-size` | the preview's font-size isn't size × scale / the served win span (times a 2% shrink step), or a line isn't libass's cell tall |
+| `checks.js caption-wrap` | a wrapped caption's lines aren't even (shortest / longest ≤ 0.75) at two box widths |
+| `checks.js caption-safe-area` | for any of 13 positions (corners, edge centres, centre, dragged far past each edge) × 5 texts (short and long English, Hindi, long German words, Russian) × box padding 0 / 40 and outline + shadow × font 28 / 110, on each video in `VCM_SAFE_VIDEOS` (16:9, 9:16, 1:1), the painted caption isn't inside 3% of every edge |
+| `checks.js caption-width` | at 375 or 1440 px, by mouse or touch, dragging a width handle doesn't resize the box about its centre or rewrap the text inside it, isn't saved, isn't shown by the Max width slider; the slider doesn't move the box and its handles; arrow keys on a handle don't step 1%; the width or lines change when the box is dragged to any edge; Max lines 1 and 2 don't shrink the font (to no less than 70%) or exceed one extra line |
+| `checks.js caption-snap` | no guide or snap at the frame's centre lines, no guide at the safe-area edge, guides left after the drag; Top / Middle / Bottom don't centre the box at 12/50/88% inside the safe area; Reset doesn't restore the centre, width and line count |
+| `checks.js layout-parity` | the editor's lines or painted rectangle (within 0.5% of the frame) differ from the burn's layout (`backend/scripts/caption_layout.py`, through `docker compose exec`), for the texts, looks and sizes above on each video in `VCM_SAFE_VIDEOS`. Dev stack only |
 | `flow.js` | the guarded UI flow (delete, settings change and back, SRT and MP4 export and download) fails, or the guard refuses any of the app's own requests |
 
 Required for every UI change (PROGRESS.md, v1.0.4 rules):
@@ -222,9 +227,12 @@ Full layer digests are in PROGRESS.md.
 | Every caption language is one M2M100 lists; the rejected ones are refused | `test_translation.py` (`test_every_caption_language_translates_offline`), `test_transcription.py` | |
 | Local translation by sentence, split back over the same captions; decode guards | `test_translation.py` | the translation sweep (§4, "Adding a caption language") |
 | Preview = burn: position, box colour and opacity, box height | `test_exports.py` (`test_burned_caption_sits_where_the_preview_puts_it`) | `checks.js caption-drag` (saved fraction = preview centre) |
+| Caption box: width, line limit and shrink, broken long words, the safe area on every side for the grid of positions × aspects × texts × padding × size, in the layout and **in the burned pixels**; the width doesn't change when dragged | `test_caption_layout.py` | `checks.js caption-safe-area`, `caption-width`, `caption-snap` |
+| Preview and burn use the same lines, size and rectangle | `test_caption_layout.py`, `test_caption_styles.py` (`test_libass_never_wraps_or_places_on_its_own`) | `checks.js layout-parity` |
+| Old anchored and hand-placed styles convert to the box centre | `test_caption_styles.py` (`test_old_placements_convert_to_the_box_centre`) | |
 | Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
 | Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |
-| Reset and presets clear a dragged position | `test_caption_styles.py` (`test_reset_and_presets_clear_a_hand_placement`) | |
+| Reset and presets centre the box with the default width and lines | `test_caption_styles.py` (`test_reset_and_presets_clear_a_hand_placement`) | |
 | Caption drag, grab handle, keyboard placement, style sliders | | `checks.js caption-drag`, `caption-handle`, `caption-keyboard`, `style-sliders` |
 | Deleting a video deletes its export files | `test_exports.py` (`test_deleting_the_video_deletes_its_export_files`; fails without the fix) | |
 | `/api/ask` without a key says a key is needed | `test_search.py` | |
