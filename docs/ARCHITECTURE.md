@@ -201,13 +201,31 @@ logged and never surfaced to the user.
   (`export_service.write_sidecar`) and return `completed`.
 - MP4 creates an `exports` row (`pending`) and queues `render_export`:
   1. build an ASS file from the captions and style (`services/subtitles.py`);
-  2. run FFmpeg with `scale` **before** `subtitles` (`_filter_chain`), so
-     glyphs are drawn at the output size;
+  2. run FFmpeg with `scale` **before** `ass` (`_filter_chain`), so glyphs
+     are drawn at the output size. `ass`, not `subtitles`: the same libass,
+     but the only one of the two that accepts `shaping=complex`, without
+     which Indic scripts were drawn unshaped (v1.0.7);
   3. encode with `h264_nvenc` (`-cq 19 -preset p6`) when it works, otherwise
      `libx264 -crf 18 -preset medium` (`services/rendering.py`);
   4. write the progress from FFmpeg's `out_time_us`.
 - The output goes to `user_N/exports/<uuid>.<fmt>`. A retry writes a new
   file, never resuming a partial one.
+- **Preview = burn.** `lib/caption-style.ts` is the browser twin of
+  `to_ass_style`, and three rules keep them at the same size and shape
+  (v1.0.7, measured within ~1.5% on burned frames):
+  - libass makes a face's whole win cell (usWinAscent + usWinDescent) the
+    font size; CSS makes the em the font size. The style serves the face's
+    ratio (`font_win_span`); the preview divides by it and uses it as the
+    line height;
+  - libass's WrapStyle 0 balances wrapped lines; the preview uses
+    `text-wrap: balance`;
+  - Devanagari, Bengali, Tamil and Malayalam are drawn in vendored Noto
+    faces (`SCRIPT_FONTS`, `frontend/public/fonts`): the ASS names the face
+    per run with `\fs` scaled to the caption font's em; CSS lists the faces
+    first, each limited to its script with `unicode-range`.
+- A box (`box_opacity > 0`, BorderStyle 3) is filled by libass with
+  **OutlineColour**, so that field carries the box colour and opacity when
+  boxed.
 - Render timeout: 3 h (`RENDER_TIMEOUT_SECONDS`), enforced by the FFmpeg
   subprocess itself.
 - **No Celery time limits** (`task_soft_time_limit`/`task_time_limit` are
@@ -267,13 +285,13 @@ Model weights go through `services/model_store.py`:
 flowchart TD
     S{"caption_language"} -->|same| N["no translation"]
     S -->|en| WT["Whisper task=translate<br/>(same pass, any spoken language)"]
-    S -->|"hi / fr / de / nl"| D{"detected == target?"}
+    S -->|"any other caption language"| D{"detected == target?"}
     D -->|yes| N
     D -->|no| K{"Gemini key set?<br/>(Settings, else env)"}
     K -->|yes| GM["Gemini, 25 lines/batch,<br/>3 attempts, backoff 2 s·2ⁿ"]
     GM -->|ok, aligned| OK["captions replaced, timings kept"]
     GM -->|any failure| L
-    K -->|no| L["M2M100 local (CTranslate2)<br/>line by line, beam 4"]
+    K -->|no| L["M2M100 local (CTranslate2)<br/>a sentence at a time, beam 4"]
     L -->|ok| OK2["captions replaced<br/>(+ notice if Gemini failed)"]
     L -->|error| KEEP["keep spoken-language captions<br/>+ notice; job still completes"]
 ```
@@ -281,7 +299,20 @@ flowchart TD
 - A Gemini batch is rejected unless it returns a JSON array **of the same
   length**. A misaligned array would put the wrong text on each timing.
 - M2M100 needs the source language. It uses Whisper's detected language and
-  refuses codes missing from its vocabulary (`UnsupportedLanguage`).
+  refuses codes missing from its vocabulary (`UnsupportedLanguage`). Every
+  caption language is in its list (`M2M100_LANGUAGES`, held to
+  `languages.LANGUAGES` by a test).
+- **Sentences, not fragments** (v1.0.7). `sentence_groups` joins captions
+  until one ends a sentence (`. ! ? … । ॥` and closing quotes), up to 4
+  captions or 400 characters; the joined sentence is translated once and
+  `split_like` splits it back over the same captions in proportion to their
+  source lengths, at word boundaries, preferring a cut after punctuation
+  within two words. Timings never move. A sentence with fewer translated
+  words than captions is translated caption by caption instead.
+- **Decode guards:** `max_decoding_length` = 3 × the longest source in tokens
+  + 10, `no_repeat_ngram_size` 4, `repetition_penalty` 1.1. M2M100 can run
+  away on languages it has seen little of (a remembered news paragraph in
+  place of a caption).
 - The M2M100 weights are third-party CTranslate2 conversions, **pinned to a
   commit** (`M2M100_MODELS`).
 - `ModelDownloadError` propagates and fails the job with its message. Any
@@ -385,7 +416,8 @@ NVENC.
     `constraints.txt`, with CPU torch; the CUDA variant adds pinned
     `nvidia-cublas-cu12`/`nvidia-cudnn-cu12`;
   - stage `runtime` adds the apt packages (ffmpeg and fonts), copies the venv
-    and fonts, then the app;
+    and the vendored fonts (`frontend/public/fonts`, a late layer, so a font
+    change is a small update), then the app;
   - **the version `ARG`/`LABEL`/`ENV` are last**, so a new version only
     changes the image config.
 - **Frontend:** `deps` → `build` (`npm run build`, standalone) → `runtime`

@@ -225,7 +225,27 @@ exports client references, not functions, and prerendering fails with
   Native on purpose: it's keyboard- and screen-reader-complete, and opens the
   system picker on phones.
 - `Range` (`range.tsx` + `range.module.css`): a themed range input. The fill
-  is passed as `--fill` (0–1), clamped.
+  is passed as `--fill` (0–1), clamped. The style panel's `Slider` keeps the
+  value being dragged in its own state, set in the input event, and follows
+  the saved style when that changes (v1.0.7): a value read back through the
+  query cache arrives a render late, and React would reset the thumb to the
+  old value in between.
+- **Searchable pickers** (`styles/font-picker.tsx`, `videos/language-picker.tsx`):
+  the one deliberate exception to "native controls first". A native
+  `<select>` can't be searched, and its type-ahead matches only the start of
+  one label, which fails a list of 1,301 fonts or of languages named in
+  their own scripts. Both are a button (`aria-haspopup="listbox"`) over a
+  search input (`role="combobox"`, `aria-activedescendant`) and a
+  `role="listbox"`; Arrow keys, Home/End, Enter, Escape and Tab work as in a
+  select, and a click outside closes. Language options show the language's
+  own name first (with `lang`), then the English one; search matches either,
+  or the code, accents optional. The language step keeps its radio cards and
+  adds a search field above them.
+- **Dependent controls stay put.** A control that has no effect in the
+  current state (outline colour with a box, box colour and padding without
+  one) is shown disabled, not removed: in a two-column grid, controls that
+  appear and vanish move every control after them, including one being
+  dragged (v1.0.7).
 
 ### Card (`card.tsx`)
 
@@ -284,6 +304,8 @@ after it.
 | `layout/app-footer.tsx`, `layout/brand.tsx` | shell |
 | `.glass-surface`, `.glass-panel`, `.rail-tabs` (`globals.css`) | the glass treatment (auth screens and editor panels), with a fallback for engines without `backdrop-filter` |
 | `.bar-fill` | solid accent progress fill |
+| `captions/caption-overlay.tsx` grab handle | a 28 px round `bg-primary` button with a grip icon on the caption's top edge (at the anchor's point), always visible because touch has no hover; pushed down just enough to stay whole at the top of the frame. Drags the caption by mouse or touch; focused, the arrow keys move it 1% of the frame, Shift 10%. A click focuses it and does not play the video. From the editor mockup's "Drag placement" grip |
+| Caption fonts for Indic scripts | Noto Sans Devanagari, Bengali, Tamil and Malayalam, vendored in `public/fonts` with `unicode-range` in `globals.css`, listed first in every caption's stack; the same files the export burns with |
 
 ## 7. Empty, loading and error states
 

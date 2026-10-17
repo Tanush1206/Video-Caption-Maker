@@ -137,9 +137,17 @@ or a dev server. On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first.
 cd scripts/ui-check && npm ci && npx playwright install chromium
 node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
-node checks.js http://localhost:3000 theme not-found retry-small editor-languages
+node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step script-fonts
+VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap   # change that video's style
 node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes data: test installs only
 ```
+
+The editor checks in the second line need a **completed video with
+captions** and change its caption style (reset to defaults before and
+after): run them on the dev stack or a test install. `VCM_CHECK_VIDEO`
+picks the video, otherwise the newest completed one is used. Run them on a
+16:9 and a 9:16 video; a portrait frame is taller than the window, which is
+what the 9:16 run is for.
 
 | Script | Fails when |
 |---|---|
@@ -148,7 +156,15 @@ node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes 
 | `checks.js theme` | Settings lacks Light/Dark/System; System isn't the default, doesn't clear the stored choice, or doesn't follow an OS change live; an explicit choice doesn't stick |
 | `checks.js not-found` | an unknown address isn't a 404 with the app's own page and a working way back |
 | `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
-| `checks.js editor-languages` | the editor's caption-language select doesn't offer all six choices enabled. Read-only (it presents a video as completed with one caption) |
+| `checks.js editor-languages` | the editor's caption-language picker doesn't offer every served language with its own and English name, or its search (English name, own name, accents optional), Enter, Escape or outside click don't work. Read-only |
+| `checks.js language-step` | the language step lacks a card per served language, or its search by English name, own name or code doesn't filter the cards, or a found language can't be chosen. Read-only (a file is picked, never uploaded) |
+| `checks.js script-fonts` | an Indic caption isn't drawn in its bundled Noto face (Chromium's own report of the fonts used), or the Latin words in it are. Read-only |
+| `checks.js style-sliders` | any style slider at 375 or 1440 px doesn't follow a drag, moves while dragged, ignores a click or an arrow key, shows a different number, doesn't update the preview within 0.5 s, or doesn't survive a reload |
+| `checks.js caption-drag` | the caption, dragged by mouse or touch at 375 or 1440 px, jumps on grab or release, doesn't follow the pointer, leaves the frame or changes size past any edge, isn't saved where it was dropped, toggles playback, or moves on reload |
+| `checks.js caption-handle` | the grab handle is under 24x24, covered, doesn't drag the caption by mouse or touch with no jump, isn't whole inside the frame at the top, or a click on it plays the video or doesn't focus it |
+| `checks.js caption-keyboard` | arrow keys on the handle don't move the caption 1% (Shift 10%) clamped to the frame, scroll the page, seek the video, lose focus, or aren't saved |
+| `checks.js caption-size` | the preview's font-size isn't size × scale / the served win span, or its line height isn't libass's cell |
+| `checks.js caption-wrap` | a wrapped caption's lines aren't balanced (shortest / longest ≤ 0.8), as libass balances them |
 | `flow.js` | the guarded UI flow (delete, settings change and back, SRT and MP4 export and download) fails, or the guard refuses any of the app's own requests |
 
 Required for every UI change (PROGRESS.md, v1.0.4 rules):
@@ -202,7 +218,14 @@ Full layer digests are in PROGRESS.md.
 | Hardware tiers and model choice | `test_local_install.py` (`test_a_big_gpu_gets_large_v3_in_float16`, `test_cpu_with_little_ram_gets_small_int8`, …) | GPU, CPU and low-RAM runs (§4) |
 | Local mode: no credentials, session without cookie, settings validation | `test_local_install.py` | |
 | Gemini key never returned by any response and never logged (SQL echo included) | `test_local_install.py` (`test_the_gemini_key_is_never_logged_or_returned_anywhere`) | |
-| All five caption languages available without a key | `test_videos.py` (`test_every_caption_language_is_available_without_a_gemini_key`) | `checks.js editor-languages` |
+| All caption languages available without a key, each with its own name | `test_videos.py` (`test_every_caption_language_is_available_without_a_gemini_key`, `test_language_options_carry_each_name_in_its_own_language`) | `checks.js editor-languages`, `language-step` |
+| Every caption language is one M2M100 lists; the rejected ones are refused | `test_translation.py` (`test_every_caption_language_translates_offline`), `test_transcription.py` | |
+| Local translation by sentence, split back over the same captions; decode guards | `test_translation.py` | the translation sweep (§4, "Adding a caption language") |
+| Preview = burn: position, box colour and opacity, box height | `test_exports.py` (`test_burned_caption_sits_where_the_preview_puts_it`) | `checks.js caption-drag` (saved fraction = preview centre) |
+| Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
+| Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |
+| Reset and presets clear a dragged position | `test_caption_styles.py` (`test_reset_and_presets_clear_a_hand_placement`) | |
+| Caption drag, grab handle, keyboard placement, style sliders | | `checks.js caption-drag`, `caption-handle`, `caption-keyboard`, `style-sliders` |
 | Deleting a video deletes its export files | `test_exports.py` (`test_deleting_the_video_deletes_its_export_files`; fails without the fix) | |
 | `/api/ask` without a key says a key is needed | `test_search.py` | |
 | API version is `VCM_VERSION` | `test_version.py` | |
@@ -272,6 +295,31 @@ simulate a small machine.
   need a GPU.
 - The verified GPU stack is pinned (PROGRESS.md, "Pinned GPU stack": RTX 5080,
   sm_120, CTranslate2 4.8.1, cuBLAS 12.9.2.10, cuDNN 9.24.0.43).
+
+### Adding a caption language
+
+What v1.0.7 did for its eight, and what any further one needs before it is
+offered (PROGRESS.md v1.0.7 has the scripts' output):
+
+1. **M2M100 has it:** the code is one of the model's own language tokens
+   (`translation.M2M100_LANGUAGES`, read from `shared_vocabulary.json` of the
+   pinned revision). Not there → not offered: the core flow is offline, and a
+   Gemini-only language is not acceptable.
+2. **Translation sweep:** two 8-line texts (a cooking clip with mid-sentence
+   splits, and a general "set up the app" text) from English, run through
+   `translate_locally` in the dev worker, each output translated back to
+   English. Check the script (share of letters in the expected Unicode
+   block), missing or repeated text, punctuation, and read the round trip.
+   Clearly unusable (wrong script, mostly invented) → not offered, reported
+   with a sample. Usable but weak → offered, listed in PRD §10 and README.
+3. **Fonts and shaping:** burn a caption per language through
+   `rendering.burn_captions` with the default and a display font; libass must
+   log no missing glyph, and the frame is checked by eye for shaping (vowel
+   signs before their consonant, conjuncts, no dotted circles). A script
+   with no face in the image gets a vendored one (`SCRIPT_FONTS`).
+4. **Code:** `LANGUAGES` and `NATIVE_NAMES` in `services/languages.py`; the
+   tests that list languages; PRD, README, API.md, CHANGELOG.
+5. **E2E on GPU** with the new language, MP4 burn included.
 
 ## 5. Clean-machine install testing
 

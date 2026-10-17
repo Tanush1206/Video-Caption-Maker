@@ -456,6 +456,64 @@ most every 5 s.
 follows the name, so anything else given the alias `frontend` on the network
 would be trusted. Only the compose file assigns it.
 
+---
+
+## D14. A caption language is admitted on evidence, offline only
+
+**Date:** v1.0.7 (2026-10-16)
+
+**Context.** Twelve languages were asked for. M2M100 lists a hundred, but
+"in the model's list" is not "usable": on two short texts, Kannada returned
+a remembered news story in place of three captions, Gujarati printed web
+crawl furniture ("Read also:"), and Punjabi inverted a sentence's meaning.
+
+**Decision.** A language is offered only if (1) M2M100 lists it, so the core
+flow works offline; (2) a translation sweep is usable (right script, mostly
+right meaning); (3) it burns correctly in a bundled or installed font with
+complex shaping; (4) it passes E2E. Usable but weak is offered and listed as
+a limitation. TESTING.md "Adding a caption language" is the procedure; a test
+holds `LANGUAGES` to `M2M100_LANGUAGES`.
+
+**Alternatives.**
+- Offer every M2M100 language: rejected; users would get invented captions
+  with no warning.
+- Gemini-only languages: rejected; the app must work without a key or a
+  network.
+
+**Trade-offs.** Telugu, Kannada, Gujarati and Punjabi are left out until a
+better local model exists, which is a model change and the maintainer's call.
+
+---
+
+## D15. The preview reproduces libass's metrics, not the other way round
+
+**Date:** v1.0.7 (2026-10-16)
+
+**Context.** Measured on burned frames, the preview drew captions up to
+1.76x larger than the export (libass sizes a face by its win cell, CSS by its
+em), wrapped lines greedily where libass balances them, and drew Indic text
+in whatever font the viewer's OS had.
+
+**Decision.** The burn is the product, so the preview follows it:
+- the style serves the face's win span; the preview divides the font size by
+  it and uses it as the line height;
+- `text-wrap: balance`, as libass's WrapStyle 0;
+- Devanagari, Bengali, Tamil and Malayalam in vendored Noto faces in both
+  renderers, named per run in the ASS with `\fs` scaled to the caption
+  font's em, and first in the CSS stack with `unicode-range`.
+
+**Alternatives.**
+- Change the burn to CSS semantics (scale `Fontsize` by the span): would
+  change every existing export's size, and still leave wrapping and fallback
+  fonts to two different engines.
+- Render the preview with libass (WebAssembly): one renderer, but a large
+  dependency and a rewrite of the overlay, its drag and its handle.
+
+**Trade-offs.** A caption is now drawn smaller in the editor than before
+v1.0.7 — at the size it always had in the MP4. `text-wrap: balance` and
+libass's smart wrap are close, not identical (measured 60/63% against
+61/64% of the frame).
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open
