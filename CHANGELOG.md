@@ -10,8 +10,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Caption placement and styling fixed and made to match the export exactly,
 better local translation, and eight more caption languages. No migration.
-Expected update from 1.0.6: about 12 MB (backend: app code, the vendored
-fonts and their cache, ~4 MB; frontend: the app and its fonts, ~9 MB); the
+Expected update from 1.0.6: about 14 MB (backend: app code, the vendored
+fonts and their cache, ~5 MB; frontend: the app and its fonts, ~9 MB); the
 dependency layers are unchanged. Measured with `update_layers.py` after
 release.
 
@@ -29,7 +29,8 @@ release.
   (1% of the frame, Shift 10%) (`7100933`).
 - **Noto Sans Devanagari, Bengali, Tamil and Malayalam** bundled (OFL), so
   the preview and the export draw those scripts from the same files
-  (`af21ba2`, `40113f6`).
+  (`af21ba2`, `40113f6`), and **Noto Sans** for Cyrillic in caption fonts
+  that have none, such as the default Poppins (`069d74a`).
 
 ### Changed
 - **Local translation works a sentence at a time.** Captions that make up
@@ -47,7 +48,8 @@ release.
 - **Wrapped lines are balanced in the preview**, as libass balances them in
   the export (`fdeb305`).
 - **Indic text uses the same font and size in the preview and the export**
-  (`0edbf20`).
+  (`0edbf20`), and so does Russian in a caption font without Cyrillic, which
+  burned about 1.3x the size of the Latin beside it (`0900c29`, `6ed3501`).
 
 ### Fixed
 - **Style sliders snapped back and jumped while dragged.** A click or arrow

@@ -317,6 +317,7 @@ Enum: `left`, `center`, `right`
 | `reference_height` | integer | no | default `1080` |
 | `font_family` | string | no | default `""` |
 | `font_css_stack` | string | no | default `""` |
+| `script_font_stack` | string | no | default `""`. CSS families the preview lists before the caption font, each limited to its script by `unicode-range`: the Indic Noto faces, plus `"Noto Sans"` when the caption font has no Cyrillic. The same faces the burn uses (v1.0.7) |
 | `font_win_span` | number | no | default `1.0`. The caption face's (usWinAscent + usWinDescent) / unitsPerEm. libass makes that span the font size, CSS the em, so the preview draws at `font_size × scale / font_win_span` with that line height (v1.0.7) |
 
 ### CaptionStyleUpdate

@@ -305,7 +305,7 @@ after it.
 | `.glass-surface`, `.glass-panel`, `.rail-tabs` (`globals.css`) | the glass treatment (auth screens and editor panels), with a fallback for engines without `backdrop-filter` |
 | `.bar-fill` | solid accent progress fill |
 | `captions/caption-overlay.tsx` grab handle | a 28 px round `bg-primary` button with a grip icon on the caption's top edge (at the anchor's point), always visible because touch has no hover; pushed down just enough to stay whole at the top of the frame. Drags the caption by mouse or touch; focused, the arrow keys move it 1% of the frame, Shift 10%. A click focuses it and does not play the video. From the editor mockup's "Drag placement" grip |
-| Caption fonts for Indic scripts | Noto Sans Devanagari, Bengali, Tamil and Malayalam, vendored in `public/fonts` with `unicode-range` in `globals.css`, listed first in every caption's stack; the same files the export burns with |
+| Caption fonts for other scripts | Noto Sans Devanagari, Bengali, Tamil and Malayalam, and Noto Sans for Cyrillic, vendored in `public/fonts` with `unicode-range` in `globals.css`; the served `script_font_stack` lists them before the caption font (Cyrillic only for fonts without it); the same files the export burns with |
 
 ## 7. Empty, loading and error states
 

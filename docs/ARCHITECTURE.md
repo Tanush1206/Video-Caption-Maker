@@ -222,7 +222,9 @@ logged and never surfaced to the user.
   - Devanagari, Bengali, Tamil and Malayalam are drawn in vendored Noto
     faces (`SCRIPT_FONTS`, `frontend/public/fonts`): the ASS names the face
     per run with `\fs` scaled to the caption font's em; CSS lists the faces
-    first, each limited to its script with `unicode-range`.
+    first, each limited to its script with `unicode-range`. Cyrillic gets
+    the same treatment (Noto Sans) only when the caption font's own charset
+    (`fc-query`) lacks it; the style serves the resulting `script_font_stack`.
 - A box (`box_opacity > 0`, BorderStyle 3) is filled by libass with
   **OutlineColour**, so that field carries the box colour and opacity when
   boxed.
