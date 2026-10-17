@@ -1,4 +1,4 @@
-Noto Sans Devanagari, Noto Sans Bengali, Noto Sans Tamil, Noto Sans Malayalam
+Noto Sans, Noto Sans Devanagari, Noto Sans Bengali, Noto Sans Tamil, Noto Sans Malayalam
 (NotoSans*-Regular.ttf / -Bold.ttf, from Debian fonts-noto-core 20201225-2)
 
 Copyright 2010, 2012-2020 Google Inc.; 2015-2020 Google LLC.
