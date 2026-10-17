@@ -18,12 +18,6 @@ REFERENCE_HEIGHT = 1080
 BOX_PADDING_MIN = 8
 
 
-class VerticalPosition(str, enum.Enum):
-    TOP = "top"
-    MIDDLE = "middle"
-    BOTTOM = "bottom"
-
-
 class Alignment(str, enum.Enum):
     LEFT = "left"
     CENTER = "center"
@@ -42,7 +36,7 @@ class CaptionStyle(Base):
 
     So the knobs are the intersection: font, size, weight, slant, decoration,
     tracking, fill colour, outline, drop shadow, an optional opaque box,
-    alignment and margin.
+    alignment, width and position.
 
     `uppercase` is the single exception, and it earns it: ASS has no property
     for letter case, so the burn-in transforms the text and the preview uses
@@ -128,12 +122,8 @@ class CaptionStyle(Base):
     # drawn on the video, not what they say.
     uppercase: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    position: Mapped[VerticalPosition] = mapped_column(
-        Enum(VerticalPosition, name="caption_vertical_position",
-             values_callable=lambda e: [m.value for m in e]),
-        nullable=False,
-        default=VerticalPosition.BOTTOM,
-    )
+    # How the lines sit against each other and in the box: flush left,
+    # centred or flush right. Not where the caption is — that is pos_x/pos_y.
     alignment: Mapped[Alignment] = mapped_column(
         Enum(Alignment, name="caption_alignment",
              values_callable=lambda e: [m.value for m in e]),
@@ -141,35 +131,24 @@ class CaptionStyle(Base):
         default=Alignment.CENTER,
     )
 
-    # Distance from the edge the captions sit against, in reference pixels.
+    # Where the caption box's centre is, as a fraction of the frame, 0..1.
     #
-    # `margin_h` keeps a second job under free placement, below: ASS derives the
-    # line-wrapping width from MarginL/MarginR whether or not the caption is
-    # positioned by hand, so it stays meaningful in both modes.
-    margin_v: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
-    margin_h: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    # Fractions rather than reference pixels because this is the geometry the
+    # user sets by pointing at the frame, and a fraction survives a video of
+    # any shape. It is where the box is *asked* to be: each caption is slid
+    # inside the safe area on its own (services/caption_layout.py), because
+    # each one is a different size.
+    pos_x: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    pos_y: Mapped[float] = mapped_column(Float, nullable=False, default=0.88)
 
-    # Free placement: where the caption sits as a fraction of the frame, 0..1.
-    #
-    # NULL means "anchored", and the pair above does the positioning — nine
-    # anchors and a gap from the edge, which is all an ASS *Style* line can say.
-    # That remains the default and every existing row keeps it.
-    #
-    # When both are set the burn-in switches to a per-event `\pos()` override
-    # instead. That is a different mechanism from the Style line, and it was
-    # avoided for exactly that reason until it was actually measured: burning
-    # the same text with and without `\pos` puts it in the same place to within
-    # a pixel, and — the part that decides it — MarginL/MarginR still govern
-    # where lines wrap under `\pos`. So the override buys arbitrary placement
-    # without costing the wrap width, and the preview can still describe
-    # everything the export will do.
-    #
-    # Fractions rather than reference pixels because this is the one geometry
-    # the user sets by pointing at the frame, and a fraction survives a video
-    # of any shape. Nullable rather than defaulted to the centre so that
-    # "never placed by hand" stays distinguishable from "placed at 0.5".
-    pos_x: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
-    pos_y: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    # The box's width as a fraction of the frame's width; text wraps inside it
+    # and nowhere else. NULL is the default for the frame's shape, 80% of a
+    # landscape or square frame and 85% of a portrait one — a style doesn't
+    # know its video's shape until something measures it.
+    box_width: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+
+    # Lines before the font shrinks to fit (see caption_layout).
+    max_lines: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

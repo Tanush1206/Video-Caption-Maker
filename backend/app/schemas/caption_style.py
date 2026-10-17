@@ -1,12 +1,13 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.caption_style import REFERENCE_HEIGHT, Alignment, VerticalPosition
+from app.models.caption_style import REFERENCE_HEIGHT, Alignment
 from app.services import font_library
 from app.services.caption_style import (
     FONTS_BY_KEY,
     PRESETS,
     font_win_span,
     get_font,
+    script_font_span,
     script_fonts,
 )
 
@@ -14,6 +15,12 @@ from app.services.caption_style import (
 # normalised: the ASS conversion slices fixed byte positions out of this string,
 # so accepting a second shape would mean two code paths that must agree forever.
 HEX_COLOUR = r"^#(?:[0-9a-fA-F]{6})$"
+
+
+class ScriptFont(BaseModel):
+    family: str
+    chars: str
+    span: float
 
 
 class CaptionStyleRead(BaseModel):
@@ -36,16 +43,14 @@ class CaptionStyleRead(BaseModel):
     box_color: str
     box_opacity: float
     box_padding: int
-    position: VerticalPosition
     alignment: Alignment
-    margin_v: int
-    margin_h: int
-
-    # Null unless the caption has been placed by hand — see the model. The
-    # client switches the preview between two positioning modes on this, so it
-    # has to come back as null rather than be smoothed into a number.
-    pos_x: float | None = None
-    pos_y: float | None = None
+    # The box's centre, as fractions of the frame (see the model).
+    pos_x: float
+    pos_y: float
+    # Null: the default for the frame's shape, which the client resolves the
+    # same way the layout does (caption_layout.default_width).
+    box_width: float | None = None
+    max_lines: int = 2
 
     # Echoed so the client never has to hardcode it to size the preview.
     reference_height: int = REFERENCE_HEIGHT
@@ -68,6 +73,10 @@ class CaptionStyleRead(BaseModel):
     # (caption_style.script_fonts). Cyrillic is in it only for a caption font
     # that has no Cyrillic of its own.
     script_font_stack: str = ""
+    # The same faces as data, for the editor's copy of the layout rule: which
+    # characters each draws (a regex character class, as the burn matches
+    # them) and its win span, which sets the height of a line it is on.
+    script_fonts: list[ScriptFont] = []
 
     @model_validator(mode="after")
     def resolve_font(self) -> "CaptionStyleRead":
@@ -75,9 +84,12 @@ class CaptionStyleRead(BaseModel):
         self.font_family = font.render_name
         self.font_css_stack = font.css_stack
         self.font_win_span = round(font_win_span(self.font_key, self.bold), 4)
-        self.script_font_stack = ", ".join(
-            f'"{family}"' for family, _ in script_fonts(self.font_key, self.bold)
-        )
+        faces = script_fonts(self.font_key, self.bold)
+        self.script_font_stack = ", ".join(f'"{family}"' for family, _ in faces)
+        self.script_fonts = [
+            ScriptFont(family=family, chars=chars, span=round(script_font_span(family, self.bold), 4))
+            for family, chars in faces
+        ]
         return self
 
 
@@ -109,21 +121,26 @@ class CaptionStyleUpdate(BaseModel):
     box_color: str | None = Field(default=None, pattern=HEX_COLOUR)
     box_opacity: float | None = Field(default=None, ge=0.0, le=1.0)
     box_padding: int | None = Field(default=None, ge=0, le=60)
-    position: VerticalPosition | None = None
     alignment: Alignment | None = None
-    margin_v: int | None = Field(default=None, ge=0, le=500)
-    margin_h: int | None = Field(default=None, ge=0, le=500)
 
-    # Fractions of the frame. Clamped to the frame rather than left open: a
-    # caption at 1.4 is off the canvas, invisible in the preview *and* in the
-    # burn, which is the same failure the margin bounds exist to prevent.
-    #
-    # Note the route applies the patch with `exclude_unset`, not
-    # `exclude_none` — so an explicit null here really does clear the field and
-    # hand the caption back to its anchor. That is how the placement grid
-    # undoes a hand-drag, and it only works because of that distinction.
+    # Fractions of the frame. Bounded to the frame, though the layout slides
+    # every caption inside the safe area whatever these say.
     pos_x: float | None = Field(default=None, ge=0.0, le=1.0)
     pos_y: float | None = Field(default=None, ge=0.0, le=1.0)
+    # 20% up to the whole safe area's width (94%). An explicit null puts it
+    # back on the default for the frame's shape: the route applies the patch
+    # with `exclude_unset`, so a null is sent through, not dropped.
+    box_width: float | None = Field(default=None, ge=0.2, le=0.94)
+    max_lines: int | None = Field(default=None, ge=1, le=3)
+
+    @model_validator(mode="after")
+    def no_nulls(self) -> "CaptionStyleUpdate":
+        # Every other column is NOT NULL, so a null there was a 500 from the
+        # database instead of a 422 here.
+        nulls = [f for f in self.model_fields_set if f != "box_width" and getattr(self, f) is None]
+        if nulls:
+            raise ValueError(f"Can't be null: {', '.join(sorted(nulls))}")
+        return self
 
     @field_validator("font_key")
     @classmethod
