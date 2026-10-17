@@ -41,7 +41,12 @@ async function openEditor(page, base, id) {
  * width) makes every geometry check wrong.
  */
 const waitForCaption = (page, text) =>
-  page.waitForFunction((t) => document.querySelector("[data-caption-text]")?.textContent === t, text);
+  page.waitForFunction(
+    // Whitespace ignored: the caption is drawn as the layout's lines with a
+    // space between them, and a word too long for the box is broken across two.
+    (t) => document.querySelector("[data-caption-text]")?.textContent.replace(/\s+/g, "") === t.replace(/\s+/g, ""),
+    text
+  );
 
 const styleOf = async (page, base, id) => (await page.request.get(`${base}/api/videos/${id}/style`)).json();
 
@@ -63,8 +68,8 @@ const previewSignature = (page) =>
     const text = document.querySelector("[data-caption-text]");
     const s = getComputedStyle(text);
     const r = text.getBoundingClientRect();
-    const b = getComputedStyle(text.closest("[data-caption-box]"));
-    return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, b.padding, b.maxWidth].join("|");
+    const w = document.querySelector("[data-caption-wrap-box]")?.getBoundingClientRect();
+    return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, w?.width].join("|");
   });
 
 /** A pointer that can be a mouse or a finger, driving one drag gesture. */
@@ -91,6 +96,131 @@ async function pointer(page, kind) {
 }
 
 const near = (a, b, tolerance = 1.5) => Math.abs(a - b) <= tolerance;
+
+// ── Caption layout checks ──────────────────────────────────────────────
+// The texts, looks and sizes of backend/tests/test_caption_layout.py.
+const LAYOUT_TEXTS = {
+  short: "Hi there",
+  long: "Finally, stir everything together until the soup is completely smooth, then serve it hot with fresh bread, a little butter and a handful of chopped herbs on top",
+  hindi: "अंत में, सब कुछ चिकना होने तक मिलाएँ और इसे ताज़ी रोटी के साथ परोसें",
+  german: "Donaudampfschifffahrtsgesellschaftskapitän und Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz",
+  russian: "Наконец, перемешайте все, пока оно не будет гладким, и подайте его с хлебом",
+};
+const LOOKS = {
+  "box-pad-0": { box_opacity: 1, box_padding: 0, outline_width: 0, shadow: 0 },
+  "box-pad-40": { box_opacity: 1, box_padding: 40, outline_width: 0, shadow: 0 },
+  "outline-shadow": { box_opacity: 0, outline_width: 8, shadow: 8 },
+};
+const SIZES = { small: 28, large: 110 };
+const GRID = [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5], [0.5, 0.5]];
+const SAFE = 0.03;
+
+/** VCM_SAFE_VIDEOS: one 16:9, one 9:16 and one 1:1 video, comma-separated. */
+async function safeVideos(page, base) {
+  if (process.env.VCM_SAFE_VIDEOS) return process.env.VCM_SAFE_VIDEOS.split(",").map(Number);
+  return [await editorVideo(page, base)];
+}
+
+/** Answer the video as completed with these captions, two seconds each. */
+async function mockCaptions(page, base, id, texts) {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await page.route(`**/api/videos/${id}`, async (route) => {
+    const body = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...body, status: "completed", stage: null, error_message: null } });
+  });
+  await page.route(`**/api/videos/${id}/captions`, (route) =>
+    route.fulfill({
+      json: {
+        total: texts.length,
+        items: texts.map((text, i) => ({
+          id: i + 1, video_id: id, sequence: i, start_ms: i * 2000, end_ms: i * 2000 + 1900, text,
+          confidence: -0.2, override_color: null, override_bold: null, override_scale: null,
+        })),
+      },
+    })
+  );
+}
+
+async function openMocked(page, base, id) {
+  await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+}
+
+/** Seek to caption `i` and wait until it's drawn in its loaded fonts. */
+async function showCaption(page, i, text) {
+  await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, i * 2 + 1);
+  await waitForCaption(page, text);
+  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await waitForCaption(page, text);
+}
+
+/** The painted caption — box, or text plus outline and shadow — and the frame. */
+const paintedBox = (page) =>
+  page.evaluate(() => {
+    const box = document.querySelector("[data-caption-box]");
+    const f = document.querySelector("video").parentElement.getBoundingClientRect();
+    const r = box.getBoundingClientRect();
+    const s = getComputedStyle(box);
+    const out = parseFloat(s.webkitTextStrokeWidth || "0") / 2;
+    const shadow = s.textShadow && s.textShadow !== "none" ? parseFloat(s.textShadow.match(/(-?[\d.]+)px/)?.[1] ?? "0") : 0;
+    return {
+      frame: { x: f.x, y: f.y, w: f.width, h: f.height },
+      box: { x: r.x - out, y: r.y - out, w: r.width + 2 * out + shadow, h: r.height + 2 * out + shadow },
+    };
+  });
+
+function insideSafeArea({ frame, box }) {
+  const e = 0.5;
+  return (
+    box.x >= frame.x + SAFE * frame.w - e && box.y >= frame.y + SAFE * frame.h - e &&
+    box.x + box.w <= frame.x + (1 - SAFE) * frame.w + e && box.y + box.h <= frame.y + (1 - SAFE) * frame.h + e
+  );
+}
+
+const describe = ({ frame, box }) =>
+  `l ${((box.x - frame.x) / frame.w * 100).toFixed(1)}% t ${((box.y - frame.y) / frame.h * 100).toFixed(1)}% r ${((frame.x + frame.w - box.x - box.w) / frame.w * 100).toFixed(1)}% b ${((frame.y + frame.h - box.y - box.h) / frame.h * 100).toFixed(1)}%`;
+
+/** Drag the grip to (fx, fy) of the frame — anywhere, including far outside it. */
+async function dragGrip(page, fx, fy, kind = "mouse") {
+  const grip = page.getByRole("button", { name: "Move caption" });
+  await grip.scrollIntoViewIfNeeded();
+  const h = await grip.boundingBox();
+  const frame = await page.evaluate(() => { const r = document.querySelector("video").parentElement.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+  const drag = await pointer(page, kind);
+  const x = h.x + h.width / 2, y = h.y + h.height / 2;
+  await drag.down(x, y);
+  await drag.move(frame.x + fx * frame.w, frame.y + fy * frame.h);
+  await page.waitForTimeout(100);
+  await drag.up();
+  await page.waitForTimeout(900);
+}
+
+/** The wrap box (where the width handles sit), the text and its line count. */
+const wrapBox = (page) =>
+  page.evaluate(() => {
+    const w = document.querySelector("[data-caption-wrap-box]").getBoundingClientRect();
+    const t = document.querySelector("[data-caption-box]").getBoundingClientRect();
+    const f = document.querySelector("video").parentElement.getBoundingClientRect();
+    return {
+      x: w.x, w: w.width, cx: w.x + w.width / 2,
+      lines: document.querySelectorAll("[data-caption-line]").length,
+      text: { w: t.width, h: t.height },
+      frame: { x: f.x, y: f.y, w: f.width, h: f.height },
+    };
+  });
+
+/** The burn's layout of these texts (backend/scripts/caption_layout.py), via the dev stack. */
+function burnLayout(style, texts, frame) {
+  const { execFileSync } = require("node:child_process");
+  const path = require("node:path");
+  const out = execFileSync(
+    "docker",
+    ["compose", "exec", "-T", "backend", "python", "scripts/caption_layout.py"],
+    { cwd: path.resolve(__dirname, "../.."), input: JSON.stringify({ style, texts, width: frame.width, height: frame.height }), encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" } }
+  );
+  return JSON.parse(out);
+}
 
 const CHECKS = {
   // Settings → Interface theme offers Light, Dark and System. System stores
@@ -342,8 +472,8 @@ const CHECKS = {
           // inside half a second.
           const updated = await page.waitForFunction((b) => {
             const t = document.querySelector("[data-caption-text]"); const s = getComputedStyle(t); const r = t.getBoundingClientRect();
-            const p = getComputedStyle(t.closest("[data-caption-box]"));
-            return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, p.padding, p.maxWidth].join("|") !== b;
+            const w = document.querySelector("[data-caption-wrap-box]")?.getBoundingClientRect();
+            return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, w?.width].join("|") !== b;
           }, before, { timeout: 500 }).then(() => true, () => false);
           ok(`${at}: ${tab}/${name} preview updates`, updated);
         }
@@ -395,7 +525,7 @@ const CHECKS = {
         // Measured against the frame, so a page scroll doesn't count.
         // Nor so far that the caption's own top edge meets the frame's,
         // where the clamp (correctly) stops it.
-        const dy = -Math.min(frame.h * 0.3, start.text.cy - 20, start.text.y - frame.y - 10);
+        const dy = -Math.min(frame.h * 0.3, start.text.cy - 20, start.text.y - frame.y - SAFE * frame.h - 10);
         await drag.move(start.text.cx + 12, start.text.cy + dy);
         await page.waitForTimeout(80);
         now = await captionGeometry(page);
@@ -404,13 +534,13 @@ const CHECKS = {
         ok(`${at}: follows the pointer`, near(travelled, dy - scrolled), `${travelled.toFixed(1)} vs ${(dy - scrolled).toFixed(1)}`);
 
         // Far past each edge in turn: the caption stays whole, its own size,
-        // and inside the frame.
+        // and inside the safe area.
         for (const [name, x, y] of [["right", frame.x + frame.w * 3, now.text.cy], ["bottom", now.text.cx, frame.y + frame.h * 3], ["left", frame.x - frame.w * 2, now.text.cy], ["top", now.text.cx, frame.y - frame.h * 2]]) {
           await drag.move(x, y);
           await page.waitForTimeout(80);
           const g = await captionGeometry(page);
-          const inside = g.text.x >= frame.x - 1 && g.text.y >= frame.y - 1 && g.text.x + g.text.w <= frame.x + frame.w + 1 && g.text.y + g.text.h <= frame.y + frame.h + 1;
-          ok(`${at}: past the ${name} edge stays inside the frame`, inside, JSON.stringify(g.text));
+          const p = await paintedBox(page);
+          ok(`${at}: past the ${name} edge stays inside the safe area`, insideSafeArea(p), describe(p));
           ok(`${at}: past the ${name} edge keeps its size`, near(g.text.w, size.w, 2) && near(g.text.h, size.h, 2), `${g.text.w.toFixed(0)}x${g.text.h.toFixed(0)} vs ${size.w.toFixed(0)}x${size.h.toFixed(0)}`);
         }
 
@@ -447,73 +577,61 @@ const CHECKS = {
   // The preview draws a caption at the size libass will burn it: libass makes
   // a face's whole cell (usWinAscent + usWinDescent) the font size, CSS makes
   // the em the font size, so the preview's font-size is size x scale / span
-  // and its line-height is the span. Measured against the burn on dev: within
-  // 1% in width for Liberation Sans, Poppins and Lato (Poppins Bold was 1.76x
-  // before). Changes data: see editorVideo.
+  // (times the layout's shrink, a 2% step) and each line is one cell tall.
+  // Measured against the burn on dev: within 1% in width for Liberation Sans,
+  // Poppins and Lato (Poppins Bold was 1.76x before). Changes data.
   async "caption-size"(browser, base) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const id = await editorVideo(page, base);
     await openEditor(page, base, id);
     for (const font of ["sans", "poppins", "lato", "anton"]) {
-      const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_key: font, font_size: 80 } })).json();
+      const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_key: font, font_size: 80, max_lines: 3 } })).json();
       await page.reload({ waitUntil: "networkidle" });
       await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
-      await page.locator("[data-caption-text]").waitFor();
+      await page.locator("[data-caption-line]").first().waitFor();
+      await page.evaluate(() => document.fonts.ready);
       const got = await page.evaluate(() => {
         const t = document.querySelector("[data-caption-text]");
         const frame = document.querySelector("video").parentElement.getBoundingClientRect();
-        const s = getComputedStyle(t);
-        return { size: parseFloat(s.fontSize), line: parseFloat(s.lineHeight), frameH: frame.height };
+        const line = document.querySelector("[data-caption-line]").getBoundingClientRect();
+        return { size: parseFloat(getComputedStyle(t).fontSize), line: line.height, frameH: frame.height };
       });
       const scale = got.frameH / style.reference_height;
-      const expected = (style.font_size * scale) / style.font_win_span;
+      const full = (style.font_size * scale) / style.font_win_span;
+      const shrink = got.size / full;
+      const step = Math.abs(shrink * 50 - Math.round(shrink * 50)) < 0.01 && shrink <= 1 + 1e-3 && shrink >= 0.7 - 1e-3;
       ok(`caption-size: ${font} served a win span`, style.font_win_span > 1, String(style.font_win_span));
-      ok(`caption-size: ${font} font-size = size x scale / span`, Math.abs(got.size - expected) < 0.05, `${got.size.toFixed(2)} vs ${expected.toFixed(2)}`);
-      ok(`caption-size: ${font} line height = the libass cell`, Math.abs(got.line - style.font_size * scale) < 0.1, `${got.line.toFixed(2)} vs ${(style.font_size * scale).toFixed(2)}`);
+      ok(`caption-size: ${font} font-size = size x scale / span x a 2% shrink step`, step, `${got.size.toFixed(2)} vs ${full.toFixed(2)} (x${shrink.toFixed(3)})`);
+      ok(`caption-size: ${font} line height = the libass cell`, Math.abs(got.line - got.size * style.font_win_span) < 0.1, `${got.line.toFixed(2)} vs ${(got.size * style.font_win_span).toFixed(2)}`);
     }
     await page.request.delete(`${base}/api/videos/${id}/style`);
     await page.close();
   },
 
-  // A caption that wraps breaks into lines of about the same width, as
-  // libass's WrapStyle 0 does in the export (measured: 61% + 64% of the
-  // frame there; the preview's greedy wrap was 86% + 38%). Changes data:
-  // see editorVideo.
+  // A caption that wraps breaks into lines of about the same width, the way
+  // the layout breaks it for the burn too: two or three even lines rather
+  // than one full line and a word. Changes data: see editorVideo.
   async "caption-wrap"(browser, base) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const id = await editorVideo(page, base);
-    await openEditor(page, base, id);
-    const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
-    const long = captions.items.reduce((a, b) => (b.text.length > a.text.length ? b : a));
-    const lineWidths = () => page.evaluate(() => {
-      const range = document.createRange();
-      range.selectNodeContents(document.querySelector("[data-caption-text]"));
-      const byLine = new Map();
-      for (const r of range.getClientRects()) {
-        const key = Math.round(r.top);
-        const [lo, hi] = byLine.get(key) ?? [Infinity, -Infinity];
-        byLine.set(key, [Math.min(lo, r.left), Math.max(hi, r.right)]);
-      }
-      return [...byLine.values()].map(([lo, hi]) => hi - lo);
-    });
-    // Chrome balances blocks of up to six lines and leaves longer ones as
-    // they are (a documented limit of text-wrap: balance), and five lines of
-    // whole words can't be even anyway — so the size is brought down until
-    // the caption wraps into two or three lines on this frame.
-    let widths = [];
-    for (const size of [130, 100, 80, 60, 45]) {
-      await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_size: size } });
-      await page.reload({ waitUntil: "networkidle" });
-      await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
-      await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (long.start_ms + long.end_ms) / 2000);
-      await waitForCaption(page, long.text);
-      widths = await lineWidths();
-      if (widths.length <= 3) break;
+    await mockCaptions(page, base, id, [LAYOUT_TEXTS.long]);
+    for (const [box_width, max_lines] of [[0.8, 2], [0.5, 3]]) {
+      await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_size: 54, box_width, max_lines, pos_x: 0.5, pos_y: 0.5 } });
+      await openMocked(page, base, id);
+      await showCaption(page, 0, LAYOUT_TEXTS.long);
+      const widths = await page.evaluate(() =>
+        [...document.querySelectorAll("[data-caption-line]")].map((line) => {
+          const range = document.createRange();
+          range.selectNodeContents(line);
+          return range.getBoundingClientRect().width;
+        })
+      );
+      const at = `caption-wrap@${box_width}/${max_lines}`;
+      ok(`${at}: the long caption wraps`, widths.length >= 2, `${widths.length} lines`);
+      const ratio = Math.min(...widths) / Math.max(...widths);
+      ok(`${at}: lines are even`, ratio > 0.75, `${widths.map((w) => w.toFixed(0)).join(" / ")} (min/max ${ratio.toFixed(2)})`);
     }
-    ok("caption-wrap: the long caption wraps", widths.length >= 2, `${widths.length} lines`);
-    ok("caption-wrap: text-wrap is balance", (await page.locator("[data-caption-text]").evaluate((e) => getComputedStyle(e).textWrap || getComputedStyle(e).textWrapStyle)).includes("balance"));
-    const ratio = Math.min(...widths) / Math.max(...widths);
-    ok("caption-wrap: lines are balanced like the export's", ratio > 0.8, `${widths.map((w) => w.toFixed(0)).join(" / ")} (min/max ${ratio.toFixed(2)})`);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.request.delete(`${base}/api/videos/${id}/style`);
     await page.close();
   },
@@ -646,9 +764,10 @@ const CHECKS = {
       await page.waitForTimeout(100);
       const g2 = await captionGeometry(page);
       ok(`${at}: Shift+ArrowUp moves up 10%`, near(g2.text.cy - g1.text.cy, -g0.frame.h * 0.1, 1.5), `${(g2.text.cy - g1.text.cy).toFixed(1)} vs ${(-g0.frame.h * 0.1).toFixed(1)}`);
-      // Across, predicted with the same clamp the editor applies: a wide
-      // caption has little room to move sideways.
-      const lo = g2.frame.x + g2.text.w / 2, hi = g2.frame.x + g2.frame.w - g2.text.w / 2;
+      // Across, predicted with the safe area the layout keeps it in: a wide
+      // caption has little room to move sideways. The bound is approximate
+      // (the layout also keeps room for glyph overhang), hence the tolerance.
+      const lo = g2.frame.x + SAFE * g2.frame.w + g2.text.w / 2, hi = g2.frame.x + (1 - SAFE) * g2.frame.w - g2.text.w / 2;
       const clampX = (x) => Math.max(lo, Math.min(hi, x));
       const afterRight = clampX(g2.text.cx + g2.frame.w * 0.01);
       const expectedX = clampX(afterRight - g2.frame.w * 0.1);
@@ -656,7 +775,7 @@ const CHECKS = {
       await page.keyboard.press("Shift+ArrowLeft");
       await page.waitForTimeout(100);
       const g3 = await captionGeometry(page);
-      ok(`${at}: ArrowRight then Shift+ArrowLeft, clamped to the frame`, near(g3.text.cx, expectedX, 1.5), `${g3.text.cx.toFixed(1)} vs ${expectedX.toFixed(1)}`);
+      ok(`${at}: ArrowRight then Shift+ArrowLeft, kept in the safe area`, near(g3.text.cx, expectedX, 6), `${g3.text.cx.toFixed(1)} vs ${expectedX.toFixed(1)}`);
       ok(`${at}: arrows don't scroll the page`, (await page.evaluate(() => scrollY)) === scroll);
       // The editor's transport shortcuts seek on the arrows; not while the
       // handle has them.
@@ -666,7 +785,8 @@ const CHECKS = {
       for (let k = 0; k < 15; k++) await page.keyboard.press("Shift+ArrowRight");
       await page.waitForTimeout(150);
       const g4 = await captionGeometry(page);
-      ok(`${at}: stays inside the frame`, g4.text.x + g4.text.w <= g4.frame.x + g4.frame.w + 1 && g4.text.y + g4.text.h <= g4.frame.y + g4.frame.h + 1);
+      const p4 = await paintedBox(page);
+      ok(`${at}: stays inside the safe area`, insideSafeArea(p4), describe(p4));
       await page.waitForTimeout(800);
       const saved = await styleOf(page, base, id);
       const fx = (g4.text.cx - g4.frame.x) / g4.frame.w, fy = (g4.text.cy - g4.frame.y) / g4.frame.h;
@@ -674,6 +794,256 @@ const CHECKS = {
       await page.request.delete(`${base}/api/videos/${id}/style`);
       await page.close();
     }
+  },
+  // The caption box is fully inside the safe area (3% from every edge) in the
+  // preview, for a grid of positions — corners, edge centres, the centre, and
+  // dragged far outside the frame on each side — x five texts (short and long
+  // English, Hindi, German with long words, Russian) x padding 0 and large x
+  // small and large font, on every video in VCM_SAFE_VIDEOS (one each 16:9,
+  // 9:16 and 1:1; default: the editor video). Measures the painted element:
+  // the box, or the text plus its outline and shadow. Changes data.
+  async "caption-safe-area"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const ids = await safeVideos(page, base);
+    for (const id of ids) {
+      await mockCaptions(page, base, id, Object.values(LAYOUT_TEXTS));
+      for (const [look, lookFields] of Object.entries(LOOKS)) {
+        for (const [size, font_size] of Object.entries(SIZES)) {
+          const style = { ...lookFields, font_size, box_width: null, max_lines: 2 };
+          const at = `caption-safe-area@${id}/${look}/${size}`;
+          const failures = [];
+          for (const [x, y] of GRID) {
+            await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...style, pos_x: x, pos_y: y } });
+            await openMocked(page, base, id);
+            for (const [name, text] of Object.entries(LAYOUT_TEXTS)) {
+              await showCaption(page, Object.values(LAYOUT_TEXTS).indexOf(text), text);
+              const g = await paintedBox(page);
+              if (!insideSafeArea(g)) failures.push(`${name}@${x},${y}: ${describe(g)}`);
+            }
+          }
+          ok(`${at}: inside the safe area at every grid position`, failures.length === 0, failures.slice(0, 3).join("; "));
+          // Far outside on each side, by dragging the grip.
+          const dragged = [];
+          for (const [side, fx, fy] of [["left", -3, 0.5], ["right", 4, 0.5], ["top", 0.5, -3], ["bottom", 0.5, 4]]) {
+            await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...style, pos_x: 0.5, pos_y: 0.5 } });
+            await openMocked(page, base, id);
+            await showCaption(page, 1, LAYOUT_TEXTS.long);
+            await dragGrip(page, fx, fy);
+            for (const [name, text] of Object.entries(LAYOUT_TEXTS)) {
+              await showCaption(page, Object.values(LAYOUT_TEXTS).indexOf(text), text);
+              const g = await paintedBox(page);
+              if (!insideSafeArea(g)) dragged.push(`${name} past ${side}: ${describe(g)}`);
+            }
+          }
+          ok(`${at}: inside the safe area when dragged far past each edge`, dragged.length === 0, dragged.slice(0, 3).join("; "));
+        }
+      }
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await page.request.delete(`${base}/api/videos/${id}/style`);
+    }
+    await page.close();
+  },
+
+  // The box's width: the handles on its edges change it by mouse, touch and
+  // keyboard; the Max width slider changes it too, and both show the same
+  // value; it doesn't change when the box is dragged from the centre to any
+  // edge; Max lines and the font shrink work. Changes data.
+  async "caption-width"(browser, base) {
+    for (const width of [1440, 375]) {
+      for (const kind of ["mouse", "touch"]) {
+        const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: kind === "touch" });
+        const page = await context.newPage();
+        const id = await editorVideo(page, base);
+        const at = `caption-width@${width}/${kind}`;
+        await mockCaptions(page, base, id, [LAYOUT_TEXTS.long, LAYOUT_TEXTS.short]);
+        await page.request.delete(`${base}/api/videos/${id}/style`);
+        await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.5, pos_y: 0.5, font_size: 40, max_lines: 3 } });
+        await openMocked(page, base, id);
+        await showCaption(page, 0, LAYOUT_TEXTS.long);
+
+        const right = page.locator('[data-width-handle="right"]');
+        await right.scrollIntoViewIfNeeded();
+        const before = await wrapBox(page);
+        const h = await right.boundingBox();
+        const drag = await pointer(page, kind);
+        await drag.down(h.x + h.width / 2, h.y + h.height / 2);
+        await drag.move(h.x + h.width / 2 - before.frame.w * 0.25, h.y + h.height / 2);
+        await page.waitForTimeout(100);
+        await drag.up();
+        await page.waitForTimeout(900);
+        const after = await wrapBox(page);
+        const expected = before.w - before.frame.w * 0.5;
+        ok(`${at}: dragging the right edge in narrows the box both sides`, near(after.w, expected, 3) && near(after.cx, before.cx, 2), `${after.w.toFixed(0)} vs ${expected.toFixed(0)}`);
+        ok(`${at}: the text rewraps inside the narrower box`, after.text.w <= after.w + 1 && after.text.w < before.text.w, `text ${before.text.w.toFixed(0)} → ${after.text.w.toFixed(0)}, box ${after.w.toFixed(0)}`);
+        const saved = await styleOf(page, base, id);
+        ok(`${at}: the width is saved`, near(saved.box_width, after.w / after.frame.w, 0.005), `${saved.box_width} vs ${(after.w / after.frame.w).toFixed(3)}`);
+        await page.getByRole("radio", { name: "Position" }).click();
+        const slider = page.getByLabel(/^Max width —/);
+        ok(`${at}: the Max width slider shows it`, Number(await slider.inputValue()) === Math.round(saved.box_width * 100), `${await slider.inputValue()} vs ${saved.box_width}`);
+
+        // The slider moves the handles.
+        await slider.evaluate((e) => e.scrollIntoView({ block: "center" }));
+        await slider.focus();
+        for (let k = 0; k < 10; k++) await page.keyboard.press("ArrowRight");
+        await page.waitForTimeout(900);
+        const slid = await wrapBox(page);
+        ok(`${at}: the slider widens the box on the video`, near(slid.w, after.w + slid.frame.w * 0.1, 3), `${slid.w.toFixed(0)} vs ${(after.w + slid.frame.w * 0.1).toFixed(0)}`);
+        const handleNow = await right.boundingBox();
+        ok(`${at}: the handle follows the slider`, near(handleNow.x + handleNow.width / 2, slid.x + slid.w, 2));
+
+        // Keyboard on the handle: outward widens by 1%.
+        if (kind === "mouse") {
+          await right.focus();
+          await page.keyboard.press("ArrowRight");
+          await page.waitForTimeout(900);
+          const keyed = await styleOf(page, base, id);
+          ok(`${at}: ArrowRight on the right edge widens by 1%`, near(keyed.box_width, Math.round(saved.box_width * 100 + 10 + 1) / 100, 0.002), String(keyed.box_width));
+          ok(`${at}: the slider follows the handle`, Number(await slider.inputValue()) === Math.round(keyed.box_width * 100));
+        }
+
+        // Dragged from the centre to each edge: same width, same lines.
+        await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.5, pos_y: 0.5, box_width: 0.6 } });
+        await openMocked(page, base, id);
+        await showCaption(page, 0, LAYOUT_TEXTS.long);
+        const centred = await wrapBox(page);
+        for (const [side, fx, fy] of [["left", -3, 0.5], ["right", 4, 0.5], ["top", 0.5, -3], ["bottom", 0.5, 4]]) {
+          await dragGrip(page, fx, fy, kind);
+          const g = await wrapBox(page);
+          ok(`${at}: dragged to the ${side} edge keeps its width and lines`, near(g.w, centred.w, 1) && g.lines === centred.lines && near(g.text.w, centred.text.w, 1), `${g.w.toFixed(0)}/${g.lines} vs ${centred.w.toFixed(0)}/${centred.lines}`);
+        }
+        await page.unrouteAll({ behavior: "ignoreErrors" });
+        await page.request.delete(`${base}/api/videos/${id}/style`);
+        await context.close();
+      }
+    }
+
+    // Max lines and the font shrink, on one long caption in a narrow box.
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    await mockCaptions(page, base, id, [LAYOUT_TEXTS.long]);
+    const measured = {};
+    for (const max_lines of [1, 2, 3]) {
+      await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.5, pos_y: 0.5, font_size: 54, box_width: 0.5, max_lines } });
+      await openMocked(page, base, id);
+      await showCaption(page, 0, LAYOUT_TEXTS.long);
+      measured[max_lines] = await page.evaluate(() => ({
+        lines: document.querySelectorAll("[data-caption-line]").length,
+        size: parseFloat(getComputedStyle(document.querySelector("[data-caption-text]")).fontSize),
+      }));
+    }
+    const full = measured[3].size;
+    ok("caption-width: Max lines 3 fits without shrinking", measured[3].lines <= 3, JSON.stringify(measured[3]));
+    for (const n of [1, 2]) {
+      const m = measured[n];
+      const shrunk = m.size / full;
+      ok(`caption-width: Max lines ${n} shrinks the font, no further than 70%`, shrunk < 1 && shrunk >= 0.7 - 1e-3, shrunk.toFixed(3));
+      ok(`caption-width: Max lines ${n} keeps to ${n} lines, or one more`, m.lines <= n + 1, `${m.lines} lines`);
+    }
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.close();
+  },
+
+  // Snapping: a guide line shows, and the box snaps, when its centre comes
+  // near the frame's horizontal or vertical centre; a guide shows at the
+  // safe area's edge when the box is pushed against it. Presets and Reset put
+  // the box centred inside the safe area. Changes data.
+  async "caption-snap"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    await mockCaptions(page, base, id, [LAYOUT_TEXTS.short]);
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.3, pos_y: 0.3 } });
+    await openMocked(page, base, id);
+    await showCaption(page, 0, LAYOUT_TEXTS.short);
+    const grip = page.getByRole("button", { name: "Move caption" });
+    await grip.scrollIntoViewIfNeeded();
+    const g0 = await captionGeometry(page);
+    const h = await grip.boundingBox();
+    const sx = h.x + h.width / 2, sy = h.y + h.height / 2;
+    // Aim 5px off the centre lines: within reach of the snap.
+    const tx = sx + (g0.frame.x + g0.frame.w / 2 - g0.text.cx) + 5;
+    const ty = sy + (g0.frame.y + g0.frame.h / 2 - g0.text.cy) - 5;
+    await page.mouse.move(sx, sy); await page.mouse.down();
+    await page.mouse.move(tx, ty, { steps: 8 });
+    await page.waitForTimeout(100);
+    const guides = await page.evaluate(() => [...document.querySelectorAll("[data-guide]")].map((e) => e.dataset.guide));
+    const g1 = await captionGeometry(page);
+    ok("caption-snap: guides show at the centre lines", guides.includes("center-x") && guides.includes("center-y"), guides.join(","));
+    ok("caption-snap: the box snaps to the frame's centre", near(g1.text.cx, g1.frame.x + g1.frame.w / 2, 0.6) && near(g1.text.cy, g1.frame.y + g1.frame.h / 2, 0.6), `${(g1.text.cx - g1.frame.x - g1.frame.w / 2).toFixed(1)},${(g1.text.cy - g1.frame.y - g1.frame.h / 2).toFixed(1)}`);
+    await page.mouse.move(tx + g0.frame.w * 3, ty, { steps: 8 });
+    await page.waitForTimeout(100);
+    const edge = await page.evaluate(() => [...document.querySelectorAll("[data-guide]")].map((e) => e.dataset.guide));
+    ok("caption-snap: a guide shows at the safe area's edge", edge.includes("safe-right"), edge.join(","));
+    await page.mouse.up();
+    await page.waitForTimeout(900);
+    ok("caption-snap: guides go when the drag ends", (await page.locator("[data-guide]").count()) === 0);
+
+    await page.getByRole("radio", { name: "Position" }).click();
+    for (const [label, y] of [["Top", 0.12], ["Middle", 0.5], ["Bottom", 0.88]]) {
+      await page.getByRole("radiogroup", { name: "Placement" }).getByRole("radio", { name: label }).click();
+      await page.waitForTimeout(900);
+      const s = await styleOf(page, base, id);
+      const g = await paintedBox(page);
+      ok(`caption-snap: ${label} centres the box at ${y}`, s.pos_x === 0.5 && s.pos_y === y && near(g.box.x + g.box.w / 2, g.frame.x + g.frame.w / 2, 1) && insideSafeArea(g), `${s.pos_x},${s.pos_y}`);
+    }
+    await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.1, pos_y: 0.1, box_width: 0.3, max_lines: 3 } });
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Reset" }).click();
+    await page.waitForTimeout(900);
+    const reset = await styleOf(page, base, id);
+    ok("caption-snap: Reset puts the box back centred at the bottom", reset.pos_x === 0.5 && reset.pos_y === 0.88 && reset.box_width === null && reset.max_lines === 2, JSON.stringify([reset.pos_x, reset.pos_y, reset.box_width, reset.max_lines]));
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.close();
+  },
+
+  // The editor and the burn lay a caption out alike: the same lines, and the
+  // same painted rectangle (within half a percent of the frame). The burn's
+  // layout comes from backend/scripts/caption_layout.py through `docker
+  // compose exec`, so this runs on the dev stack only. Changes data.
+  async "layout-parity"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const ids = await safeVideos(page, base);
+    const texts = Object.values(LAYOUT_TEXTS);
+    for (const id of ids) {
+      await mockCaptions(page, base, id, texts);
+      for (const [look, lookFields] of Object.entries(LOOKS)) {
+        for (const [size, font_size] of Object.entries(SIZES)) {
+          const at = `layout-parity@${id}/${look}/${size}`;
+          const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...lookFields, font_size, pos_x: 0.5, pos_y: 0.5, box_width: null, max_lines: 2 } })).json();
+          await openMocked(page, base, id);
+          const frame = await page.evaluate(() => ({ width: document.querySelector("video").videoWidth, height: document.querySelector("video").videoHeight }));
+          const burn = burnLayout(style, texts, frame);
+          const mismatches = [];
+          for (const [i, text] of texts.entries()) {
+            await showCaption(page, i, text);
+            const preview = await page.evaluate(() => {
+              const box = document.querySelector("[data-caption-box]");
+              const f = document.querySelector("video").parentElement.getBoundingClientRect();
+              const s = getComputedStyle(box);
+              // The rectangle the layout gave it: the element, plus the
+              // outline that the element's own box leaves out.
+              const out = s.backgroundColor === "rgba(0, 0, 0, 0)" ? parseFloat(s.webkitTextStrokeWidth || "0") / 2 : 0;
+              const r = box.getBoundingClientRect();
+              return {
+                lines: [...box.querySelectorAll("[data-caption-line]")].map((l) => l.textContent),
+                x: (r.x - out - f.x) / f.width, y: (r.y - out - f.y) / f.height,
+                width: (r.width + 2 * out) / f.width, height: (r.height + 2 * out) / f.height,
+              };
+            });
+            const want = burn[i];
+            const sameLines = JSON.stringify(preview.lines) === JSON.stringify(want.lines);
+            const close = ["x", "y", "width", "height"].every((k) => Math.abs(preview[k] - want[k]) < 0.005);
+            if (!sameLines || !close) mismatches.push(`${text.slice(0, 12)}…: ${JSON.stringify(preview.lines)} vs ${JSON.stringify(want.lines)}; ${["x", "y", "width", "height"].map((k) => `${k} ${preview[k].toFixed(3)}/${want[k].toFixed(3)}`).join(" ")}`);
+          }
+          ok(`${at}: same lines and rectangle as the burn`, mismatches.length === 0, mismatches.slice(0, 2).join(" | "));
+        }
+      }
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await page.request.delete(`${base}/api/videos/${id}/style`);
+    }
+    await page.close();
   },
 };
 

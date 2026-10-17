@@ -22,7 +22,7 @@ On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first, or the page paths
 (`/settings`) are rewritten into Windows paths.
 
 Screenshots are written to the folder you name; keep them out of the repo.
-The editor checks (`style-sliders`, `caption-drag`, `caption-handle`,
+The editor checks (`style-sliders`, `caption-drag`, `caption-handle`, `caption-width`, `caption-snap`, `caption-safe-area`,
 `caption-keyboard`, `caption-size`, `caption-wrap`) need a completed video
 with captions and reset its caption style before and after; run them on the
 dev stack or a test install. `node checks.js <base>` with no check names
