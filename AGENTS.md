@@ -117,6 +117,13 @@ anything.**
     `DELETE` uninstall only on a disposable clean machine.
 18. **The install and the dev stack both use port 3000.** Run `vcm stop`
     before `docker compose up`.
+    - **Ask before taking port 3000.** Before switching it from the
+      installed app to the dev stack, tell the maintainer and wait for an
+      OK. An open browser tab on `localhost:3000` talks to whichever stack
+      holds the port, so without warning an upload meant for the installed
+      app lands in the dev stack (it happened during the v1.0.7 release).
+    - **Say when it's back.** Run `vcm start` as soon as the dev work is
+      done, and tell the maintainer the installed app is back on port 3000.
 19. **Give time estimates for long operations** (image pulls, model
     downloads, E2E runs) instead of waiting silently.
 
