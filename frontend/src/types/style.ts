@@ -1,4 +1,3 @@
-export type VerticalPosition = "top" | "middle" | "bottom";
 export type Alignment = "left" | "center" | "right";
 
 export interface CaptionStyle {
@@ -29,25 +28,19 @@ export interface CaptionStyle {
   box_opacity: number;
   /** Only drawn when `box_opacity` is above 0, matching ASS BorderStyle 3. */
   box_padding: number;
-  position: VerticalPosition;
+  /** How the lines justify against each other and sit in the box. */
   alignment: Alignment;
-  margin_v: number;
   /**
-   * Also the line-wrapping width in both renderers: ASS derives it from
-   * MarginL/MarginR whether or not the caption is placed by hand, so this
-   * still means something under free placement while `margin_v` does not.
+   * The caption box's centre, as fractions of the frame. Where the box is
+   * asked to be: each caption is slid inside the safe area on its own
+   * (lib/caption-layout.ts), because each one is a different size.
    */
-  margin_h: number;
-  /**
-   * Free placement, as a fraction of the frame — set by dragging the caption.
-   *
-   * Null means the caption is anchored by `position`/`alignment` and the
-   * margins, which is the default and what the placement grid sets. The two
-   * modes are exclusive, and the overlay switches on this being null, so it
-   * must survive as null rather than being defaulted to a number.
-   */
-  pos_x: number | null;
-  pos_y: number | null;
+  pos_x: number;
+  pos_y: number;
+  /** The box's width as a fraction of the frame's; null is the default for its shape. */
+  box_width: number | null;
+  /** Lines before the font shrinks to fit (down to 70%). */
+  max_lines: number;
   reference_height: number;
   /**
    * Resolved server-side from `font_key`. With 1301 catalogue families the
@@ -67,6 +60,15 @@ export interface CaptionStyle {
    * script by unicode-range), the same ones the burn uses.
    */
   script_font_stack: string;
+  /** The same faces as data, for the layout: their characters and win spans. */
+  script_fonts: ScriptFont[];
+}
+
+export interface ScriptFont {
+  family: string;
+  /** A regex character class body, exactly as the burn matches it. */
+  chars: string;
+  span: number;
 }
 
 export interface Font {
