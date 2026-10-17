@@ -41,8 +41,8 @@ In practice that means:
 - **A single person on their own computer**: Windows 10/11 with WSL 2, Linux,
   or (untested) macOS, with Docker installed. Local mode has exactly one user
   (`get_or_create_local_user`, `backend/app/services/auth.py`).
-- **People who need captions in English, Hindi, French, German or Dutch**: the
-  five caption languages in `backend/app/services/languages.py`.
+- **People who need captions in English, Hindi, Bengali, Marathi, Tamil, Malayalam, French, German, Dutch, Spanish, Portuguese, Italian or Russian**: the thirteen caption languages in
+  `backend/app/services/languages.py` (v1.0.7; five before).
 - **Non-developers**: the README's install, use and troubleshooting sections
   assume no programming knowledge, and error messages are written as sentences
   (`friendly_error` in `backend/app/workers/transcription.py`).
@@ -84,7 +84,9 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 2. **Upload** (stepper step 1): drag a file onto the drop zone or pick one.
    The client accepts `.mp4 .mov .mkv .webm .avi .m4v`.
 3. **Language** (step 2, before anything is sent): "Same as spoken" (the
-   default) or one of English, Hindi, French, German, Dutch. The spoken
+   default) or one of the thirteen caption languages, shown as cards with
+   each language's own name and its English one, and searchable by either
+   or by code. The spoken
    language is always auto-detected on upload. The file is then uploaded with
    `caption_language`, and the browser goes to `/editor/{id}`.
 4. **Processing** (on the video page): the worker runs
@@ -93,8 +95,9 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
    allows one (`useEta`).
 5. **Edit** (optional): caption text, timing on the waveform timeline,
    split/merge/add/delete, the style studio, and a Redo with another
-   spoken/caption language. The Redo offers all five caption languages, with
-   or without a Gemini key, as the language step does.
+   spoken/caption language. The Redo offers every caption language in a
+   searchable picker, with or without a Gemini key, as the language step
+   does.
 6. **Export** (step 3): MP4 (burned in, at a chosen resolution), SRT, VTT or
    JSON, then a download with an optional file name.
 
@@ -155,6 +158,12 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 - Other targets are transcribed first, then translated by Gemini if a key is
   set, and by local M2M100 otherwise.
 - Caption timings are never changed by translation.
+- The local translator sees whole sentences: captions that make up one
+  sentence are translated together and split back over the same captions
+  (v1.0.7). Its output is capped at three times the source length and may not
+  repeat a four-token phrase.
+- Every caption language is one M2M100 itself lists (`M2M100_LANGUAGES`), so
+  the core flow works offline.
 - Whisper and the translator are never in memory together.
 - Long Whisper segments are split into captions of at most 84 characters or
   6 seconds (`_split_long`).
@@ -206,6 +215,22 @@ the speech model for every video until changed back.
   `minimal`. The Google Fonts library can also be searched, and a family is
   downloaded the first time it is used.
 - Sizes are stored against a 1080p reference and scaled to the output.
+- **The preview is the export** (v1.0.7, measured against burned frames):
+  - a caption is drawn at libass's size: the preview divides the font size
+    by the face's win span (`font_win_span`) and uses it as the line height;
+  - wrapped lines are balanced, as libass's WrapStyle 0 balances them;
+  - Devanagari, Bengali, Tamil and Malayalam are drawn in bundled Noto faces
+    in both renderers, at the caption font's em, with complex shaping in the
+    burn;
+  - a dragged caption keeps its size and stays inside the frame; a burned
+    box sits on `pos_x`/`pos_y` in its own colour and opacity.
+- **Placement:** drag the caption anywhere on the frame or by its grab
+  handle (a 28 px dot on its top edge, mouse or touch); with the handle
+  focused, arrow keys move it 1% of the frame and Shift+arrow 10%. The
+  placement grid, a preset and Reset all put it back on an anchor.
+- **Sliders** move with the pointer, the arrow keys and a click; controls
+  that have no effect (a colour with nothing to colour) stay in place,
+  greyed out, rather than appearing and disappearing.
 
 ### F6. Export
 
@@ -283,7 +308,7 @@ removed.
 |---|---|---|
 | `same` | yes (default) | Captions in whatever language Whisper detected. **Any** language Whisper recognises. |
 | `en` | yes | From non-English audio: Whisper `task="translate"` in the same pass |
-| `hi`, `fr`, `de`, `nl` | yes | Transcribe, then translate (Gemini or M2M100) |
+| `hi`, `bn`, `mr`, `ta`, `ml`, `fr`, `de`, `nl`, `es`, `pt`, `it`, `ru` | yes | Transcribe, then translate (Gemini or M2M100). Weak locally: the Indian languages (Tamil and Malayalam most), see §10 |
 | `auto` | spoken-language value | Default for `spoken_language`; Whisper detects from the first 30 s |
 
 ### Input formats
@@ -333,9 +358,10 @@ What the code deliberately does not do:
   Gemini fits").
 - **No network exposure.** Only the UI port is published, and only on
   `127.0.0.1` (`docker-compose.prod.yml`).
-- **No caption languages beyond the five targets.** Out of scope for now,
-  possible in future ([ROADMAP.md](ROADMAP.md)). "Same as spoken" is the only
-  route to other languages.
+- **No caption language that isn't checked end to end.** Thirteen targets
+  (v1.0.7); others only after the checks in TESTING.md "Adding a caption
+  language", and right-to-left and CJK are planned work
+  ([ROADMAP.md](ROADMAP.md)). "Same as spoken" is the route to the rest.
 - **No term highlighting in search.** Semantic matches have no matched words
   (PROGRESS.md, v1.0.4).
 - **No features without data behind them.** The v1.0.4 redesign left out the
@@ -376,13 +402,23 @@ From the README "Known limitations" and PROGRESS.md:
   all. Since `b8c446a` it retries and produces rough captions, with the
   low-confidence notice on 4 of 6 jobs (PROGRESS.md, R4). A larger model in
   Settings is much better if the machine has the memory.
-- **Local translation is literal.** M2M100 translates each caption line on its
-  own, so idioms and fragments read more literally than with Gemini, which
-  sees 25 lines at once.
+- **Local translation is literal, and weak for the Indian languages.** M2M100
+  translates a sentence at a time, so idioms still read literally, and a
+  sentence split back over its captions can break inside a phrase
+  ("…und eine | Tasse Wasser…"). Into Hindi, Bengali, Marathi, Tamil and
+  Malayalam the script, timing and sentence shape are right but everyday
+  nouns often are not ("onions" became "apples", "soap" or "sugar"); Tamil
+  and Malayalam are the weakest added, and Hindi is weaker as a source than
+  as a target. Samples per pair are in PROGRESS.md (v1.0.7). Gemini, with a
+  key and quota, is much better.
+- **Languages left out (v1.0.7):** Telugu is not in M2M100; Kannada, Gujarati
+  and Punjabi came out of it unusable (invented text, wrong script); Arabic
+  and Urdu need right-to-left rendering, Chinese, Japanese and Korean need
+  CJK fonts and line breaking ([ROADMAP.md](ROADMAP.md)).
 - **Burned-in captions in Chinese, Japanese or Korean need a font picked by
-  hand.** This is not about the five caption targets (none of them is CJK).
+  hand.**
   It applies when **"Same as spoken"** is used on Chinese, Japanese or Korean
-  audio. Whisper then produces captions in that script, and the image's
+  audio (none of the thirteen caption targets is CJK). Whisper then produces captions in that script, and the image's
   fallback fonts (`fonts-noto-core`, DejaVu, Liberation) have no CJK glyphs:
   `fc-list :lang=ja`, `:lang=ko` and `:lang=zh-cn` each return 0 families in
   the worker image, while `:lang=hi` returns 2. Without a CJK font chosen in

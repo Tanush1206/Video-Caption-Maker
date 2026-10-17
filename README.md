@@ -43,8 +43,9 @@ Running it again is safe. Your videos and settings are kept.
 ## Use
 
 1. **Upload**: drop a video (`.mp4 .mov .mkv .webm .avi .m4v`).
-2. **Language**: keep "Same as spoken", or pick English, Hindi, French,
-   German or Dutch. The spoken language is detected automatically.
+2. **Language**: keep "Same as spoken", or pick one of 13 caption languages
+   (search by its own name or in English). The spoken language is detected
+   automatically.
 3. **Export**: download the video with captions burned in (MP4), or the
    subtitles as `.srt` / `.vtt`.
 
@@ -57,9 +58,10 @@ below the export step.
 - **Local transcription** with faster-whisper. The model is chosen
   automatically for your hardware: large-v3 on NVIDIA GPUs, large-v3-turbo
   or small on the CPU.
-- **Local translation** between English, Hindi, French, German and Dutch
-  with M2M100. Optionally add a Gemini key for more natural translations,
-  with automatic fallback to the local model.
+- **Local translation** with M2M100 between English, Hindi, Bengali,
+  Marathi, Tamil, Malayalam, French, German, Dutch, Spanish, Portuguese,
+  Italian and Russian, a sentence at a time. Optionally add a Gemini key for
+  more natural translations, with automatic fallback to the local model.
 - **Caption editor**: edit text, retime captions on the waveform, drag them
   on the video, and style them with a large font catalogue.
 - **Export** burned-in MP4, SRT or VTT.
@@ -180,14 +182,24 @@ healthy.
   Docker Desktop for Mac (Apple Silicon runs the amd64 images under
   emulation, which is slow), but nobody has run them there yet. On a Mac
   everything runs on the CPU; NVIDIA GPUs are Windows and Linux only.
-- **Caption languages:** English, Hindi, French, German and Dutch. "Same as
-  spoken" works for any language Whisper recognises.
+- **Caption languages:** English, Hindi, Bengali, Marathi, Tamil, Malayalam,
+  French, German, Dutch, Spanish, Portuguese, Italian and Russian. "Same as
+  spoken" works for any language Whisper recognises. Not offered: Telugu
+  (the local translator doesn't have it); Kannada, Gujarati and Punjabi (its
+  output was unusable); Arabic and Urdu (right-to-left) and Chinese,
+  Japanese and Korean (CJK) are planned, see docs/ROADMAP.md.
+- **Translation into the Indian languages is weak** with the local model:
+  the script, timing and sentence shape are right, but everyday nouns often
+  are not (in a cooking test "onions" became "soap" or "sugar"). Tamil and
+  Malayalam are the weakest; Hindi as the *spoken* language translates worse
+  than Hindi as the target. A Gemini key does much better where it works.
 - **The small speech model** (chosen on machines under 12 GB RAM) is rough
   on fast speech outside English. On Hindi, expect many wrong words; the
   video says so when the model was unsure. A larger model in Settings is
   much better, if the machine has the memory.
-- **Local translation** (M2M100) translates each caption line on its own, so
-  idioms and fragments read more literally than with Gemini.
+- **Local translation** (M2M100) translates a sentence at a time and splits
+  it back over the captions it came from, so a split can land inside a
+  phrase ("…und eine | Tasse Wasser…"), and idioms read literally.
 - **Chinese, Japanese and Korean** captions burned into video need a CJK font
   chosen in the style panel; the built-in fallback font doesn't cover CJK.
 

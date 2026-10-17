@@ -41,11 +41,34 @@ The original 10-milestone build plan is historical and lives in
   images, and it is served from the same place as the files it checks
   ([SECURITY.md §8](SECURITY.md#8-installer-checksum-verification-and-its-limits)).
 
+### Right-to-left caption languages: Arabic and Urdu
+- **What:** captions in Arabic (`ar`) and Urdu (`ur`). Both are in M2M100's
+  language list.
+- **Why not yet:** they are written right to left. The preview, the editor's
+  text fields and the burn all assume left-to-right lines today: placement,
+  alignment, line wrapping and mixed Latin/Arabic runs would each need to be
+  bidi-aware and checked in both renderers. Urdu is also normally set in
+  Nastaliq, a script style that needs its own font and line height.
+- **Must:** a `dir`-aware preview and editor, a burn that matches it
+  (libass shapes Arabic, but alignment and `\pos` assume LTR), a bundled font
+  per script as for the Indic ones, and the same translation sweep as v1.0.7.
+
+### CJK caption languages: Chinese, Japanese, Korean
+- **What:** captions in Chinese (`zh`), Japanese (`ja`) and Korean (`ko`),
+  all in M2M100's list.
+- **Why not yet:** they need CJK fonts (several MB per script, a large
+  update) and different line breaking: Chinese and Japanese have no spaces,
+  so the sentence splitter in `translation.split_like` (word boundaries) and
+  the caption length limits in the transcriber (characters, not words) would
+  both have to change, and the preview's and libass's line breaking would
+  have to agree without spaces to break at.
+
 ## Possible, not planned
-- **More caption languages.** Out of scope for now. The five targets (en, hi,
-  fr, de, nl) are the ones that have been checked end to end; M2M100 could
-  translate more. Adding one means an entry in `services/languages.py`, plus
-  E2E runs for every new pair.
+- **More caption languages.** Thirteen are offered (v1.0.7). Telugu is not in
+  M2M100; Kannada, Gujarati and Punjabi came out of it unusable (samples in
+  PROGRESS.md, v1.0.7). Any of them needs a different local model, which is a
+  model change, not a list entry. A new language is admitted only after the
+  checks in TESTING.md §4 "Adding a caption language".
 - **Hosted (accounts) mode.** The code is kept and tested (`AUTH_MODE=accounts`
   with `NEXT_PUBLIC_AUTH_MODE=accounts`), but it is not an active direction and
   is not shipped. See [DECISIONS.md D2](DECISIONS.md#d2-local-mode-without-login).

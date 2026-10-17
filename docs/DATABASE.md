@@ -190,7 +190,7 @@ values are applied by SQLAlchemy at flush time and are **not** in the schema.
 | `stage_detail` | varchar(200) | yes | | e.g. "Downloading speech model large-v3 · 1.2 of 3.1 GB" |
 | `notice` | varchar(300) | yes | | non-fatal note on a finished job (fallbacks, low confidence) |
 | `spoken_language` | varchar(16) | no | `'auto'` | `auto` or a language code |
-| `caption_language` | varchar(16) | no | `'same'` | `same` or `en` `hi` `fr` `de` `nl` |
+| `caption_language` | varchar(16) | no | `'same'` | `same` or a caption language (`services/languages.py`: `en` `hi` `bn` `mr` `ta` `ml` `fr` `de` `nl` `es` `pt` `it` `ru`) |
 | `recovery_attempts` | integer | no | `0` | automatic requeues; reset by a manual retry |
 | `created_at`, `updated_at` | timestamptz | no | `now()` | |
 

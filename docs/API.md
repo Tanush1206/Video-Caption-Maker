@@ -113,9 +113,9 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi fr de nl`) | `201` [VideoRead](#videoread); transcription is queued | 400 no filename / empty file · 413 too large · 415 type or extension · 422 unknown language · 507 disk full |
+| POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi bn mr ta ml fr de nl es pt it ru`) | `201` [VideoRead](#videoread); transcription is queued | 400 no filename / empty file · 413 too large · 415 type or extension · 422 unknown language · 507 disk full |
 | GET* | `/api/videos` | query `limit` 1–100 (50), `offset` ≥ 0 (0), `status` [VideoStatus](#videostatus) | `200` [VideoList](#videolist) (newest first; `total` counts all matches) | 422 |
-| GET* | `/api/videos/languages` | — | `200` [LanguageOptions](#languageoptions). `translation_available` is **always `true`**: English comes from Whisper, and hi/fr/de/nl from local M2M100, with no key needed | — |
+| GET* | `/api/videos/languages` | — | `200` [LanguageOptions](#languageoptions). `translation_available` is **always `true`**: English comes from Whisper, and the others from local M2M100, with no key needed. Each option carries its own-language name (`native`) | — |
 | GET* | `/api/videos/{video_id}` | — | `200` [VideoRead](#videoread) | 404 `Video not found` |
 | PATCH* | `/api/videos/{video_id}` | [VideoUpdate](#videoupdate) | `200` [VideoRead](#videoread) | 404 · 422 |
 | DELETE* | `/api/videos/{video_id}` | — | `204`; row, file, thumbnail, waveform, vectors and every export file removed | 404 |
@@ -317,6 +317,7 @@ Enum: `left`, `center`, `right`
 | `reference_height` | integer | no | default `1080` |
 | `font_family` | string | no | default `""` |
 | `font_css_stack` | string | no | default `""` |
+| `font_win_span` | number | no | default `1.0`. The caption face's (usWinAscent + usWinDescent) / unitsPerEm. libass makes that span the font size, CSS the em, so the preview draws at `font_size × scale / font_win_span` with that line height (v1.0.7) |
 
 ### CaptionStyleUpdate
 
@@ -490,7 +491,8 @@ Enum: `pending`, `processing`, `completed`, `failed`
 | Field | Type | Required | Constraints / default |
 |---|---|---|---|
 | `code` | string | yes |  |
-| `label` | string | yes |  |
+| `label` | string | yes | English name, or "Auto-detect" / "Same as spoken" |
+| `native` | string \| null | no | the language's name in itself ("বাংলা"); null for `auto` and `same` (v1.0.7) |
 
 ### LanguageOptions
 
