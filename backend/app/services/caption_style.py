@@ -470,16 +470,10 @@ def to_ass_alignment(style: CaptionStyle) -> int:
 
 
 def box_pad(style: CaptionStyle, height: int) -> int:
-    """
-    The box padding or the outline width libass draws, in frame pixels.
-
-    A box is at least 1px out from its text: libass draws no box at all at
-    Outline 0 (measured: a boxed caption with padding 0 burned as bare text),
-    and rounds anything above 0 up to 1px.
-    """
+    """The box padding, or the outline width, in frame pixels."""
     scale = scale_for(height)
     if style.box_opacity > 0:
-        return max(1, round(style.box_padding * scale))
+        return round(style.box_padding * scale)
     return round(style.outline_width * scale)
 
 
@@ -490,6 +484,13 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
     A dict rather than a formatted string so the values can be asserted
     individually in tests. Use `to_ass_style_block` to serialise it — the
     ordering is not something a caller should redo.
+
+    Always BorderStyle 1. A box is not libass's BorderStyle 3: that boxes each
+    run of text separately, and a caption whose Hindi words are each named
+    in their script font (`subtitles._script_runs`) burned as a row of
+    overlapping translucent boxes, darker where they overlapped. The box is
+    drawn instead, as a shape of the layout's exact rectangle under the text
+    (`subtitles._box_event`) — the rectangle the preview paints.
     """
     scale = scale_for(height)
     boxed = style.box_opacity > 0
@@ -504,39 +505,14 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
         "Underline": -1 if style.underline else 0,
         "StrikeOut": -1 if style.strikeout else 0,
         "PrimaryColour": to_ass_colour(style.text_color),
-        # At BorderStyle 3 libass paints the box in OutlineColour, not
-        # BackColour — measured on the rendered pixels: a box asked for in
-        # white came out black (the outline colour) and fully opaque, so every
-        # burned box was the outline colour at 100% whatever the panel said,
-        # and the YouTube preset's 75% box was solid. Unboxed, it is the
-        # stroke colour, as it says.
-        "OutlineColour": (
-            to_ass_colour(style.box_color, style.box_opacity)
-            if boxed
-            else to_ass_colour(style.outline_color)
-        ),
-        #
-        # BackColour is two different things depending on BorderStyle: the
-        # box's own shadow at 3 (never drawn: Shadow is 0 with a box), the
-        # drop-shadow colour at 1. Given the box colour when boxed so a viewer
-        # that reads it as the box fill agrees with libass.
-        #
-        # Getting this wrong is invisible rather than loud. Leaving it as the
-        # box colour at box_opacity means an unboxed style hands the shadow an
-        # alpha of 0 — ASS alpha is *transparency* — and the shadow renders
-        # perfectly, fully invisible, with no error anywhere.
-        "BackColour": (
-            to_ass_colour(style.box_color, style.box_opacity)
-            if boxed
-            else to_ass_colour(style.shadow_color)
-        ),
-        # 3 draws an opaque box behind the text; 1 draws an outline and shadow.
-        "BorderStyle": 3 if boxed else 1,
-        # This field changes meaning with BorderStyle too: stroke width at 1,
-        # box padding at 3.
-        "Outline": box_pad(style, height),
-        # A box already separates the text from the frame, and BackColour is
-        # spoken for, so the shadow is only drawn when there is no box.
+        "OutlineColour": to_ass_colour(style.outline_color),
+        # The drop-shadow colour at BorderStyle 1. Getting this wrong is
+        # invisible rather than loud: ASS alpha is *transparency*, so a box
+        # colour at box_opacity 0 here would draw the shadow fully invisible.
+        "BackColour": to_ass_colour(style.shadow_color),
+        "BorderStyle": 1,
+        # A box replaces the outline and the shadow, in the preview too.
+        "Outline": 0 if boxed else box_pad(style, height),
         "Shadow": 0 if boxed else round(style.shadow * scale),
         "Spacing": round(style.letter_spacing * scale),
         # Every event carries its own `\an`, `\pos` and line breaks from the

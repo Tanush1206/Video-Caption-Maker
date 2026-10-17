@@ -117,44 +117,37 @@ def test_sizes_scale_with_video_height():
     assert style_service.to_ass_style(style, 2160)["Fontsize"] == 108
 
 
-def test_a_box_switches_border_style_and_keeps_padding():
-    outlined = style_service.to_ass_style(a_style(outline_width=0, box_opacity=0.0), 1080)
-    boxed = style_service.to_ass_style(a_style(outline_width=0, box_opacity=0.75), 1080)
-
-    assert outlined["BorderStyle"] == 1
-    assert boxed["BorderStyle"] == 3
-    # At BorderStyle 3 the Outline field is the box's padding. Leaving it at
-    # the user's 0 would print text touching the edges of its own background.
-    assert boxed["Outline"] > 0
-
-
-def test_backcolour_follows_whichever_thing_is_being_drawn():
+def test_a_box_is_drawn_not_libass_bordered():
     """
-    BackColour is the box fill at BorderStyle 3 and the shadow colour at 1.
+    The text is always BorderStyle 1; a box replaces its outline and shadow
+    and is a drawn rectangle of its own (see test_caption_layout.py).
+    BorderStyle 3 boxed each font run separately, and overlapping runs
+    burned darker.
+    """
+    outlined = style_service.to_ass_style(a_style(outline_width=3, box_opacity=0.0), 1080)
+    boxed = style_service.to_ass_style(a_style(outline_width=3, shadow=4, box_opacity=0.75), 1080)
+
+    assert outlined["BorderStyle"] == boxed["BorderStyle"] == 1
+    assert outlined["Outline"] == 3
+    assert (boxed["Outline"], boxed["Shadow"]) == (0, 0)
+
+
+def test_backcolour_is_the_shadow_colour():
+    """
+    BackColour is the drop shadow's colour at BorderStyle 1.
 
     This is the failure mode worth a test of its own, because it is silent. If
-    an unboxed style kept the box colour at box_opacity, ASS would be handed an
-    alpha of 0 — and ASS alpha is *transparency* — so the shadow would render
+    it carried the box colour at box_opacity 0, ASS would be handed an alpha of
+    0xFF — and ASS alpha is *transparency* — so the shadow would render
     exactly as asked and be completely invisible.
     """
     shadowed = style_service.to_ass_style(
         a_style(box_opacity=0.0, shadow=4, shadow_color="#FF0000"), 1080
     )
-    boxed = style_service.to_ass_style(
-        a_style(box_opacity=0.75, shadow=4, box_color="#0000FF"), 1080
-    )
 
     # Opaque (alpha 00) and the shadow's own colour, in ASS's backwards BGR.
     assert shadowed["BackColour"] == "&H000000FF"
     assert shadowed["Shadow"] == 4
-
-    # Boxed: the box wins the field, and the shadow is not drawn at all rather
-    # than drawn in the box's colour on top of the box.
-    assert boxed["BackColour"] == "&H40FF0000"
-    assert boxed["Shadow"] == 0
-    # And the box itself: libass fills a BorderStyle 3 box with OutlineColour.
-    assert boxed["OutlineColour"] == "&H40FF0000"
-    assert shadowed["OutlineColour"] != "&H40FF0000"
 
 
 def test_shadow_and_tracking_scale_with_the_frame():

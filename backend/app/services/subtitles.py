@@ -190,6 +190,23 @@ def _script_runs(layout_line: Line, style: CaptionStyle, size: float, bold: bool
     return "".join(out)
 
 
+def _box_event(layout: Layout, style: CaptionStyle) -> str:
+    r"""
+    The caption's box, as a filled rectangle drawn under its text.
+
+    `\p1` draws in frame pixels from `\pos` at `\an7` (the top-left corner),
+    so the rectangle is the layout's to the hundredth of a pixel — the one
+    the preview paints. Filled with `\1c`/`\1a`: no outline, no shadow.
+    """
+    alpha = round((1.0 - max(0.0, min(1.0, style.box_opacity))) * 255)
+    w, h = _num(layout.width), _num(layout.height)
+    return (
+        f"{{\\an7\\pos({_num(layout.x)},{_num(layout.y)})\\bord0\\shad0"
+        f"\\1c{to_ass_inline_colour(style.box_color)}\\1a&H{alpha:02X}&\\p1}}"
+        f"m 0 0 l {w} 0 {w} {h} 0 {h}{{\\p0}}"
+    )
+
+
 def _layout_tags(layout: Layout, style: CaptionStyle) -> list[str]:
     """
     Where the laid-out caption goes, and at what size.
@@ -246,10 +263,11 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
         text = "{" + "".join(tags) + "}" + "\\N".join(
             _script_runs(line, style, layout.size, bold) for line in layout.lines
         )
-        events.append(
-            f"Dialogue: 0,{ass_time(caption.start_ms)},{ass_time(caption.end_ms)},"
-            f"Default,,0,0,0,,{text}"
-        )
+        span = f"{ass_time(caption.start_ms)},{ass_time(caption.end_ms)}"
+        # The box on layer 0, the text above it on layer 1.
+        if style.box_opacity > 0:
+            events.append(f"Dialogue: 0,{span},Default,,0,0,0,,{_box_event(layout, style)}")
+        events.append(f"Dialogue: 1,{span},Default,,0,0,0,,{text}")
 
     return (
         "[Script Info]\n"

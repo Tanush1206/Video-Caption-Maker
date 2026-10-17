@@ -304,8 +304,8 @@ export function layoutCaption(
   const measure = new Measurer(style, bold);
   const k = frame.height / (style.reference_height || REFERENCE_HEIGHT);
   const boxed = style.box_opacity > 0;
-  // As the ASS Style line rounds them (caption_style.box_pad).
-  const pad = boxed ? Math.max(1, pyRound(style.box_padding * k)) : pyRound(style.outline_width * k);
+  // As the burn rounds them (caption_style.box_pad).
+  const pad = pyRound((boxed ? style.box_padding : style.outline_width) * k);
   const shadow = boxed ? 0 : pyRound(style.shadow * k);
   const spacing = pyRound(style.letter_spacing * k);
   const size = style.font_size * (options.overrideScale || 1) * k;

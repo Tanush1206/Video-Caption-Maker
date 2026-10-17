@@ -271,3 +271,25 @@ def test_the_burned_caption_is_inside_the_safe_area_where_the_layout_put_it(
                 slack = max(2.5, 0.01 * rect.width)
                 assert abs(x0 - rect.x) <= slack and abs(x1 - (rect.x + rect.width)) <= slack, (case, box)
                 assert abs(y0 - rect.y) <= 2.5 and abs(y1 - (rect.y + rect.height)) <= 2.5, (case, box)
+
+
+def test_a_translucent_box_is_one_even_rectangle(tmp_path):
+    """
+    A boxed Hindi caption burns as one box of one level, not a row of
+    overlapping boxes. libass's BorderStyle 3 boxed each font run, and each
+    Hindi word is a run of its own (its script font), so a 60% box came out
+    darker wherever two words' boxes overlapped.
+    """
+    style = _style(
+        "box-pad-40", "large", pos_x=0.5, pos_y=0.5,
+        box_color="#FFFFFF", box_opacity=0.6, text_color="#000000",
+    )
+    captions = [Caption(video_id=1, sequence=0, start_ms=0, end_ms=900, text=TEXTS["hindi"], confidence=-0.1)]
+    frame = _burn(captions, style, 1280, 720, tmp_path)[0].astype(int)
+    layout = layout_caption(TEXTS["hindi"], style, 1280, 720)
+    x0, y0 = int(layout.x) + 3, int(layout.y) + 3
+    inside = frame[y0:int(layout.y + layout.height) - 3, x0:int(layout.x + layout.width) - 3].mean(axis=2)
+    # Box pixels: everything but the (black) text and its antialiasing.
+    box = inside[inside > 160]
+    assert box.size > 0.5 * inside.size
+    assert box.max() - np.median(box) <= 6, f"box levels {np.median(box):.0f} to {box.max():.0f}"
