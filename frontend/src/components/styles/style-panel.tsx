@@ -13,7 +13,8 @@ import {
   useStyleOptions,
 } from "@/hooks/use-caption-style";
 import { cn } from "@/lib/utils";
-import type { Alignment, CaptionStyle, VerticalPosition } from "@/types/style";
+import { MAX_BOX_WIDTH, MIN_BOX_WIDTH, PLACEMENT_Y, defaultWidth } from "@/lib/caption-layout";
+import type { Alignment, CaptionStyle } from "@/types/style";
 
 const PRESET_LABELS: Record<string, string> = {
   youtube: "YouTube",
@@ -21,8 +22,17 @@ const PRESET_LABELS: Record<string, string> = {
   minimal: "Minimal",
 };
 
-const POSITIONS: VerticalPosition[] = ["top", "middle", "bottom"];
-const ALIGNMENTS: Alignment[] = ["left", "center", "right"];
+const PLACEMENTS = [
+  { key: "top", label: "Top" },
+  { key: "middle", label: "Middle" },
+  { key: "bottom", label: "Bottom" },
+] as const;
+const ALIGNMENTS = [
+  { key: "left", label: "Left" },
+  { key: "center", label: "Centre" },
+  { key: "right", label: "Right" },
+] as const satisfies readonly { key: Alignment; label: string }[];
+const LINE_LIMITS = [1, 2, 3] as const;
 
 /**
  * The on/off text properties, each previewing itself in its own button.
@@ -183,96 +193,45 @@ function Swatch({
 }
 
 /**
- * The nine places a caption can sit, as a picture of the frame.
+ * A row of mutually exclusive choices — alignment, line limit, placement.
  *
- * This was two segmented controls reading "top / middle / bottom" and "left /
- * center / right" — six words to express one point in a rectangle, and you had
- * to build the combination in your head before you could click it.
- *
- * Nine cells is what the underlying format actually offers. ASS positions text
- * with an alignment anchor plus margins, so these are not a convenience over
- * free coordinates; they *are* the coordinate system, and a control shaped
- * like the thing it sets beats two lists of adverbs.
- *
- * The dot inside each cell sits where the caption would sit, so the control is
- * a small map rather than a grid of identical squares.
+ * `selected` may match none of them: a dragged caption is at no preset
+ * height, and lighting one up would claim otherwise.
  */
-function AnchorGrid({
-  position,
-  alignment,
-  placed,
-  aspect,
-  onChange,
+function Choice<T extends string | number>({
+  label,
+  options,
+  selected,
+  onSelect,
 }: {
-  position: VerticalPosition;
-  alignment: Alignment;
-  /** Whether the caption has been dragged, and so is not on an anchor at all. */
-  placed: boolean;
-  /** The video's real shape. A portrait clip must not get a 16:9 map. */
-  aspect: number;
-  onChange: (next: Partial<CaptionStyle>) => void;
+  label: string;
+  options: readonly { key: T; label: string }[];
+  selected: T | null;
+  onSelect: (key: T) => void;
 }) {
   return (
-    <Field label="Placement">
-      <div
-        role="radiogroup"
-        aria-label="Caption placement"
-        // The aspect comes from the loaded video rather than being assumed,
-        // because the whole idea is that this is a picture of the frame. A
-        // 16:9 control over a vertical video would put the dots somewhere the
-        // caption will not be.
-        style={{ aspectRatio: aspect }}
-        className="grid w-full max-w-sm grid-cols-3 grid-rows-3 gap-0.5 rounded-md border border-border bg-background/40 p-0.5"
-      >
-        {POSITIONS.map((row) =>
-          ALIGNMENTS.map((column) => {
-            // Nothing is selected once the caption has been dragged: it is at
-            // some x/y that is almost certainly not any of these nine, and
-            // lighting one up would claim otherwise.
-            const selected = !placed && position === row && alignment === column;
-            return (
-              <button
-                key={`${row}-${column}`}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                aria-label={`${row} ${column}`}
-                title={`${row} ${column}`}
-                // Nulls, not omissions. Choosing an anchor is also how you undo
-                // a hand-drag, and clearing the free position is the only thing
-                // that puts the caption back under this control — the PATCH is
-                // applied with `exclude_unset`, so an explicit null really does
-                // clear the column while leaving it out would change nothing.
-                onClick={() =>
-                  onChange({ position: row, alignment: column, pos_x: null, pos_y: null })
-                }
-                className={cn(
-                  "flex rounded-sm transition-colors",
-                  // The dot goes where the caption goes. items-*/justify-* are
-                  // the same two axes the anchor itself names, so the cell is
-                  // laid out by the value it sets.
-                  row === "top" ? "items-start" : row === "middle" ? "items-center" : "items-end",
-                  column === "left"
-                    ? "justify-start"
-                    : column === "center"
-                      ? "justify-center"
-                      : "justify-end",
-                  "p-1",
-                  selected ? "bg-primary/15" : "hover:bg-muted"
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-0.5 rounded-full transition-all",
-                    selected ? "w-4 bg-primary" : "w-2.5 bg-muted-foreground/40"
-                  )}
-                />
-              </button>
-            );
-          })
-        )}
+    <div>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex gap-1.5">
+        {options.map(({ key, label: text }) => (
+          <button
+            key={key}
+            type="button"
+            role="radio"
+            aria-checked={selected === key}
+            onClick={() => onSelect(key)}
+            className={cn(
+              "flex-1 rounded-md border px-2 py-1.5 text-xs transition",
+              selected === key
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:bg-muted"
+            )}
+          >
+            {text}
+          </button>
+        ))}
       </div>
-    </Field>
+    </div>
   );
 }
 
@@ -299,7 +258,7 @@ export function StylePanel({
   videoId: number;
   update: (patch: Partial<CaptionStyle>) => void;
   isSaving: boolean;
-  /** The video's aspect ratio, so the placement map matches the frame. */
+  /** The video's aspect ratio, for the default width of its shape. */
   aspect?: number;
 }) {
   const { data: style, isLoading } = useCaptionStyle(videoId);
@@ -474,42 +433,45 @@ export function StylePanel({
         </Pane>
 
         <Pane hidden={tab !== "position"}>
-          <AnchorGrid
-            position={style.position}
-            alignment={style.alignment}
-            placed={style.pos_x != null && style.pos_y != null}
-            aspect={aspect}
-            onChange={set}
+          {/* Centred, at a height inside the safe area. Each caption is then
+              slid inside it on its own, so a long one at the bottom still
+              clears the edge. */}
+          <Choice
+            label="Placement"
+            options={PLACEMENTS}
+            selected={
+              style.pos_x === 0.5
+                ? (PLACEMENTS.find(({ key }) => PLACEMENT_Y[key] === style.pos_y)?.key ?? null)
+                : null
+            }
+            onSelect={(key) => set({ pos_x: 0.5, pos_y: PLACEMENT_Y[key] })}
           />
-
-          {/* Only while the caption is on an anchor. A hand-placed caption sits
-              at an explicit y, so there is no edge for this to be a gap from —
-              and libass ignores MarginV outright once `\pos` is in play. A
-              slider that moves nothing is worse than no slider. */}
-          {style.pos_y == null && (
-            <Slider
-              label="Edge margin"
-              value={style.margin_v}
-              min={0}
-              // 500, matching the column bound. It was 300, so a margin set by
-              // dragging the caption could exceed what this track could show
-              // and the thumb sat pinned at the end while the number climbed.
-              max={500}
-              suffix="px"
-              onChange={(margin_v) => set({ margin_v })}
-            />
-          )}
-          {/* This one survives free placement, and is the reason `margin_h` is
-              not simply ignored alongside `margin_v`: ASS takes the line-wrap
-              width from MarginL/MarginR in both modes. */}
+          <Choice
+            label="Alignment"
+            options={ALIGNMENTS}
+            selected={style.alignment}
+            onSelect={(alignment) => set({ alignment })}
+          />
+          {/* The box's width: text wraps at it, wherever the box is. The same
+              value the handles on the box's edges set. */}
           <Slider
-            label={style.pos_x == null ? "Side margin" : "Side margin — line width"}
-            value={style.margin_h}
-            min={0}
-            max={500}
-            suffix="px"
-            onChange={(margin_h) => set({ margin_h })}
+            label="Max width"
+            value={Math.round((style.box_width ?? defaultWidth({ width: aspect, height: 1 })) * 100)}
+            min={MIN_BOX_WIDTH * 100}
+            max={MAX_BOX_WIDTH * 100}
+            suffix="%"
+            onChange={(percent) => set({ box_width: percent / 100 })}
           />
+          <Choice
+            label="Max lines"
+            options={LINE_LIMITS.map((n) => ({ key: n, label: String(n) }))}
+            selected={style.max_lines}
+            onSelect={(max_lines) => set({ max_lines })}
+          />
+          <p className="text-[11px] text-muted-foreground sm:col-span-2">
+            A caption that needs more lines is drawn smaller, down to 70% of the size, then gets one
+            more line. Drag the caption to move it, or the edges of its box to change the width.
+          </p>
         </Pane>
       </div>
 
