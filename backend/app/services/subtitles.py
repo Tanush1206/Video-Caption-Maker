@@ -10,19 +10,16 @@ the words in the database, which are the words Whisper heard.
 """
 
 import json
-import re
-from functools import lru_cache
 from collections.abc import Sequence
 
 from app.models.caption import Caption
-from app.models.caption_style import CaptionStyle
+from app.models.caption_style import Alignment, CaptionStyle
+from app.services.caption_layout import Layout, Line, Measurer, layout_caption
 from app.services.caption_style import (
     font_win_span,
     get_font,
-    scale_for,
     script_font_span,
-    script_fonts,
-    to_ass_free_alignment,
+    to_ass_alignment,
     to_ass_inline_colour,
     to_ass_style_block,
 )
@@ -141,12 +138,13 @@ def escape_ass_text(text: str) -> str:
     )
 
 
-def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> list[str]:
+def _emphasis_tags(caption: Caption) -> list[str]:
     """
     Inline override tags for a caption that carries emphasis.
 
-    These are the ASS equivalent of the per-caption overrides the editor shows:
-    the same three fields, applied to one line instead of the whole video.
+    These are the ASS equivalent of the per-caption overrides the editor shows,
+    applied to one line instead of the whole video. The third, the size, is
+    part of the layout (`_layout_tags`), because it changes where lines break.
     """
     tags = []
 
@@ -154,69 +152,64 @@ def _emphasis_tags(caption: Caption, style: CaptionStyle, scale: float) -> list[
         tags.append(f"\\c{to_ass_inline_colour(caption.override_color)}")
     if caption.override_bold is not None:
         tags.append(f"\\b{1 if caption.override_bold else 0}")
-    if caption.override_scale is not None:
-        tags.append(f"\\fs{round(style.font_size * caption.override_scale * scale)}")
 
     return tags
 
 
-# A run: characters of one script, with the joiners (ZWNJ, ZWJ) that shape
-# them and any spaces *between* two of them — so a sentence is one run, not
-# one per word, and a space before Latin text is left to the caption font.
-@lru_cache(maxsize=16)
-def _run_pattern(chars: str) -> re.Pattern:
-    return re.compile(rf"[{chars}](?:[{chars}\u200c\u200d]|\s+(?=[{chars}]))*")
+def _num(value: float) -> str:
+    """A coordinate or size for a tag: two decimals at most, no trailing zeros."""
+    return f"{round(value, 2):g}"
 
 
-def _script_runs(text: str, style: CaptionStyle, size: int) -> str:
+def _script_runs(layout_line: Line, style: CaptionStyle, size: float, bold: bool) -> str:
     """
-    Wrap each run of an Indic script in its own font, at the caption font's em.
+    One laid-out line, with each script word in its own font at the caption font's em.
 
     `size` is the caption's Fontsize as libass will apply it. libass makes a
     face's whole cell that size, so a script font with a different win span
     has to be asked for at `size * its span / the caption font's span` to come
     out with the same em — the em the browser draws it at (see SCRIPT_FONTS).
-    Afterwards the caption's own font and size are put back.
+    Afterwards the caption's own font and size are put back. The words are the
+    layout's segments, so the burn draws each in the font it was measured in.
     """
     primary = get_font(style.font_key).render_name
-    primary_span = font_win_span(style.font_key, style.bold)
-    for family, chars in script_fonts(style.font_key, style.bold):
-        pattern = _run_pattern(chars)
-        scaled = round(size * script_font_span(family, style.bold) / primary_span, 1)
+    primary_span = font_win_span(style.font_key, bold)
+    out = []
+    for segment in layout_line.segments:
+        # Braces only: `escape_ass_text` also strips, and a segment's edge is
+        # often the space between two words. A laid-out line has no newlines.
+        text = segment.text.replace("{", "(").replace("}", ")")
+        if segment.family is None:
+            out.append(text)
+            continue
+        scaled = size * script_font_span(segment.family, bold) / primary_span
+        out.append(
+            f"{{\\fn{segment.family}\\fs{_num(scaled)}}}{text}"
+            f"{{\\fn{primary}\\fs{_num(size)}}}"
+        )
+    return "".join(out)
 
-        def wrap(match: re.Match, family: str = family, scaled: float = scaled) -> str:
-            return (
-                f"{{\\fn{family}\\fs{scaled:g}}}{match.group(0)}"
-                f"{{\\fn{primary}\\fs{size}}}"
-            )
 
-        text = pattern.sub(wrap, text)
-    return text
-
-
-def _placement_tags(style: CaptionStyle, width: int, height: int) -> list[str]:
+def _layout_tags(layout: Layout, style: CaptionStyle) -> list[str]:
     """
-    Inline override tags for a caption the user placed by hand.
+    Where the laid-out caption goes, and at what size.
 
-    Empty for an anchored style, which is the default and every existing row:
-    the Style line's own Alignment and margins already say where the text goes,
-    and adding `\\pos` would only restate it less clearly.
-
-    When `pos_x`/`pos_y` are set they are fractions of the frame, so they are
-    multiplied by the real video size here — the same size that becomes
-    PlayResX/Y, which is the canvas libass measures `\\pos` against.
-
-    What this does *not* touch is the wrap width. MarginL/MarginR keep working
-    under `\\pos` (verified by burning the same line both ways: 700px margins
-    wrapped six lines wide either way), so the Style line is still the one
-    place line breaking is decided and the preview only has to mirror it once.
+    `\\an4/5/6` with `\\pos` at the vertical middle of the lines and their left
+    edge, centre or right edge — the padding is inside the layout's rectangle,
+    and libass draws it outside the text. Fractions of a pixel are kept: libass
+    takes them, and the clamp is measured to them.
     """
-    if style.pos_x is None or style.pos_y is None:
-        return []
-
+    if style.alignment == Alignment.LEFT:
+        x = layout.x + layout.pad
+    elif style.alignment == Alignment.RIGHT:
+        x = layout.x + layout.width - layout.pad
+    else:
+        x = layout.x + layout.width / 2
+    y = layout.y + layout.height / 2
     return [
-        f"\\an{to_ass_free_alignment(style)}",
-        f"\\pos({round(style.pos_x * width)},{round(style.pos_y * height)})",
+        f"\\an{to_ass_alignment(style)}",
+        f"\\pos({_num(x)},{_num(y)})",
+        f"\\fs{_num(layout.size)}",
     ]
 
 
@@ -229,25 +222,30 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
     out the wrong size — which is exactly the preview/export mismatch the whole
     styling milestone was built to avoid.
     """
-    scale = scale_for(height)
-
     events = [
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
+    measurers = {bold: Measurer(style, bold) for bold in (False, True)}
     for caption in captions:
-        # `uppercase` is the one style field ASS cannot express, so it is applied
-        # to the text instead of to the Style line. Only here: the stored caption
-        # and the SRT/VTT sidecars keep their original case, because this is how
-        # the captions are *drawn on the video*, not what they say.
-        body = caption.text.upper() if style.uppercase else caption.text
-        # One override block rather than two adjacent ones. Both are legal ASS,
-        # but placement and emphasis are independent and either can be empty,
-        # so building the list first is the version with no empty `{}` in it.
-        tags = _placement_tags(style, width, height) + _emphasis_tags(caption, style, scale)
-        prefix = "{" + "".join(tags) + "}" if tags else ""
-        size = round(style.font_size * (caption.override_scale or 1) * scale)
-        text = prefix + _script_runs(escape_ass_text(body), style, size)
+        bold = style.bold if caption.override_bold is None else caption.override_bold
+        # `uppercase` is the one style field ASS cannot express, so the layout
+        # applies it to the text instead of to the Style line. Only here: the
+        # stored caption and the SRT/VTT sidecars keep their original case,
+        # because this is how the captions are *drawn on the video*.
+        layout = layout_caption(
+            caption.text,
+            style,
+            width,
+            height,
+            override_scale=caption.override_scale,
+            bold=bold,
+            measurer=measurers[bold],
+        )
+        tags = _layout_tags(layout, style) + _emphasis_tags(caption)
+        text = "{" + "".join(tags) + "}" + "\\N".join(
+            _script_runs(line, style, layout.size, bold) for line in layout.lines
+        )
         events.append(
             f"Dialogue: 0,{ass_time(caption.start_ms)},{ass_time(caption.end_ms)},"
             f"Default,,0,0,0,,{text}"
@@ -256,7 +254,9 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
     return (
         "[Script Info]\n"
         "ScriptType: v4.00+\n"
-        "WrapStyle: 0\n"
+        # 2: no wrapping at all. The lines are the layout's, broken with `\N`,
+        # and libass must not break them again.
+        "WrapStyle: 2\n"
         # Without this libass ignores PlayResX/Y for scaling and the sizes drift.
         "ScaledBorderAndShadow: yes\n"
         f"PlayResX: {width}\n"

@@ -935,7 +935,9 @@ def test_indic_runs_get_their_own_font_at_the_caption_fonts_em():
     """
     Indic text is drawn in a vendored Noto face named for its script, sized so
     its em is the caption font's em — the em the browser draws it at — and
-    the caption font comes back afterwards. Latin text is left alone.
+    the caption font comes back afterwards. Latin text is left alone, and so
+    are the spaces between words: the browser draws a space in the caption
+    font (the Noto faces are limited to their script), so the burn does too.
     """
     from app.services.caption_style import font_win_span, script_font_span
 
@@ -945,14 +947,15 @@ def test_indic_runs_get_their_own_font_at_the_caption_fonts_em():
         text="Hello हमारा सूप, এবং Tamil", confidence=-0.1,
     )
     line = subtitles.to_ass([caption], style, 1280, 720).splitlines()[-1]
-    size = round(54 * 720 / 1080)
-    devanagari = round(size * script_font_span("Noto Sans Devanagari", True) / font_win_span("poppins", True), 1)
+    size = 54 * 720 / 1080
+    devanagari = round(size * script_font_span("Noto Sans Devanagari", True) / font_win_span("poppins", True), 2)
 
     # The ASS tags fn and fs with their backslash, built rather than escaped.
     fn, fs = chr(92) + "fn", chr(92) + "fs"
-    assert f"Hello {{{fn}Noto Sans Devanagari{fs}{devanagari:g}}}हमारा सूप{{{fn}Poppins{fs}{size}}}," in line
+    noto, back = f"{{{fn}Noto Sans Devanagari{fs}{devanagari:g}}}", f"{{{fn}Poppins{fs}{size:g}}}"
+    assert f"Hello {noto}हमारा{back} {noto}सूप{back}," in line
     assert f"{{{fn}Noto Sans Bengali" in line
-    assert line.endswith(f"}}এবং{{{fn}Poppins{fs}{size}}} Tamil")
+    assert line.endswith(f"}}এবং{back} Tamil")
 
 
 def test_indic_text_is_burned_at_the_caption_fonts_em(tmp_path):
@@ -1014,7 +1017,8 @@ def test_cyrillic_gets_noto_only_when_the_caption_font_has_none():
 
     fn = chr(92) + "fn"
     assert f"{{{fn}Noto Sans" in line("poppins")
-    assert line("lato").endswith(",,Сначала два лука")
+    assert line("lato").endswith("}Сначала два лука")
+    assert fn not in line("lato")
 
 
 def test_cyrillic_is_burned_at_the_caption_fonts_em(tmp_path):

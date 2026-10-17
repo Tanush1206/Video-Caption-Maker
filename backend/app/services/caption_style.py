@@ -27,7 +27,6 @@ from app.models.caption_style import (
     REFERENCE_HEIGHT,
     Alignment,
     CaptionStyle,
-    VerticalPosition,
 )
 from app.services import font_library
 
@@ -138,7 +137,7 @@ def script_fonts(key: str, bold: bool) -> tuple[tuple[str, str], ...]:
     return (*SCRIPT_FONTS, CYRILLIC_FONT)
 
 
-def font_file(key: str, bold: bool) -> Path | None:
+def font_file(key: str, bold: bool, italic: bool = False) -> Path | None:
     """The file libass will draw this caption font from."""
     if key not in FONTS_BY_KEY:
         weight = "bold" if bold else "regular"
@@ -146,7 +145,13 @@ def font_file(key: str, bold: bool) -> Path | None:
             if path.exists():
                 return path
         return None
-    path = _fc_match(get_font(key).render_name, bold)
+    path = _fc_match(get_font(key).render_name, bold, italic)
+    return Path(path) if path else None
+
+
+def script_font_file(family: str, bold: bool) -> Path | None:
+    """The file libass draws a script face from."""
+    path = _fc_match(family, bold)
     return Path(path) if path else None
 
 
@@ -182,11 +187,12 @@ def script_font_span(family: str, bold: bool) -> float:
 
 
 @lru_cache(maxsize=64)
-def _fc_match(family: str, bold: bool) -> str | None:
-    """The file fontconfig hands libass for this family and weight."""
+def _fc_match(family: str, bold: bool, italic: bool = False) -> str | None:
+    """The file fontconfig hands libass for this family, weight and slant."""
+    slant = ":slant=100" if italic else ""
     try:
         return subprocess.run(
-            ["fc-match", "-f", "%{file}", f"{family}:weight={200 if bold else 80}"],
+            ["fc-match", "-f", "%{file}", f"{family}:weight={200 if bold else 80}{slant}"],
             capture_output=True, text=True, timeout=10, check=True,
         ).stdout.strip() or None
     except (OSError, subprocess.SubprocessError):
@@ -266,11 +272,17 @@ _PRESET_BASELINE: dict = {
     "letter_spacing": 0,
     "uppercase": False,
     "box_padding": 8,
-    # Back on the preset's own anchor: a caption dragged somewhere by hand
-    # would otherwise ignore the `position` every preset sets.
-    "pos_x": None,
-    "pos_y": None,
+    # Centred, and back to the default width and line count: a caption
+    # dragged or resized by hand would otherwise keep that through a preset.
+    "pos_x": 0.5,
+    "box_width": None,
+    "max_lines": 2,
 }
+
+# The box centre's height for the Top / Middle / Bottom placements, as a
+# fraction of the frame. Every caption is then slid inside the safe area on its
+# own, so a three-line caption at the bottom still clears the edge.
+PLACEMENT_Y: dict[str, float] = {"top": 0.12, "middle": 0.5, "bottom": 0.88}
 
 PRESETS: dict[str, dict] = {
     "youtube": {
@@ -286,10 +298,8 @@ PRESETS: dict[str, dict] = {
         "outline_width": 0,
         "box_color": "#000000",
         "box_opacity": 0.75,
-        "position": VerticalPosition.BOTTOM,
+        "pos_y": PLACEMENT_Y["bottom"],
         "alignment": Alignment.CENTER,
-        "margin_v": 60,
-        "margin_h": 60,
     },
     "tiktok": {
         **_PRESET_BASELINE,
@@ -313,10 +323,8 @@ PRESETS: dict[str, dict] = {
         "box_opacity": 0.0,
         # Centred vertically, because the bottom of a phone screen is covered
         # by the caption, handle and buttons of whatever app it's played in.
-        "position": VerticalPosition.MIDDLE,
+        "pos_y": PLACEMENT_Y["middle"],
         "alignment": Alignment.CENTER,
-        "margin_v": 0,
-        "margin_h": 80,
     },
     "minimal": {
         **_PRESET_BASELINE,
@@ -332,10 +340,8 @@ PRESETS: dict[str, dict] = {
         "shadow": 3,
         "box_color": "#000000",
         "box_opacity": 0.0,
-        "position": VerticalPosition.BOTTOM,
+        "pos_y": PLACEMENT_Y["bottom"],
         "alignment": Alignment.CENTER,
-        "margin_v": 48,
-        "margin_h": 60,
     },
 }
 
@@ -444,44 +450,37 @@ def to_ass_inline_colour(hex_colour: str) -> str:
     return f"&H{_bgr(hex_colour)}&"
 
 
-# ASS alignment follows a numeric keypad: 1-3 along the bottom, 4-6 the
-# middle, 7-9 the top, left to right within each row.
-_ASS_ALIGNMENT = {
-    (VerticalPosition.BOTTOM, Alignment.LEFT): 1,
-    (VerticalPosition.BOTTOM, Alignment.CENTER): 2,
-    (VerticalPosition.BOTTOM, Alignment.RIGHT): 3,
-    (VerticalPosition.MIDDLE, Alignment.LEFT): 4,
-    (VerticalPosition.MIDDLE, Alignment.CENTER): 5,
-    (VerticalPosition.MIDDLE, Alignment.RIGHT): 6,
-    (VerticalPosition.TOP, Alignment.LEFT): 7,
-    (VerticalPosition.TOP, Alignment.CENTER): 8,
-    (VerticalPosition.TOP, Alignment.RIGHT): 9,
-}
-
-
-def to_ass_alignment(style: CaptionStyle) -> int:
-    return _ASS_ALIGNMENT[(style.position, style.alignment)]
-
-
-# The middle row of the same nine, for a caption placed by hand.
+# The middle row of ASS's numeric-keypad alignments: every caption is placed
+# with `\pos` (caption_layout), at the vertical centre of its lines.
 #
-# `\an` does two jobs at once: it says which point of the text box `\pos`
-# refers to, *and* how the lines are justified against each other. Only the
-# horizontal half is a free choice here — the vertical is pinned to the middle
-# so that `\pos`'s y is the vertical centre of the text, which is what the
-# browser's `translate(-50%)` gives it. Anchoring to a top or bottom edge
-# instead would put the two renderers half a caption apart on any line that
-# wrapped.
-_ASS_FREE_ALIGNMENT = {
+# `\an` does two jobs at once: it says which point of the text `\pos`
+# refers to, *and* how the lines are justified against each other. So the
+# horizontal half follows the caption's alignment, and the layout hands `\pos`
+# the lines' left edge, centre or right edge to match.
+_ASS_ALIGNMENT = {
     Alignment.LEFT: 4,
     Alignment.CENTER: 5,
     Alignment.RIGHT: 6,
 }
 
 
-def to_ass_free_alignment(style: CaptionStyle) -> int:
-    """The `\\an` to pair with `\\pos` for a hand-placed caption."""
-    return _ASS_FREE_ALIGNMENT[style.alignment]
+def to_ass_alignment(style: CaptionStyle) -> int:
+    """The `\\an` to pair with `\\pos`."""
+    return _ASS_ALIGNMENT[style.alignment]
+
+
+def box_pad(style: CaptionStyle, height: int) -> int:
+    """
+    The box padding or the outline width libass draws, in frame pixels.
+
+    A box is at least 1px out from its text: libass draws no box at all at
+    Outline 0 (measured: a boxed caption with padding 0 burned as bare text),
+    and rounds anything above 0 up to 1px.
+    """
+    scale = scale_for(height)
+    if style.box_opacity > 0:
+        return max(1, round(style.box_padding * scale))
+    return round(style.outline_width * scale)
 
 
 def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
@@ -535,15 +534,17 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
         "BorderStyle": 3 if boxed else 1,
         # This field changes meaning with BorderStyle too: stroke width at 1,
         # box padding at 3.
-        "Outline": round((style.box_padding if boxed else style.outline_width) * scale),
+        "Outline": box_pad(style, height),
         # A box already separates the text from the frame, and BackColour is
         # spoken for, so the shadow is only drawn when there is no box.
         "Shadow": 0 if boxed else round(style.shadow * scale),
         "Spacing": round(style.letter_spacing * scale),
+        # Every event carries its own `\an`, `\pos` and line breaks from the
+        # layout, so the margins have nothing left to do.
         "Alignment": to_ass_alignment(style),
-        "MarginL": round(style.margin_h * scale),
-        "MarginR": round(style.margin_h * scale),
-        "MarginV": round(style.margin_v * scale),
+        "MarginL": 0,
+        "MarginR": 0,
+        "MarginV": 0,
     }
 
 
