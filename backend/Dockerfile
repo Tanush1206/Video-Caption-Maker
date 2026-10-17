@@ -89,6 +89,20 @@ ENV PATH=/opt/venv/bin:$PATH \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
     TOKENIZERS_PARALLELISM=false
 
+# HarfBuzz, the shaper libass uses, for measuring caption lines on the same
+# font files (services/caption_layout.py). Its own layer, not a line in
+# pyproject.toml: that file and constraints.txt feed the deps layer above, and
+# touching either rebuilds the whole virtualenv — every user would download
+# 0.8 GB (CPU) or 2.3 GB (CUDA) on update for one 2 MB wheel. Fold it into
+# pyproject.toml the next time the dependencies change anyway.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then \
+        cat /etc/ssl/certs/ca-certificates.crt /run/secrets/extra_ca > /tmp/ca.pem \
+        && export PIP_CERT=/tmp/ca.pem SSL_CERT_FILE=/tmp/ca.pem REQUESTS_CA_BUNDLE=/tmp/ca.pem; \
+    fi \
+    && PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 pip install --no-deps uharfbuzz==0.56.3 \
+    && rm -f /tmp/ca.pem
+
 COPY frontend/public/fonts/ /usr/share/fonts/truetype/vcm/
 RUN fc-cache -f
 

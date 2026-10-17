@@ -131,7 +131,6 @@ typing-inspection==0.4.2
 typing_extensions==4.16.0
 tzdata==2026.3
 tzlocal==5.4.4
-uharfbuzz==0.56.3
 urllib3==2.7.0
 uvicorn==0.52.1
 uvloop==0.22.1
