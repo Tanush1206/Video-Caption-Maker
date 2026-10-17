@@ -62,6 +62,11 @@ export interface CaptionStyle {
    * span the font size; CSS makes the em the font size. Divide by it.
    */
   font_win_span: number;
+  /**
+   * The script faces to list before the caption font (each limited to its
+   * script by unicode-range), the same ones the burn uses.
+   */
+  script_font_stack: string;
 }
 
 export interface Font {

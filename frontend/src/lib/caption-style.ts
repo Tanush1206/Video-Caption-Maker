@@ -16,9 +16,12 @@ import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
 
 /**
- * Indic scripts are drawn in vendored Noto faces, in the preview and in the
- * burn alike. libass names them per run (`subtitles._script_runs`); here they
- * lead the stack and `unicode-range` keeps them to their own characters.
+ * Indic scripts (and Cyrillic, for a caption font without it) are drawn in
+ * vendored Noto faces, in the preview and in the burn alike. libass names them
+ * per run (`subtitles._script_runs`); here they lead the stack and
+ * `unicode-range` keeps them to their own characters. The server decides
+ * which (`script_font_stack`); this is the Indic set, for a style cached
+ * from before that field existed.
  */
 const SCRIPT_FONT_STACK =
   '"Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Malayalam"';
@@ -78,7 +81,7 @@ export function captionTextStyle(
     // The Indic script faces first: each is limited to its own script by
     // unicode-range (globals.css), so they take only those characters, in
     // the same files and at the same em the export uses (SCRIPT_FONTS).
-    fontFamily: `${SCRIPT_FONT_STACK}, ${style.font_css_stack || font?.css_stack || "sans-serif"}`,
+    fontFamily: `${style.script_font_stack || SCRIPT_FONT_STACK}, ${style.font_css_stack || font?.css_stack || "sans-serif"}`,
     fontSize: `${(style.font_size * emphasisScale * scale) / span}px`,
     fontWeight: (override?.override_bold ?? style.bold) ? 700 : 400,
     fontStyle: style.italic ? "italic" : "normal",

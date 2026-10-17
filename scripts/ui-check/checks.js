@@ -522,6 +522,8 @@ const CHECKS = {
       ["Noto Sans Bengali", "আমরা স্যুপ tomato"],
       ["Noto Sans Tamil", "நாம் சூப் tomato"],
       ["Noto Sans Malayalam", "നമുക്ക് സൂപ്പ് tomato"],
+      // Russian in the default caption font (Poppins, no Cyrillic).
+      ["Noto Sans", "Сначала суп tomato"],
     ];
     await page.route(`**/api/videos/${video.id}`, async (route) => {
       const body = await (await route.fetch()).json();
@@ -551,7 +553,7 @@ const CHECKS = {
       const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
       const names = fonts.map((f) => `${f.familyName}:${f.glyphCount}`).join(", ");
       ok(`script-fonts: ${family} draws its script`, fonts.some((f) => f.familyName === family && f.glyphCount > 0), names);
-      ok(`script-fonts: ${family} leaves Latin to the caption font`, fonts.some((f) => !f.familyName.startsWith("Noto Sans ") && f.glyphCount >= 6), names);
+      ok(`script-fonts: ${family} leaves Latin to the caption font`, fonts.some((f) => !f.familyName.startsWith("Noto Sans") && f.glyphCount >= 6), names);
     }
     await page.close();
   },

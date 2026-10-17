@@ -966,6 +966,16 @@ are in Tanush's brief of 2026-10-15; this section is the resume point.
   preview 0.863 + 0.375, preview with `text-wrap: balance` 0.601 + 0.633.
   Applies to every language; Indic scripts wrap at spaces like the others.
   Check `caption-wrap` (min/max line width 0.52 before, 0.90 after).
+- Cyrillic, found in the GPU E2E burns: Russian in Poppins (the default,
+  no Cyrillic) burned ~1.3x the size of the Latin around it (libass sized
+  its Noto fallback by Noto's span). Now Noto Sans (vendored, 1 MB) draws
+  Cyrillic in both renderers at the caption font's em, **only** for a
+  caption font without Cyrillic (fc-query charset: Poppins, Anton, Bebas
+  Neue, Barlow Condensed lack it; Lato, Liberation, DejaVu keep their own).
+  The style serves `script_font_stack` for the preview. Russian caption,
+  preview vs burn width: Poppins 0.993, Lato 0.999. Tests
+  `test_cyrillic_gets_noto_only_when_the_caption_font_has_none`,
+  `test_cyrillic_is_burned_at_the_caption_fonts_em` (both fail without).
 
 ### Next
 - A1-A3: start the dev stack (vcm stop; docker compose up -d), make a test
