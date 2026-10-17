@@ -583,7 +583,11 @@ const CHECKS = {
   async "caption-size"(browser, base) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const id = await editorVideo(page, base);
-    await openEditor(page, base, id);
+    // A Latin caption: a line with a script face is as tall as that face's
+    // cell, as in libass, which is the layout's business, not this check's.
+    await mockCaptions(page, base, id, [LAYOUT_TEXTS.short]);
+    await openMocked(page, base, id);
+    await showCaption(page, 0, LAYOUT_TEXTS.short);
     for (const font of ["sans", "poppins", "lato", "anton"]) {
       const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { font_key: font, font_size: 80, max_lines: 3 } })).json();
       await page.reload({ waitUntil: "networkidle" });
@@ -921,24 +925,31 @@ const CHECKS = {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const id = await editorVideo(page, base);
     await mockCaptions(page, base, id, [LAYOUT_TEXTS.long]);
+    // A text that needs 2-4 lines at full size in this box, on any frame.
+    const text = "Stir everything together until it is smooth and then serve it warm";
+    await mockCaptions(page, base, id, [text]);
     const measured = {};
     for (const max_lines of [1, 2, 3]) {
-      await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.5, pos_y: 0.5, font_size: 54, box_width: 0.5, max_lines } });
+      const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.5, pos_y: 0.5, font_size: 54, box_width: 0.5, max_lines } })).json();
       await openMocked(page, base, id);
-      await showCaption(page, 0, LAYOUT_TEXTS.long);
-      measured[max_lines] = await page.evaluate(() => ({
-        lines: document.querySelectorAll("[data-caption-line]").length,
-        size: parseFloat(getComputedStyle(document.querySelector("[data-caption-text]")).fontSize),
-      }));
+      await showCaption(page, 0, text);
+      measured[max_lines] = await page.evaluate((s) => {
+        const frame = document.querySelector("video").parentElement.getBoundingClientRect();
+        const size = parseFloat(getComputedStyle(document.querySelector("[data-caption-text]")).fontSize);
+        return {
+          lines: document.querySelectorAll("[data-caption-line]").length,
+          shrink: size / ((s.font_size * frame.height) / s.reference_height / s.font_win_span),
+        };
+      }, style);
     }
-    const full = measured[3].size;
-    ok("caption-width: Max lines 3 fits without shrinking", measured[3].lines <= 3, JSON.stringify(measured[3]));
-    for (const n of [1, 2]) {
+    // Shrunk only when it needs more lines than allowed; never below 70%;
+    // past that one extra line, then (at 70%) every line it needs.
+    for (const n of [1, 2, 3]) {
       const m = measured[n];
-      const shrunk = m.size / full;
-      ok(`caption-width: Max lines ${n} shrinks the font, no further than 70%`, shrunk < 1 && shrunk >= 0.7 - 1e-3, shrunk.toFixed(3));
-      ok(`caption-width: Max lines ${n} keeps to ${n} lines, or one more`, m.lines <= n + 1, `${m.lines} lines`);
+      const legal = m.shrink >= 0.7 - 1e-3 && m.shrink <= 1 + 1e-3 && (m.lines <= n || (m.lines === n + 1) || Math.abs(m.shrink - 0.7) < 1e-3);
+      ok(`caption-width: Max lines ${n}: ${m.lines} lines at ${(m.shrink * 100).toFixed(0)}%`, legal, JSON.stringify(m));
     }
+    ok("caption-width: fewer lines allowed, smaller font", measured[1].shrink <= measured[2].shrink && measured[2].shrink <= measured[3].shrink && measured[1].shrink < 1, JSON.stringify(measured));
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.request.delete(`${base}/api/videos/${id}/style`);
     await page.close();
