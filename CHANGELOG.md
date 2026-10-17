@@ -12,10 +12,9 @@ Caption placement and styling fixed and made to match the export exactly,
 better local translation, and eight more caption languages. **One
 migration** (`c8f2a6d41e93`), run automatically on start: every saved caption
 position is converted to the new caption box (below), so existing videos keep
-their place. Expected update from 1.0.6: about 16 MB (backend: app code, the
-vendored fonts and their cache, and a 2 MB HarfBuzz layer, ~7 MB; frontend:
-the app and its fonts, ~9 MB); the dependency layers are unchanged. Measured
-with `update_layers.py` after release.
+their place. Update from 1.0.6, measured on the Windows GPU install: **11.8
+MB** (backend CUDA 9/15 layers, 4.6 MB: HarfBuzz 2.2 MB, fonts 2.2 MB, app
+code; frontend 4/10 layers, 7.2 MB); the 2 GB dependency layer is reused.
 
 ### Added
 - **The caption box.** A caption is now a box with its own width, as in

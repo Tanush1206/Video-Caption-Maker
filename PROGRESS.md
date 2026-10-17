@@ -747,7 +747,7 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.0.7 (done, not tagged)
+## v1.0.7 (released 2026-10-17, tag on 4064dc1)
 Brief: fix caption dragging, the drag handle and the style sliders; improve
 translation quality; add 12 caption languages. Definition of done and rules
 are in Tanush's brief of 2026-10-15; this section is the resume point.
@@ -1106,16 +1106,38 @@ Measured:
 - ui-check totals at the end: 216/216 (16:9), 216/216 (9:16 after the
   wrap check change), 54/54 read-only.
 
+### Release check (2026-10-17)
+- CI green on 4064dc1; `release.yml` 4/4 jobs green; Release has 8 assets,
+  all 7 files match SHA256SUMS; backend 1.0.7-cpu/-cuda and frontend 1.0.7
+  manifests fetch anonymously (200).
+- Backup before the update, per DATABASE.md §7 (11 s downtime):
+  `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.0.7` (vcm.dump, vcm-media.tgz,
+  .env copy, rowcounts-before.txt). Kept until Tanush confirms the update.
+  The install held 0 videos at that point: video 79 was deleted from the
+  dashboard in Tanush's browser at 14:26:41 (audit log), and its re-upload
+  landed in the dev stack while that had port 3000, and was deleted there
+  at his answer.
+- `vcm update` (Windows GPU) in 25 s: VCM_VERSION 1.0.7, alembic
+  `c8f2a6d41e93` (head), placement columns replaced, all containers
+  healthy, data unchanged (0 videos, captions, exports, styles; the same 19
+  media files). Download 11.8 MB: backend CUDA 9/15 layers 4.6 MB (venv
+  2050 MB reused), frontend 4/10 layers 7.2 MB.
+- Guard: own origin 200 at localhost and 127.0.0.1; other origin,
+  cross-site and rebinding Host 403. `flow.js` PASS at both addresses.
+- E2E on the install (GPU): soup-169 x same,hi,es and soup-916 x hi ALL
+  PASSED; `caption-snap`, `caption-keyboard`, `caption-safe-area` on the
+  install 48/48; axe 0. Test videos 80-83 deleted afterwards (80 and 82 by
+  flow.js, 81 and 83 through the API); the install holds 0 videos again.
+- Secrets: only the old `docs/learning-guide.md` in history (accepted);
+  images hold only public CA bundles.
+- Linux CPU install not updated (no CPU check required, as for 1.0.5/1.0.6).
+- Dev stack cleanup: 43 soup/square test videos and 16 failed `clip.mp4`
+  uploads deleted through the API; it holds only 7426.
+
 ### Next
-- Tanush: push, wait for CI, tag v1.0.7 (commands in the final report).
-- After the tag: release checklist (docs/TESTING.md §6), `vcm update` the
-  Windows install, measure the download with `update_layers.py` (expected
-  ~16 MB), check data, version, guard, and that migration `c8f2a6d41e93`
-  ran (old styles converted, captions where they were).
+- Tanush: confirm the updated install looks right; then the pre-1.0.7
+  backup can be deleted.
 - Gemini: the dev key's quota for the configured model is exhausted (429).
   Switching the Gemini model is Tanush's call.
-- Test videos left in the dev database (ids 7424 onwards, the soup clips,
-  their E2E copies and a 1:1 test-pattern clip, 7486). Delete them from the
-  dev UI if wanted.
 - When the dependencies next change: move uharfbuzz from its Dockerfile
   layer into pyproject.toml/constraints.txt.
