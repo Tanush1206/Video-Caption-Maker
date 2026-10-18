@@ -152,7 +152,7 @@ def dont_queue_transcription(monkeypatch):
     here needs the real queue.
     """
     monkeypatch.setattr(
-        "app.api.videos._enqueue_transcription", lambda video_id: True
+        "app.api.videos._enqueue_transcription", lambda video_id, keep_breaks=False: True
     )
 
 

@@ -228,3 +228,51 @@ async def create_caption(
     await db.commit()
     await db.refresh(caption)
     return caption
+
+
+# ── Manual line breaks across a Redo ────────────────────────────────────
+#
+# Redo re-transcribes and replaces every caption. A caption keeps the line
+# breaks someone put in it only if the caption language is unchanged and its
+# words come out exactly the same; anything else starts without them.
+
+
+def break_key(text: str) -> str:
+    """The caption's words, whatever lines they were on."""
+    return " ".join(text.split())
+
+
+def break_positions(text: str) -> tuple[int, ...]:
+    """After how many words each manual break comes. () for none."""
+    positions, words = [], 0
+    paragraphs = text.split("\n")
+    for paragraph in paragraphs[:-1]:
+        words += len(paragraph.split())
+        positions.append(words)
+    return tuple(p for p in positions if 0 < p < len(text.split()))
+
+
+def with_breaks(text: str, positions: tuple[int, ...]) -> str:
+    """`text`'s words with a line break after each of those word counts."""
+    words = text.split()
+    lines, start = [], 0
+    for position in (*sorted(set(positions)), len(words)):
+        if start < position <= len(words):
+            lines.append(" ".join(words[start:position]))
+            start = position
+    return "\n".join(lines)
+
+
+def saved_breaks(captions: list[Caption]) -> dict[str, tuple[int, ...]]:
+    """The manual breaks of these captions, keyed by their words."""
+    return {
+        break_key(c.text): positions
+        for c in captions
+        if (positions := break_positions(c.text))
+    }
+
+
+def restore_breaks(text: str, saved: dict[str, tuple[int, ...]]) -> str:
+    """`text` with the breaks a caption with exactly these words had, if any."""
+    positions = saved.get(break_key(text))
+    return with_breaks(text, positions) if positions else text

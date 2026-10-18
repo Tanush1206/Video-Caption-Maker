@@ -29,6 +29,7 @@ from app.services import (
     transcription,
     translation,
 )
+from app.services import caption as caption_service
 from app.workers.celery_app import celery_app
 from app.workers.db import worker_session
 
@@ -126,7 +127,7 @@ def friendly_error(exc: BaseException) -> str:
     return "Transcription failed unexpectedly. Try again; if it keeps failing, check the logs."
 
 
-async def _run(video_id: int) -> dict:
+async def _run(video_id: int, keep_breaks: bool = False) -> dict:
     async with worker_session() as session:
         video = await session.get(Video, video_id)
         if video is None:
@@ -148,8 +149,14 @@ async def _run(video_id: int) -> dict:
     if not source.exists():
         raise RuntimeError("Source video file is missing")
 
-    # Re-running must not duplicate captions or vectors.
+    # Re-running must not duplicate captions or vectors. A Redo in the same
+    # caption language keeps the manual line breaks of any caption that comes
+    # out with exactly the same words (`keep_breaks`, set by the route).
     async with worker_session() as session:
+        breaks: dict[str, tuple[int, ...]] = {}
+        if keep_breaks:
+            old = (await session.execute(select(Caption).where(Caption.video_id == video_id))).scalars()
+            breaks = caption_service.saved_breaks(list(old))
         await session.execute(delete(Caption).where(Caption.video_id == video_id))
         await session.commit()
     embeddings.delete_video_vectors(video_id)
@@ -292,7 +299,7 @@ async def _run(video_id: int) -> dict:
                     sequence=index,
                     start_ms=segment.start_ms,
                     end_ms=segment.end_ms,
-                    text=segment.text,
+                    text=caption_service.restore_breaks(segment.text, breaks),
                     confidence=segment.confidence,
                 )
                 for index, segment in enumerate(segments)
@@ -392,9 +399,9 @@ def reindex_captions(video_id: int, caption_ids: list[int] | None = None) -> dic
 
 
 @celery_app.task(name="transcribe_video", bind=True)
-def transcribe_video(self, video_id: int) -> dict:
+def transcribe_video(self, video_id: int, keep_breaks: bool = False) -> dict:
     try:
-        return asyncio.run(_run(video_id))
+        return asyncio.run(_run(video_id, keep_breaks))
     except Exception as exc:
         logger.exception("Transcription failed for video %s", video_id)
         # A video stuck on "processing" forever is worse than an honest

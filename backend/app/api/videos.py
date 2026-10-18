@@ -65,7 +65,7 @@ def _to_read(video) -> VideoRead:
     )
 
 
-def _enqueue_transcription(video_id: int) -> bool:
+def _enqueue_transcription(video_id: int, keep_breaks: bool = False) -> bool:
     """
     Hand the video to the worker.
 
@@ -76,7 +76,7 @@ def _enqueue_transcription(video_id: int) -> bool:
     try:
         from app.workers.transcription import transcribe_video
 
-        transcribe_video.delay(video_id)
+        transcribe_video.delay(video_id, keep_breaks=keep_breaks)
         return True
     except Exception as exc:  # noqa: BLE001
         logger.error("Could not enqueue transcription for video %s: %s", video_id, exc)
@@ -322,6 +322,8 @@ async def retranscribe(
     auto-detect would undo the setting that made it better.
     """
     video = await _require_owned(db, video_id, user.id)
+    # Manual line breaks survive only a Redo into the same caption language.
+    keep_breaks = payload is None or payload.caption_language in (None, video.caption_language)
 
     if payload is not None and (
         payload.spoken_language is not None or payload.caption_language is not None
@@ -341,7 +343,7 @@ async def retranscribe(
 
     video = await video_service.mark_queued(db, video)
 
-    if not _enqueue_transcription(video.id):
+    if not _enqueue_transcription(video.id, keep_breaks):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not reach the processing queue. Please try again.",
