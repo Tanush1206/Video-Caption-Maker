@@ -55,6 +55,22 @@ def build_export_path(video: Video, export_format: ExportFormat) -> tuple[Path, 
     return storage.resolve(relative), relative
 
 
+async def captions_from(db: AsyncSession, video_id: int):
+    """When the video's current set of captions was written: its oldest caption."""
+    from sqlalchemy import func
+
+    return (
+        await db.execute(select(func.min(Caption.created_at)).where(Caption.video_id == video_id))
+    ).scalar_one_or_none()
+
+
+def is_current(export: Export, video: Video, written) -> bool | None:
+    """Whether `export` was made from the captions the video has now."""
+    if export.caption_language is None or export.captions_from is None or written is None:
+        return None
+    return export.caption_language == video.caption_language and export.captions_from == written
+
+
 async def create_export(
     db: AsyncSession,
     video: Video,
@@ -69,6 +85,8 @@ async def create_export(
         # None means "the source's own size", which is what every export before
         # this option existed meant, and still the default.
         height=height,
+        caption_language=video.caption_language,
+        captions_from=await captions_from(db, video.id),
     )
     db.add(export)
     await db.commit()

@@ -21,6 +21,12 @@ class ExportRead(BaseModel):
     # Null for a sidecar, and for a burn rendered at the source's own size.
     height: int | None = None
 
+    # The caption language it was made in ("same", or a language code); null
+    # for an export from before v1.0.8. `current` is false once a Redo has
+    # replaced the captions it was made from (null when that can't be told).
+    caption_language: str | None = None
+    current: bool | None = None
+
     # storage_path is deliberately absent, as everywhere else: the client gets
     # a download route, never a filesystem path.
 

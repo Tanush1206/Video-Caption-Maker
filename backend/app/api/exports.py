@@ -118,7 +118,7 @@ async def create_export(
 
     if payload.format in INSTANT_FORMATS:
         export = await export_service.write_sidecar(db, export, video, captions)
-        return ExportRead.model_validate(export)
+        return _read(export, video, export.captions_from)
 
     if not _queue_render(export.id):
         await export_service.delete_export(db, export)
@@ -127,7 +127,14 @@ async def create_export(
             detail="Could not reach the rendering queue. Please try again.",
         )
 
-    return ExportRead.model_validate(export)
+    return _read(export, video, export.captions_from)
+
+
+def _read(export, video, written) -> ExportRead:
+    """An export, with the language it holds and whether those are still the captions."""
+    read = ExportRead.model_validate(export)
+    read.current = export_service.is_current(export, video, written)
+    return read
 
 
 @router.get(
@@ -190,10 +197,11 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
 
 @router.get("/videos/{video_id}/exports", response_model=ExportList, tags=["exports"])
 async def list_exports(video_id: int, user: CurrentUser, db: DbSession) -> ExportList:
-    await _require_owned_video(db, video_id, user.id)
+    video = await _require_owned_video(db, video_id, user.id)
     exports = await export_service.list_exports(db, video_id)
+    written = await export_service.captions_from(db, video_id)
     return ExportList(
-        items=[ExportRead.model_validate(export) for export in exports],
+        items=[_read(export, video, written) for export in exports],
         total=len(exports),
     )
 
@@ -201,7 +209,9 @@ async def list_exports(video_id: int, user: CurrentUser, db: DbSession) -> Expor
 @router.get("/exports/{export_id}", response_model=ExportRead, tags=["exports"])
 async def get_export(export_id: int, user: CurrentUser, db: DbSession) -> ExportRead:
     """Polled while a render runs, for status and progress."""
-    return ExportRead.model_validate(await _require_owned_export(db, export_id, user.id))
+    export = await _require_owned_export(db, export_id, user.id)
+    video = await video_service.get_owned_video(db, export.video_id, user.id)
+    return _read(export, video, await export_service.captions_from(db, export.video_id))
 
 
 @router.delete("/exports/{export_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["exports"])

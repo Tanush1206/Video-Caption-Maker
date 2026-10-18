@@ -92,6 +92,15 @@ class Export(Base):
     # ratio, and storing both would allow them to disagree.
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # The captions this export was made from: their language (the video's
+    # caption language at the time) and when that set of captions was written
+    # (the oldest caption's created_at; a Redo writes a new set). An export is
+    # a file made at one moment, and the list has to say which captions it
+    # holds: an SRT made in English and listed, unlabelled, after a Redo into
+    # Hindi was downloaded as "the Hindi SRT". Null on exports from before.
+    caption_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    captions_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # Times a worker restart found this render stranded and requeued it.
     # See app/workers/recovery.py.
