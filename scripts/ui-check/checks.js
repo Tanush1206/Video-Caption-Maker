@@ -98,13 +98,21 @@ async function pointer(page, kind) {
 const near = (a, b, tolerance = 1.5) => Math.abs(a - b) <= tolerance;
 
 // ── Caption layout checks ──────────────────────────────────────────────
-// The texts, looks and sizes of backend/tests/test_caption_layout.py.
+// The texts, looks and sizes of backend/tests/test_caption_layout.py, and
+// the line styles (v1.0.8), with Stacked at its own defaults.
+const LINE_STYLES = {
+  balanced: { line_style: "balanced", max_lines: 2 },
+  auto: { line_style: "auto", max_lines: 2 },
+  stacked: { line_style: "stacked", words_per_line: 2, max_lines: 4 },
+};
 const LAYOUT_TEXTS = {
   short: "Hi there",
   long: "Finally, stir everything together until the soup is completely smooth, then serve it hot with fresh bread, a little butter and a handful of chopped herbs on top",
   hindi: "अंत में, सब कुछ चिकना होने तक मिलाएँ और इसे ताज़ी रोटी के साथ परोसें",
   german: "Donaudampfschifffahrtsgesellschaftskapitän und Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz",
   russian: "Наконец, перемешайте все, пока оно не будет гладким, и подайте его с хлебом",
+  // A manual line break (Shift+Enter), then a line long enough to wrap.
+  manual: "A line I broke\nby hand, and then a much longer second line that the box has to wrap as well",
 };
 const LOOKS = {
   "box-pad-0": { box_opacity: 1, box_padding: 0, outline_width: 0, shadow: 0 },
@@ -1009,20 +1017,101 @@ const CHECKS = {
     await page.close();
   },
 
+  // Line control in the editor (v1.0.8). Shift+Enter in a caption's text
+  // puts a line break there: the preview breaks there, it's saved, and it's
+  // still there after a reload (Enter still saves and moves on). The Line
+  // style choice works from the keyboard, each option is described to a
+  // screen reader, Words per line shows only for Stacked, Max lines offers
+  // 1-6 for Stacked and 1-3 otherwise, and the preview restacks. Changes
+  // data (one caption's text and the style, both put back).
+  async "line-styles"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    await openEditor(page, base, id);
+    const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
+    const target = captions.items.find((c) => c.text.split(" ").length >= 4) ?? captions.items[0];
+    const original = target.text;
+    const words = original.split(" ");
+    await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (target.start_ms + target.end_ms) / 2000);
+    await waitForCaption(page, original);
+
+    // Shift+Enter after the second word.
+    const box = page.getByRole("textbox", { name: /^Caption at / }).filter({ hasText: original }).first();
+    await box.scrollIntoViewIfNeeded();
+    await box.click();
+    await box.evaluate((el, at) => { el.setSelectionRange(at, at); }, words.slice(0, 2).join(" ").length);
+    await page.keyboard.press("Delete"); // the space the break replaces
+    await page.keyboard.press("Shift+Enter");
+    ok("line-styles: Shift+Enter keeps the caption open for typing", await box.evaluate((el) => el === document.activeElement));
+    const wanted = `${words.slice(0, 2).join(" ")}\n${words.slice(2).join(" ")}`;
+    ok("line-styles: Shift+Enter inserts a line break", (await box.inputValue()) === wanted, JSON.stringify(await box.inputValue()));
+    await page.keyboard.press("Enter"); // saves and moves on
+    await page.waitForTimeout(800);
+    const saved = (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items.find((c) => c.id === target.id);
+    ok("line-styles: the break is saved", saved.text === wanted, JSON.stringify(saved.text));
+    const firstLine = () => page.evaluate(() => document.querySelector("[data-caption-line]")?.textContent);
+    await page.waitForFunction((w) => document.querySelector("[data-caption-line]")?.textContent === w, words.slice(0, 2).join(" "), { timeout: 3000 }).catch(() => {});
+    ok("line-styles: the preview breaks there", (await firstLine()) === words.slice(0, 2).join(" "), String(await firstLine()));
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+    await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (target.start_ms + target.end_ms) / 2000);
+    await waitForCaption(page, original);
+    ok("line-styles: the break survives a reload", (await firstLine()) === words.slice(0, 2).join(" "), String(await firstLine()));
+    await page.request.patch(`${base}/api/captions/${target.id}`, { data: { text: original } });
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("video")?.readyState >= 1);
+    await page.evaluate((s) => { const v = document.querySelector("video"); v.pause(); v.currentTime = s; }, (target.start_ms + target.end_ms) / 2000);
+    await waitForCaption(page, original);
+
+    // The Line style choice, by keyboard.
+    await page.getByRole("radio", { name: "Position" }).click();
+    const group = page.getByRole("radiogroup", { name: "Line style" });
+    const radios = group.getByRole("radio");
+    ok("line-styles: three line styles, Balanced first and chosen", (await radios.count()) === 3 && (await radios.nth(0).getAttribute("aria-checked")) === "true" && (await radios.nth(0).textContent()) === "Balanced");
+    for (let i = 0; i < 3; i++) {
+      const description = await radios.nth(i).evaluate((el) => document.getElementById(el.getAttribute("aria-describedby") ?? "")?.textContent ?? "");
+      ok(`line-styles: ${await radios.nth(i).textContent()} is described`, description.length > 20, description);
+    }
+    await radios.nth(2).focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(900);
+    let style = await styleOf(page, base, id);
+    ok("line-styles: Stacked chosen by keyboard, Max lines 4", style.line_style === "stacked" && style.max_lines === 4, `${style.line_style} ${style.max_lines}`);
+    const limits = page.getByRole("radiogroup", { name: "Max lines" }).getByRole("radio");
+    ok("line-styles: Max lines offers 1-6 when Stacked", (await limits.count()) === 6);
+    const wpl = page.getByRole("radiogroup", { name: "Words per line" });
+    ok("line-styles: Words per line shows for Stacked", await wpl.isVisible());
+    await wpl.getByRole("radio", { name: "1" }).click();
+    await page.waitForTimeout(900);
+    const stacked = await page.evaluate(() => [...document.querySelectorAll("[data-caption-line]")].map((l) => l.textContent));
+    ok("line-styles: one word a line in the preview", stacked.length > 1 && stacked.every((l) => !l.includes(" ")), JSON.stringify(stacked));
+    await radios.nth(0).click();
+    await page.waitForTimeout(900);
+    style = await styleOf(page, base, id);
+    ok("line-styles: back to Balanced, Max lines back within 1-3", style.line_style === "balanced" && style.max_lines <= 3 && (await limits.count()) === 3, `${style.line_style} ${style.max_lines}`);
+    ok("line-styles: Words per line hidden again", !(await wpl.isVisible()));
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.close();
+  },
+
   // The editor and the burn lay a caption out alike: the same lines, and the
-  // same painted rectangle (within half a percent of the frame). The burn's
-  // layout comes from backend/scripts/caption_layout.py through `docker
-  // compose exec`, so this runs on the dev stack only. Changes data.
+  // same painted rectangle (within half a percent of the frame), for every
+  // line style, look and size. The burn's layout comes from
+  // backend/scripts/caption_layout.py through `docker compose exec`, so this
+  // runs on the dev stack only. VCM_LINE_STYLES limits the styles (comma-
+  // separated). Changes data.
   async "layout-parity"(browser, base) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const ids = await safeVideos(page, base);
     const texts = Object.values(LAYOUT_TEXTS);
     for (const id of ids) {
       await mockCaptions(page, base, id, texts);
+      const styles = (process.env.VCM_LINE_STYLES || Object.keys(LINE_STYLES).join(",")).split(",");
+      for (const lineStyle of styles)
       for (const [look, lookFields] of Object.entries(LOOKS)) {
         for (const [size, font_size] of Object.entries(SIZES)) {
-          const at = `layout-parity@${id}/${look}/${size}`;
-          const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...lookFields, font_size, pos_x: 0.5, pos_y: 0.5, box_width: null, max_lines: 2 } })).json();
+          const at = `layout-parity@${id}/${lineStyle}/${look}/${size}`;
+          const style = await (await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...lookFields, ...LINE_STYLES[lineStyle], font_size, pos_x: 0.5, pos_y: 0.5, box_width: null } })).json();
           await openMocked(page, base, id);
           const frame = await page.evaluate(() => ({ width: document.querySelector("video").videoWidth, height: document.querySelector("video").videoHeight }));
           const burn = burnLayout(style, texts, frame);
