@@ -906,9 +906,8 @@ Decisions:
       flicker gaps, no stretched words).
 - [x] Docs: PRD, DESIGN_SYSTEM, API, DATABASE (migrations 15-17),
       ARCHITECTURE, TESTING; CHANGELOG 1.0.8.
-- [x] Test videos: 46 created in the dev stack this release (7497-7539 and
-      the three line-control clips before them, ids recorded as made), all
-      deleted through the API; it holds only 7426 (Tanush's). None created
+- [x] Test videos: 43 created in the dev stack this release (7497-7539,
+      ids recorded as made), all deleted through the API; it holds only 7426 (Tanush's). None created
       in the installed app. The installed app kept port 3000 throughout (dev
       UI on 3001); dev stack stopped at the end.
 
