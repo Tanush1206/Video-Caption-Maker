@@ -49,3 +49,6 @@ learning-guide.md
 
 # Database dumps hold user data.
 *.dump
+
+# Maintainer's bug evidence (videos and exports); never committed.
+test-assets/
