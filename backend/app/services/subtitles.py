@@ -175,6 +175,10 @@ def to_json(captions: Sequence[Caption]) -> str:
             ]
         },
         indent=2,
+        # Real characters, not escapes: the file is written as UTF-8, and a
+        # Marathi caption read as a row of backslash-u codes is no use to
+        # anyone opening the file. Valid JSON either way.
+        ensure_ascii=False,
     )
 
 
