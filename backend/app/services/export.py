@@ -15,7 +15,7 @@ from app.models.caption import Caption
 from app.models.caption_style import CaptionStyle
 from app.models.export import Export, ExportFormat, ExportStatus
 from app.models.video import Video
-from app.services import storage, subtitles
+from app.services import media, storage, subtitles
 
 SIDECAR_WRITERS = {
     ExportFormat.SRT: subtitles.to_srt,
@@ -90,6 +90,14 @@ async def write_sidecar(
     absolute.parent.mkdir(parents=True, exist_ok=True)
 
     content = SIDECAR_WRITERS[export.format](captions)
+    if export.format in (ExportFormat.SRT, ExportFormat.VTT):
+        # Broken where the burn breaks them, laid out on the video's own frame.
+        # Without a frame (an unreadable file) the stored text is written as is.
+        dimensions = await media.probe_dimensions(storage.resolve(video.storage_path))
+        if dimensions is not None:
+            style = await style_for(db, video.id)
+            texts = subtitles.laid_out_texts(captions, style, *dimensions)
+            content = SIDECAR_WRITERS[export.format](captions, texts)
     # UTF-8 explicitly: players assume it, and the default encoding on the host
     # is not something a subtitle file should depend on.
     absolute.write_text(content, encoding="utf-8")

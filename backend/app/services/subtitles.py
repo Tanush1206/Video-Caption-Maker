@@ -10,7 +10,7 @@ the words in the database, which are the words Whisper heard.
 """
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 from app.models.caption import Caption
 from app.models.caption_style import Alignment, CaptionStyle
@@ -60,26 +60,87 @@ def ass_time(ms: int) -> str:
     return f"{hours}:{minutes:02d}:{seconds:02d}.{millis // 10:02d}"
 
 
-def to_srt(captions: Sequence[Caption]) -> str:
+def to_srt(captions: Sequence[Caption], texts: Sequence[str] | None = None) -> str:
     """
     SubRip. Indices are 1-based and must be contiguous — some players stop at
     the first gap, so this numbers the output rather than using `sequence`,
     which is 0-based and could have been renumbered by an edit.
+
+    `texts` are the captions as the burn breaks them (`laid_out_texts`); the
+    stored text, manual breaks and all, when there is no frame to lay out on.
     """
+    texts = texts or [c.text.strip() for c in captions]
     blocks = [
-        f"{index}\n{srt_time(c.start_ms)} --> {srt_time(c.end_ms)}\n{c.text.strip()}\n"
-        for index, c in enumerate(captions, start=1)
+        f"{index}\n{srt_time(c.start_ms)} --> {srt_time(c.end_ms)}\n{text}\n"
+        for index, (c, text) in enumerate(zip(captions, texts), start=1)
     ]
     return "\n".join(blocks)
 
 
-def to_vtt(captions: Sequence[Caption]) -> str:
+def to_vtt(captions: Sequence[Caption], texts: Sequence[str] | None = None) -> str:
     """WebVTT. The `WEBVTT` header is mandatory; browsers reject the file without it."""
+    texts = texts or [c.text.strip() for c in captions]
     blocks = [
-        f"{vtt_time(c.start_ms)} --> {vtt_time(c.end_ms)}\n{c.text.strip()}\n"
-        for c in captions
+        f"{vtt_time(c.start_ms)} --> {vtt_time(c.end_ms)}\n{text}\n"
+        for c, text in zip(captions, texts)
     ]
     return "WEBVTT\n\n" + "\n".join(blocks)
+
+
+def _layouts(
+    captions: Sequence[Caption], style: CaptionStyle, width: int, height: int
+) -> Iterator[tuple[Caption, Layout, bool]]:
+    """Every caption laid out on this frame, as the burn draws it."""
+    measurers = {bold: Measurer(style, bold) for bold in (False, True)}
+    for caption in captions:
+        bold = style.bold if caption.override_bold is None else caption.override_bold
+        layout = layout_caption(
+            caption.text,
+            style,
+            width,
+            height,
+            override_scale=caption.override_scale,
+            bold=bold,
+            measurer=measurers[bold],
+        )
+        yield caption, layout, bold
+
+
+def _in_original_case(text: str, lines: Sequence[str], uppercase: bool) -> list[str]:
+    """
+    The laid-out lines, cut from the caption's own text.
+
+    The layout works on what is drawn, which is upper-cased for an uppercase
+    style, and SRT/VTT keep the words as they are. Each line is the same run
+    of letters in the original: counted without spaces, and with each
+    original letter counting as many as its capital has (German ß is SS).
+    """
+    out, pos = [], 0
+    for line in lines:
+        need = sum(1 for ch in line if not ch.isspace())
+        start, got = pos, 0
+        while pos < len(text) and (got < need or text[pos].isspace() and got == 0):
+            ch = text[pos]
+            if not ch.isspace():
+                got += len(ch.upper()) if uppercase else 1
+            pos += 1
+        out.append(" ".join(text[start:pos].split()))
+    return out
+
+
+def laid_out_texts(
+    captions: Sequence[Caption], style: CaptionStyle, width: int, height: int
+) -> list[str]:
+    """
+    Each caption's text broken into the lines the burn draws, for SRT and VTT.
+
+    The same layout as the MP4 (manual breaks, line style, box width, font
+    shrink) on the video's own frame, so a sidecar breaks where the burn does.
+    """
+    return [
+        "\n".join(_in_original_case(caption.text, layout.text, style.uppercase))
+        for caption, layout, _ in _layouts(captions, style, width, height)
+    ]
 
 
 def to_json(captions: Sequence[Caption]) -> str:
@@ -243,22 +304,11 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
-    measurers = {bold: Measurer(style, bold) for bold in (False, True)}
-    for caption in captions:
-        bold = style.bold if caption.override_bold is None else caption.override_bold
-        # `uppercase` is the one style field ASS cannot express, so the layout
-        # applies it to the text instead of to the Style line. Only here: the
-        # stored caption and the SRT/VTT sidecars keep their original case,
-        # because this is how the captions are *drawn on the video*.
-        layout = layout_caption(
-            caption.text,
-            style,
-            width,
-            height,
-            override_scale=caption.override_scale,
-            bold=bold,
-            measurer=measurers[bold],
-        )
+    # `uppercase` is the one style field ASS cannot express, so the layout
+    # applies it to the text instead of to the Style line. Only here: the
+    # stored caption and the SRT/VTT sidecars keep their original case,
+    # because this is how the captions are *drawn on the video*.
+    for caption, layout, bold in _layouts(captions, style, width, height):
         tags = _layout_tags(layout, style) + _emphasis_tags(caption)
         text = "{" + "".join(tags) + "}" + "\\N".join(
             _script_runs(line, style, layout.size, bold) for line in layout.lines
