@@ -179,6 +179,25 @@ Required for every UI change (PROGRESS.md, v1.0.4 rules):
 - no console errors and no horizontal overflow;
 - a production build (`docker build --target build frontend`) must succeed.
 
+### Caption quality on a real video: `scripts/caption_quality.py`, `backend/scripts/timing_check.py`
+
+Upload one clip once per caption language (English and the others), let each
+finish, then:
+
+```bash
+python scripts/caption_quality.py --base http://localhost:3000 --english <en id> <hi id> <mr id> <es id>
+docker compose exec -T worker python scripts/timing_check.py <hi id> <mr id> <en id> <es id>
+```
+
+`caption_quality.py` (through the API) fails on more than 5% single-word
+captions, any caption over 7 s, overlaps, an SRT whose words differ from the
+captions', or a count more than 30% off English's. `timing_check.py` (in the
+dev worker, reading `videos.speech`) fails on a gap of 80-500 ms between
+captions, speech with no caption on screen, a caption more than 0.5 s past
+its last word, or one outside 0.8-7 s. Measured for v1.0.8 on a 228-second
+Hinglish tutorial: both pass for Hindi, Marathi, English and Spanish; on the
+v1.0.7 code both fail. Delete the videos afterwards (AGENTS.md rule 20).
+
 ### Update download size: `scripts/update_layers.py`
 
 Proves that `vcm update` downloads only the image layers that changed.
@@ -231,6 +250,9 @@ Full layer digests are in PROGRESS.md.
 | Caption box: width, line limit and shrink, broken long words, the safe area on every side for the grid of positions × aspects × texts × padding × size, in the layout and **in the burned pixels**; the width doesn't change when dragged | `test_caption_layout.py` | `checks.js caption-safe-area`, `caption-width`, `caption-snap` |
 | Preview and burn use the same lines, size and rectangle | `test_caption_layout.py`, `test_caption_styles.py` (`test_libass_never_wraps_or_places_on_its_own`) | `checks.js layout-parity` |
 | Line control (v1.0.8): manual breaks in the layout, the burned pixels, SRT and VTT and after a reload; Balanced vs Auto; Stacked 1-4 words in English, Hindi and Russian; the fit rule (one word a line, sixty words) in the layout and the MP4; Redo keeps breaks only in the same language; existing styles burn byte-for-byte as in 1.0.7 (`tests/data/burn-1.0.7.json`) | `test_line_control.py` | `checks.js layout-parity` (per line style), `line-styles` |
+| Exports say which caption language they hold; earlier captions are marked; every format in 3 languages back to back differs and holds its language | `test_exports.py` (`test_every_export_holds_the_language_it_was_made_in`) | the export list after a Redo, by eye |
+| JSON written as UTF-8 characters | `test_exports.py` (`test_json_export_writes_real_characters`) | |
+| Phrase-level captions timed to the speech: no lone or stretched words, breaths closed to 2 frames, pauses kept, 0.8-7 s, tail ≤ 0.5 s, every word covered; skipped speech re-decoded; a retimed caption keeps its times | `test_caption_phrasing.py`, `test_exports.py` (`test_a_retimed_caption_keeps_its_timing_through_reload_and_export`) | `scripts/caption_quality.py` and `backend/scripts/timing_check.py` on a real video in several caption languages (below) |
 | Old anchored and hand-placed styles convert to the box centre | `test_caption_styles.py` (`test_old_placements_convert_to_the_box_centre`) | |
 | Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
 | Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |

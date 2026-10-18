@@ -6,6 +6,67 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+Caption line control, and captions that follow the speech in every
+language. **Three migrations**, run on start: every style gets the Balanced
+line style and 2 words a line (how every caption already broke, so existing
+videos look exactly as before); exports record which captions they hold;
+videos keep the word timings their captions are timed to.
+
+### Added
+- **Manual line breaks.** Shift+Enter in a caption's text starts a new line
+  there (Enter still saves). The break is saved, shown in the editor, burned
+  at the same place in the MP4 and written into SRT and VTT; a manual line
+  still too wide for the box also wraps inside itself.
+- **Line style** in the style panel's Position tab, for the whole video, each
+  option with a one-line description:
+  - **Balanced** (default): wraps at the box width with the lines evened out,
+    as before;
+  - **Auto:** fills each line to the box width before starting the next;
+  - **Stacked:** a set number of words on each line (**Words per line** 1–4,
+    default 2), whatever the box width, unless a group is still too wide for
+    the box. Max lines goes up to 6 in Stacked (default 4).
+
+### Changed
+- **SRT and VTT break each caption where the burned MP4 does**, laid out on
+  the video's own frame, in the words' own letter case. They used to hold
+  each caption on one line.
+- **A caption taller than the frame keeps shrinking until it fits.** Past
+  Max lines a caption shrinks to 70%, then gets more lines; if its box would
+  then be taller (or wider) than the safe area, the font keeps shrinking,
+  so no caption is ever cut off, even one word a line.
+- **Redo keeps manual line breaks** of every caption that comes back with
+  exactly the same words, when the caption language is unchanged. A new
+  translation starts without them.
+- **Captions are phrases timed to the speech, in every language.** A
+  caption is about 32 characters, cut at punctuation, then at natural word
+  groups (never starting with a word that finishes the verb before it, such
+  as है or आहे), never a lone word. Its timing comes from Whisper's word
+  timestamps: whatever is spoken is on screen, a breath under 0.5 s closes
+  to two frames (no flicker), 0.5 s or more of silence stays a gap, and a
+  caption lasts 0.8–7 s, ending at most 0.5 s after its last word. Editing a
+  caption's timing by hand is kept until Redo.
+
+### Fixed
+- **An SRT downloaded after switching language could be the old
+  language.** Exports made before a Redo stayed in the list unlabelled, so an
+  English SRT was downloaded as the Hindi one. Every export now says which
+  caption language it holds, and one made from captions a Redo has since
+  replaced is marked "From earlier captions".
+- **JSON exports escaped non-Latin text** (`\u0924\u094d…` instead of
+  Marathi). Written as UTF-8 with the real characters.
+- **Translated captions became single words held for 13–15 s and sentences
+  were cut mid-phrase** (Marathi: 76 captions to English's 116; the editor
+  timeline showed gaps while speech went on). Three causes: Whisper skipped
+  stretches of speech (20 s at a time on a Hinglish tutorial; they are now
+  decoded again on their own), word alignment stretched a word across the
+  pause after it (now capped at 3 s), and translated sentences were forced
+  back into their source's caption slots (now re-cut into phrases and timed
+  to the words). On that tutorial Hindi, Marathi and Spanish now have
+  0.93–1.09 of English's caption count, 0–2 single words and nothing over
+  4.8 s.
+
 ## [1.0.7] - 2026-10-17
 
 Caption placement and styling fixed and made to match the export exactly,

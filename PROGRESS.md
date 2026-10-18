@@ -747,6 +747,143 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## v1.0.8 (in progress)
+Brief (Tanush, 2026-10-17): caption line control. Manual line breaks
+(Shift+Enter), a Line style setting (Auto / Balanced / Stacked with Words per
+line), and a fit rule that shrinks past 70% when the box would be taller than
+the safe area. One shared layout rule (backend + its frontend copy); SRT/VTT
+use the burn's lines; a migration that leaves every existing video as it is.
+This section is the resume point.
+
+### Answers (2026-10-17)
+- **Redo and manual breaks:** a caption keeps its manual breaks across Redo
+  only if the caption language is unchanged and its words exactly match an
+  old caption that had breaks (breaks put back at the same word positions).
+  Any other new caption starts without manual breaks.
+- **Port 3000:** the dev UI runs on port 3001 (an uncommitted compose
+  override); the installed app keeps 3000 throughout. GPU jobs run on one
+  stack at a time.
+
+### Found before starting
+- Shift+Enter already inserts `\n` in the caption textarea (Enter saves),
+  and the v1.0.7 layout already breaks at `\n`. Missing: SRT/VTT write the
+  raw text, not the burn's lines; no tests; Redo drops breaks.
+- v1.0.7's wrap is already near-balanced (greedy for the count, then the
+  narrowest width keeping it). "Auto = current behaviour" keeps it exactly;
+  Balanced must therefore even the lines further (see decisions).
+
+### Backlog
+- [ ] L1 Model + migration: `line_style` (auto/balanced/stacked, default
+      auto), `words_per_line` (1-4, default 2); `max_lines` up to 6 (Stacked).
+- [ ] L2 Layout (backend + frontend copy): Balanced, Stacked, manual breaks
+      counted as lines, fit rule below 70% until the box fits the safe area.
+- [ ] L3 SRT/VTT written with the layout's lines at the video's own size.
+- [ ] L4 Redo keeps manual breaks on an exact match in the same language.
+- [ ] L5 Style panel: Line style with descriptions, Words per line; Max lines
+      range by style; keyboard and screen reader; axe 0.
+- [ ] L6 Tests per the brief; parity per line style x 16:9, 9:16, 1:1.
+- [ ] L7 Docs: PRD, DESIGN_SYSTEM, API, DATABASE, ARCHITECTURE, TESTING,
+      CHANGELOG (Unreleased -> 1.0.8).
+- [ ] L8 Suites, build, GPU E2E (en, hi + one more x each line style), a
+      burned MP4 per line style in 16:9 and 9:16 by eye; delete every test
+      video in both stacks; dev stack stopped.
+
+### Decisions
+- **Auto vs Balanced** (asked, Tanush 2026-10-18): Auto fills each line to
+  the box width (ragged); Balanced is v1.0.7's even wrapping and the default
+  for existing and new videos, so nothing looks different unless Auto is
+  picked. (Measured first: a "most even split" Balanced on top of v1.0.7's
+  wrap differed from it in 1 case of 75, so it would have been a no-op.)
+- **Max lines when switching style:** choosing Stacked sets Max lines to 4
+  (its default); leaving Stacked with more than 3 sets it back to 2 (the
+  other styles offer 1-3). The API accepts 1-6 for any style.
+- **Fit rule:** past 70% the font keeps shrinking in the same 2% steps, down
+  to 10%, only while the box (with outline, shadow and overhang) is taller
+  or wider than the safe area. The wrap width is also capped at the safe
+  area's width, so a 94% box never pushes text past it.
+- **Stacked and long groups:** a group of N words too wide for the box is
+  wrapped by Balanced's rule inside itself, like any manual line.
+- **SRT/VTT lines:** laid out on the video's own frame (probed at export),
+  with the video's style, mapped back onto the original letter case for an
+  uppercase style. Without readable dimensions the stored text is written
+  as is (manual breaks only).
+- **Redo:** the route decides (`keep_breaks` when the caption language is
+  unchanged or not sent); the worker reads the old captions' breaks before
+  deleting them and restores them on captions whose words match exactly.
+- **Caption textarea:** sized by its lines, so a manual break doesn't hide
+  the second line.
+- **"Renders exactly as before":** `tests/data/burn-1.0.7.json` holds the
+  Style and Dialogue lines the v1.0.7 code produced for 4 styles x 3 frames
+  x 6 captions; the new code must produce them byte for byte with the
+  migrated defaults. (This one can't fail before the change: it is the
+  guard that the change didn't move anything.)
+- **Dev UI on 3001:** a scratch compose override publishes the dev frontend
+  on 127.0.0.1:3001 and adds it to the dev backend's CORS_ORIGINS; nothing
+  committed. Test videos created in the dev stack: 7497, 7498, 7499.
+
+### Bugs added to v1.0.8 (Tanush, 2026-10-18)
+Evidence in `test-assets/` (now gitignored; it wasn't). `hinglish.mp4` was
+not in the folder: the checks use its audio taken from `bug-mr.mp4.mp4`
+over a plain picture (a scratch file, never committed).
+
+- [x] **Bug 1, an SRT in the wrong language.** Root cause, from the
+      install's own rows: the "Hindi" SRT (8,244 bytes, export 179) was made
+      at 06:57, nine minutes before a Redo wrote the current captions. Every
+      export reads the captions it's given; the list just never said which
+      ones, so the old file was taken for the new. Fix: exports record their
+      caption language and which set of captions (`captions_from`); the API
+      serves `caption_language` and `current`; the list labels each export
+      and marks "From earlier captions". Test: all 4 formats x 3 languages
+      back to back.
+- [x] **Bug 2, JSON escapes.** `json.dumps` defaulted to ASCII;
+      `ensure_ascii=False`. Test with Devanagari.
+- [x] **Bug 3, single words over long times; cut sentences; counts.** Three
+      causes, measured on the clip:
+      1. Whisper's seek skipped speech after a window ended on a garbled
+         token (8-29 s, 96-116 s, 180-201 s empty in Hindi; decoded alone
+         the same audio gave clean phrases). Fix: no conditioning on the
+         previous window, and every 4 s+ uncaptioned stretch decoded again
+         alone, recursively (it can stop early too).
+      2. Alignment stretched a word over the pause after it (".T." 8.1-19.1,
+         "हैं।" 66.0-87.8 s) and `_split_long` made it a caption. Fix: word
+         timings capped at 3 s.
+      3. `split_like` forced translated sentences back into the source's
+         slots. Fix: `services/phrasing.py` re-cuts every language into
+         phrases (punctuation, natural groups: no auxiliary or postposition
+         first, conjunctions preferred, no lone words).
+- [x] **Bug 3, timing rules** (added mid-way): captions timed to Whisper's
+      word timestamps, kept per segment through translation and stored on
+      the video (`videos.speech`); runs split at pauses of 0.5 s+; breath
+      gaps closed to 80 ms, pauses kept at 0.5 s+; tail ≤ 0.5 s; 0.8-7 s; a
+      squeezed caption joins the neighbour the speech runs into. Rules run
+      only in the transcription job, so manual retiming survives until Redo.
+
+Measured (dev, GPU, the Hinglish clip; ids recorded for deletion):
+
+| | v1.0.7 code | final |
+|---|---|---|
+| Hindi captions (vs English) | 66 (0.54) | 128 (1.01) |
+| Marathi | 51 (0.42) | 118 (0.93) |
+| Spanish | 76 (0.62) | 139 (1.09) |
+| single-word captions | up to 14% | 0-2 |
+| longest caption | 21.8 s | 4.8 s |
+| `timing_check.py` | FAIL (46-118 violations) | ALL PASSED |
+
+Decisions:
+- **Stored word timings** (`videos.speech`, JSON) rather than checking
+  against a second decode: Whisper places words differently run to run, and
+  the rule is about the timings the captions were made from.
+- **Phrase size 32 characters** (English from Whisper's translate path has a
+  median of 33); a phrase never starts with Hindi/Marathi/Bengali auxiliaries
+  or Hindi postpositions ("की" excluded: Marathi conjunction).
+- **A pause in the speech decides the gap**, not the gap between captions: a
+  minimum-length extension may grow into a pause only while 0.5 s of it
+  stays empty.
+- **"A retimed caption keeps its timing"** holds by design (the rules live
+  only in the job); its test can't fail before, as for the 1.0.7 guard.
+- **Translation quality** (M2M100 into Marathi sometimes invents a line, as
+  at 22.8 s of the clip) is unchanged; a model switch is Tanush's call.
+
 ## v1.0.7 (released 2026-10-17, tag on 4064dc1)
 Brief: fix caption dragging, the drag handle and the style sliders; improve
 translation quality; add 12 caption languages. Definition of done and rules
