@@ -24,6 +24,14 @@ class Alignment(str, enum.Enum):
     RIGHT = "right"
 
 
+class LineStyle(str, enum.Enum):
+    """How a caption is split into lines (services/caption_layout.wrap)."""
+
+    AUTO = "auto"
+    BALANCED = "balanced"
+    STACKED = "stacked"
+
+
 class CaptionStyle(Base):
     """
     How a video's captions look.
@@ -147,8 +155,21 @@ class CaptionStyle(Base):
     # know its video's shape until something measures it.
     box_width: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
 
-    # Lines before the font shrinks to fit (see caption_layout).
+    # Lines before the font shrinks to fit (see caption_layout). 1-3 in the
+    # panel for Auto and Balanced, 1-6 for Stacked.
     max_lines: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+
+    # How lines are broken: by the box width with the lines evened out
+    # (balanced, the default and what every caption did before v1.0.8), each
+    # line filled to the box width (auto), or a fixed number of words a line
+    # (stacked, `words_per_line`).
+    line_style: Mapped[LineStyle] = mapped_column(
+        Enum(LineStyle, name="caption_line_style",
+             values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=LineStyle.BALANCED,
+    )
+    words_per_line: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

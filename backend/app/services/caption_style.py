@@ -277,6 +277,8 @@ _PRESET_BASELINE: dict = {
     "pos_x": 0.5,
     "box_width": None,
     "max_lines": 2,
+    "line_style": "balanced",
+    "words_per_line": 2,
 }
 
 # The box centre's height for the Top / Middle / Bottom placements, as a

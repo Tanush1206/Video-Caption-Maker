@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.caption_style import REFERENCE_HEIGHT, Alignment
+from app.models.caption_style import REFERENCE_HEIGHT, Alignment, LineStyle
 from app.services import font_library
 from app.services.caption_style import (
     FONTS_BY_KEY,
@@ -51,6 +51,8 @@ class CaptionStyleRead(BaseModel):
     # same way the layout does (caption_layout.default_width).
     box_width: float | None = None
     max_lines: int = 2
+    line_style: LineStyle = LineStyle.BALANCED
+    words_per_line: int = 2
 
     # Echoed so the client never has to hardcode it to size the preview.
     reference_height: int = REFERENCE_HEIGHT
@@ -131,7 +133,10 @@ class CaptionStyleUpdate(BaseModel):
     # back on the default for the frame's shape: the route applies the patch
     # with `exclude_unset`, so a null is sent through, not dropped.
     box_width: float | None = Field(default=None, ge=0.2, le=0.94)
-    max_lines: int | None = Field(default=None, ge=1, le=3)
+    # Up to 6 for Stacked; the panel offers 1-3 for Auto and Balanced.
+    max_lines: int | None = Field(default=None, ge=1, le=6)
+    line_style: LineStyle | None = None
+    words_per_line: int | None = Field(default=None, ge=1, le=4)
 
     @model_validator(mode="after")
     def no_nulls(self) -> "CaptionStyleUpdate":
