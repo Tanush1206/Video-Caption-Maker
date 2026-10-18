@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -107,6 +107,11 @@ class Video(Base):
     # was unreachable, translated locally instead").
     stage_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
     notice: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # When speech was heard, [[start_ms, end_ms], ...], one pair a word, from
+    # the transcription the captions were made from: what they are timed to
+    # (services/phrasing.py), and what backend/scripts/timing_check.py checks
+    # them against. Written by each transcription; null before v1.0.8.
+    speech: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     owner = relationship("User", back_populates="videos")
     # uselist=False: one style per video, so this reads as an object, not a

@@ -25,6 +25,7 @@ from app.services import (
     hardware,
     languages,
     model_store,
+    phrasing,
     storage,
     transcription,
     translation,
@@ -282,6 +283,9 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
                     end_ms=segment.end_ms,
                     text=text,
                     confidence=segment.confidence,
+                    # The speech is still the speech: the translated captions
+                    # are timed to it (services/phrasing.py).
+                    speech=segment.speech,
                 )
                 for segment, text in zip(segments, result.texts)
             ]
@@ -290,7 +294,25 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
                 video_id, len(segments), wanted, result.engine,
             )
 
-    # ── 3. Persist captions ─────────────────────────────────────────────
+    # The word timings the captions are made from, kept with the video.
+    spoken = [
+        [s, e] for segment in segments for s, e, w in getattr(segment, "speech", None) or [] if w and e > s
+    ]
+
+    # ── 3. Phrases ──────────────────────────────────────────────────────
+    # The same phrase-level captions in every language: whole sentences
+    # again after translation, cut at punctuation and natural word groups,
+    # timed to the speech's word timestamps, 0.8-7 s each, no flicker gaps
+    # and no caption across a pause (services/phrasing.py).
+    segments = [
+        transcription.Segment(
+            start_ms=phrase.start_ms, end_ms=phrase.end_ms, text=phrase.text,
+            confidence=phrase.confidence,
+        )
+        for phrase in phrasing.rephrase(segments)
+    ]
+
+    # ── 4. Persist captions ─────────────────────────────────────────────
     async with worker_session() as session:
         session.add_all(
             [
@@ -317,7 +339,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             ).scalars()
         )
 
-    # ── 4. Embed and index ──────────────────────────────────────────────
+    # ── 5. Embed and index ──────────────────────────────────────────────
     await _set_progress(video_id, STAGE_EMBEDDING, 0)
     try:
         await asyncio.to_thread(embeddings.index_captions, video_id, caption_ids, segments)
@@ -336,6 +358,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             video.progress = 100
             video.error_message = None
             video.notice = " ".join(notices)[:300] or None
+            video.speech = spoken
             await session.commit()
 
     return {"video_id": video_id, "segments": len(segments), "language": language}
