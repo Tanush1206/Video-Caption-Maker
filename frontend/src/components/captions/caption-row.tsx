@@ -207,7 +207,8 @@ export function CaptionRow({
       <textarea
         ref={registerRef}
         value={text}
-        rows={Math.max(1, Math.ceil(text.length / 48))}
+        // Each manual line break (Shift+Enter) starts a row of its own.
+        rows={Math.max(1, text.split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 48)), 0))}
         onChange={(e) => {
           setText(e.target.value);
           setDirty(true);

@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Move, Paintbrush, RotateCcw, Type } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { RailTabs } from "@/components/layout/editor-panel";
 import { FontPicker } from "@/components/styles/font-picker";
@@ -14,7 +14,7 @@ import {
 } from "@/hooks/use-caption-style";
 import { cn } from "@/lib/utils";
 import { MAX_BOX_WIDTH, MIN_BOX_WIDTH, PLACEMENT_Y, defaultWidth } from "@/lib/caption-layout";
-import type { Alignment, CaptionStyle } from "@/types/style";
+import type { Alignment, CaptionStyle, LineStyle } from "@/types/style";
 
 const PRESET_LABELS: Record<string, string> = {
   youtube: "YouTube",
@@ -32,7 +32,17 @@ const ALIGNMENTS = [
   { key: "center", label: "Centre" },
   { key: "right", label: "Right" },
 ] as const satisfies readonly { key: Alignment; label: string }[];
+/** Max lines: 1-3 for Balanced and Auto, 1-6 for Stacked (the API allows 6). */
 const LINE_LIMITS = [1, 2, 3] as const;
+const STACKED_LINE_LIMITS = [1, 2, 3, 4, 5, 6] as const;
+const STACKED_DEFAULT_LINES = 4;
+const WORDS_PER_LINE = [1, 2, 3, 4] as const;
+/** In the order they are offered; each with the sentence that says what it does. */
+const LINE_STYLES = [
+  { key: "balanced", label: "Balanced", description: "Wraps at the box width, with the lines evened out." },
+  { key: "auto", label: "Auto", description: "Fills each line to the box width before starting the next." },
+  { key: "stacked", label: "Stacked", description: "A set number of words on each line, whatever the width." },
+] as const satisfies readonly { key: LineStyle; label: string; description: string }[];
 
 /**
  * The on/off text properties, each previewing itself in its own button.
@@ -205,20 +215,24 @@ function Choice<T extends string | number>({
   onSelect,
 }: {
   label: string;
-  options: readonly { key: T; label: string }[];
+  /** A `description` is shown under the row and read out with its option. */
+  options: readonly { key: T; label: string; description?: string }[];
   selected: T | null;
   onSelect: (key: T) => void;
 }) {
+  const id = useId();
+  const described = options.some((o) => o.description);
   return (
     <div>
       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
       <div role="radiogroup" aria-label={label} className="flex gap-1.5">
-        {options.map(({ key, label: text }) => (
+        {options.map(({ key, label: text, description }) => (
           <button
             key={key}
             type="button"
             role="radio"
             aria-checked={selected === key}
+            aria-describedby={description ? `${id}-${key}` : undefined}
             onClick={() => onSelect(key)}
             className={cn(
               "flex-1 rounded-md border px-2 py-1.5 text-xs transition",
@@ -231,6 +245,18 @@ function Choice<T extends string | number>({
           </button>
         ))}
       </div>
+      {described && (
+        <dl className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+          {options.map(({ key, label: text, description }) =>
+            description ? (
+              <div key={key} id={`${id}-${key}`} className={cn(selected === key && "text-foreground")}>
+                <dt className="inline font-medium">{text}: </dt>
+                <dd className="inline">{description}</dd>
+              </div>
+            ) : null
+          )}
+        </dl>
+      )}
     </div>
   );
 }
@@ -462,15 +488,43 @@ export function StylePanel({
             suffix="%"
             onChange={(percent) => set({ box_width: percent / 100 })}
           />
+          {/* How a caption is split into lines. Switching to Stacked starts it
+              at four lines; leaving it brings a limit above three back to the
+              default, since Balanced and Auto offer one to three. */}
+          <Choice
+            label="Line style"
+            options={LINE_STYLES}
+            selected={style.line_style ?? "balanced"}
+            onSelect={(line_style) =>
+              set(
+                line_style === "stacked"
+                  ? { line_style, max_lines: STACKED_DEFAULT_LINES }
+                  : { line_style, ...(style.max_lines > 3 ? { max_lines: 2 } : {}) }
+              )
+            }
+          />
           <Choice
             label="Max lines"
-            options={LINE_LIMITS.map((n) => ({ key: n, label: String(n) }))}
+            options={(style.line_style === "stacked" ? STACKED_LINE_LIMITS : LINE_LIMITS).map((n) => ({
+              key: n,
+              label: String(n),
+            }))}
             selected={style.max_lines}
             onSelect={(max_lines) => set({ max_lines })}
           />
+          {style.line_style === "stacked" && (
+            <Choice
+              label="Words per line"
+              options={WORDS_PER_LINE.map((n) => ({ key: n, label: String(n) }))}
+              selected={style.words_per_line}
+              onSelect={(words_per_line) => set({ words_per_line })}
+            />
+          )}
           <p className="text-[11px] text-muted-foreground sm:col-span-2">
-            A caption that needs more lines is drawn smaller, down to 70% of the size, then gets one
-            more line. Drag the caption to move it, or the edges of its box to change the width.
+            A caption that needs more lines is drawn smaller, down to 70% of the size, then gets more
+            lines; one that would still be taller than the frame keeps shrinking until it fits.
+            Shift+Enter in a caption&rsquo;s text starts a new line there. Drag the caption to move it, or
+            the edges of its box to change the width.
           </p>
         </Pane>
       </div>
