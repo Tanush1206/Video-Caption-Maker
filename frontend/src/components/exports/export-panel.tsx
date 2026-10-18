@@ -8,6 +8,7 @@ import {
   Download,
   FileCode,
   FileText,
+  History,
   Info,
   Loader2,
   PencilLine,
@@ -25,6 +26,7 @@ import {
   useExports,
 } from "@/hooks/use-exports";
 import { useDownloadOriginal } from "@/hooks/use-stream";
+import { useLanguageOptions } from "@/hooks/use-videos";
 import { formatFileSize, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ExportFormat, VideoExport } from "@/types/export";
@@ -56,6 +58,29 @@ const FORMATS: {
 ];
 
 const ICONS: Record<string, typeof FileText> = { mp4: Clapperboard, srt: FileText, vtt: Captions, json: FileCode };
+
+/**
+ * Which captions an export holds, by language, and whether they have since
+ * been replaced. An export is a file made at one moment: after a Redo into
+ * another language the old SRT is still in the list, and unlabelled it was
+ * downloaded as the new one.
+ */
+function LanguageLine({ item, names }: { item: VideoExport; names: Map<string, string> }) {
+  if (!item.caption_language) return null;
+  const name =
+    item.caption_language === "same" ? "Spoken language" : (names.get(item.caption_language) ?? item.caption_language);
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+      <span>{name}</span>
+      {item.current === false && (
+        <span className="inline-flex items-center gap-1 rounded-sm border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[11px] font-medium text-warning">
+          <History className="size-3" aria-hidden="true" />
+          From earlier captions
+        </span>
+      )}
+    </span>
+  );
+}
 
 function StatusLine({ item }: { item: VideoExport }) {
   if (item.status === "failed") {
@@ -104,6 +129,8 @@ export function ExportPanel({
   const deleteExport = useDeleteExport(videoId);
   const download = useDownloadExport();
   const downloadOriginal = useDownloadOriginal(videoId);
+  const { data: languages } = useLanguageOptions();
+  const languageNames = new Map((languages?.caption ?? []).map((option) => [option.code, option.label]));
 
   /**
    * The height to burn at. Null means "whatever the server recommends", which
@@ -367,6 +394,7 @@ export function ExportPanel({
                     {item.format}
                     {item.height ? <span className="normal-case"> · {item.height}p</span> : null}
                   </p>
+                  <LanguageLine item={item} names={languageNames} />
                   <StatusLine item={item} />
                 </div>
                 <button

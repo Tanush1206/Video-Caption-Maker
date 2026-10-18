@@ -17,6 +17,13 @@ export interface VideoExport {
    * before the resolution option existed is.
    */
   height: number | null;
+  /**
+   * The caption language it was made in ("same" or a code); null for an
+   * export from before v1.0.8, which didn't record it.
+   */
+  caption_language: string | null;
+  /** False once a Redo has replaced the captions it was made from; null if unknown. */
+  current: boolean | null;
 }
 
 export interface ExportList {

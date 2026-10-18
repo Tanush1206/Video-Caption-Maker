@@ -1057,3 +1057,124 @@ def test_cyrillic_is_burned_at_the_caption_fonts_em(tmp_path):
 
     expected = font_win_span("bebas-neue", False) / font_win_span("poppins", False)
     assert ink_height("poppins") / ink_height("bebas-neue") == pytest.approx(expected, abs=0.03)
+
+
+# ── Caption language and character encoding (v1.0.8) ───────────────────
+
+LANGUAGE_CAPTIONS = {
+    "en": ["First, chop two onions", "and fry them slowly."],
+    "hi": ["सबसे पहले, दो प्याज़ काटें", "और उन्हें धीरे-धीरे भूनें।"],
+    "mr": ["सर्वात आधी, दोन कांदे चिरा", "आणि ते हळूहळू परता."],
+}
+
+
+@pytest.mark.asyncio
+async def test_every_export_holds_the_language_it_was_made_in(
+    client, auth_headers, sample_video_bytes, tmp_path
+):
+    """
+    Three caption languages back to back (a Redo replaces the captions each
+    time), every format exported in each. Each file holds that language,
+    no two languages' files are the same, and each export says which language
+    it holds and whether those are still the video's captions — an English
+    SRT left in the list after a Redo into Hindi was downloaded as the Hindi
+    one, because nothing told them apart.
+    """
+    import hashlib
+
+    from sqlalchemy import delete
+
+    from app.models.export import Export
+    from app.models.video import Video
+    from app.services import storage
+    from app.workers.export import _run
+
+    video_id = await make_video(client, auth_headers, sample_video_bytes)
+    black = tmp_path / "black.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=320x180:d=1:r=5",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(black)],
+        capture_output=True, timeout=120, check=True,
+    )
+    async with AsyncSessionLocal() as session:
+        video = await session.get(Video, video_id)
+        storage.resolve(video.storage_path).write_bytes(black.read_bytes())
+
+    made: dict[str, dict[str, int]] = {}
+    for language, texts in LANGUAGE_CAPTIONS.items():
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(Caption).where(Caption.video_id == video_id))
+            video = await session.get(Video, video_id)
+            video.caption_language = language
+            session.add_all([
+                Caption(video_id=video_id, sequence=i, start_ms=i * 400, end_ms=(i + 1) * 400, text=t)
+                for i, t in enumerate(texts)
+            ])
+            await session.commit()
+        made[language] = {}
+        for fmt in ("srt", "vtt", "json", "mp4"):
+            created = (
+                await client.post(f"/api/videos/{video_id}/exports", headers=auth_headers, json={"format": fmt})
+            ).json()
+            assert created["caption_language"] == language, created
+            assert created["current"] is True, created
+            if fmt == "mp4":
+                assert "error" not in await _run(created["id"])
+            made[language][fmt] = created["id"]
+
+    async def body(export_id: int) -> bytes:
+        async with AsyncSessionLocal() as session:
+            return storage.resolve((await session.get(Export, export_id)).storage_path).read_bytes()
+
+    listed = {
+        item["id"]: item
+        for item in (await client.get(f"/api/videos/{video_id}/exports", headers=auth_headers)).json()["items"]
+    }
+    for fmt in ("srt", "vtt", "json", "mp4"):
+        digests = set()
+        for language, texts in LANGUAGE_CAPTIONS.items():
+            export_id = made[language][fmt]
+            data = await body(export_id)
+            digests.add(hashlib.sha256(data).hexdigest())
+            if fmt != "mp4":
+                text = data.decode("utf-8")
+                assert texts[0].split()[0] in text and texts[1].split()[-1] in text, (fmt, language)
+                for other, other_texts in LANGUAGE_CAPTIONS.items():
+                    if other != language:
+                        assert other_texts[0].split()[-1] not in text, (fmt, language, other)
+            assert listed[export_id]["caption_language"] == language
+            # Only the last language's exports are made from today's captions.
+            assert listed[export_id]["current"] is (language == "mr"), (fmt, language)
+        assert len(digests) == 3, f"{fmt}: two languages' files are identical"
+
+
+def test_json_export_writes_real_characters():
+    """Devanagari as itself in a UTF-8 file, not as backslash-u escapes; still valid JSON."""
+    caption = Caption(start_ms=0, end_ms=1000, text="त्यामुळे व्हिडिओमध्ये", confidence=None)
+    written = subtitles.to_json([caption])
+    assert "त्यामुळे व्हिडिओमध्ये" in written
+    assert r"\u0924" not in written
+    assert json.loads(written)["captions"][0]["text"] == "त्यामुळे व्हिडिओमध्ये"
+
+
+@pytest.mark.asyncio
+async def test_a_retimed_caption_keeps_its_timing_through_reload_and_export(exportable, client, auth_headers):
+    """
+    Dragging a caption's edge in the editor is the last word on its timing:
+    nothing re-times captions except a Redo, so it reads back and exports
+    exactly as set.
+    """
+    video_id = exportable
+    items = (await client.get(f"/api/videos/{video_id}/captions", headers=auth_headers)).json()["items"]
+    first = items[0]
+    patched = await client.patch(
+        f"/api/captions/{first['id']}", headers=auth_headers, json={"start_ms": 37, "end_ms": 391}
+    )
+    assert patched.status_code == 200, patched.text
+    again = (await client.get(f"/api/videos/{video_id}/captions", headers=auth_headers)).json()["items"][0]
+    assert (again["start_ms"], again["end_ms"]) == (37, 391)
+    for fmt, stamp in (("srt", "00:00:00,037 --> 00:00:00,391"), ("vtt", "00:00:00.037 --> 00:00:00.391")):
+        created = (await client.post(f"/api/videos/{video_id}/exports", headers=auth_headers, json={"format": fmt})).json()
+        ticket = (await client.post(f"/api/exports/{created['id']}/download-token", headers=auth_headers)).json()
+        body = (await client.get(f"/api/exports/{created['id']}/download?token={ticket['token']}")).text
+        assert stamp in body, (fmt, body[:120])
