@@ -13,7 +13,7 @@ import gc
 import logging
 import subprocess
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -57,6 +57,11 @@ class Segment:
     end_ms: int
     text: str
     confidence: float | None
+    # When each word was said, (start_ms, end_ms, word), from Whisper's word
+    # timestamps: what captions are timed to (services/phrasing.py). Kept
+    # through translation, where the words no longer match the text but the
+    # speech is still the speech.
+    speech: list[tuple[int, int, str]] = field(default_factory=list)
 
 
 def _repo_for(model: str) -> str:
@@ -606,6 +611,8 @@ def transcribe(
     levels = vocal_envelope(audio_path)
 
     segments, info = _decode(model, audio_path, language, task, spans, levels, on_progress)
+    if segments:
+        segments = _fill_skipped(model, audio_path, segments, language or info.language, task, spans, levels)
     if not segments:
         # Whisper skips a 30-second window when it thinks it is probably not
         # speech AND its words are unlikely. A small model on fast speech in
@@ -625,8 +632,94 @@ def transcribe(
     return segments, info.language or "unknown"
 
 
-def _decode(model, audio_path, language, task, spans, levels, on_progress, **options):
-    """One Whisper pass, filtered and retimed into caption segments."""
+# A stretch this long with no caption is re-decoded on its own. Whisper's
+# seek can jump past speech after a window ends on a confused token: on a
+# 228-second Hinglish tutorial the full pass captioned "S.R .T." at 8 s and
+# nothing again until 29.4 s, and two more 20-second stretches likewise,
+# while the same audio cut out and decoded alone gave clean phrases for all
+# of it. Silence and music that come back as invented text are dropped by
+# the same silence check as everything else.
+SKIPPED_GAP_SECONDS = 4.0
+
+
+# Re-decoding a stretch can stop early the same way, so what is still
+# uncaptioned inside it is decoded again, from where the last caption ended.
+# Each level only ever looks at a smaller stretch, and stops when one finds
+# nothing new.
+SKIPPED_DEPTH = 3
+
+
+def _fill_skipped(
+    model, audio_path, segments, language, task, spans, levels,
+    within: tuple[float, float] | None = None, depth: int = 0,
+) -> list[Segment]:
+    """`segments` with every long uncaptioned stretch decoded on its own and merged in."""
+    lo, hi = within if within is not None else (0.0, _duration(audio_path))
+    filled: list[Segment] = []
+    bounds = [lo] + [s.end_ms / 1000 for s in segments]
+    starts = [s.start_ms / 1000 for s in segments] + [hi]
+    for index, (gap_start, gap_end) in enumerate(zip(bounds, starts)):
+        if gap_end - gap_start >= SKIPPED_GAP_SECONDS:
+            found = _decode_stretch(model, audio_path, gap_start, gap_end, language, task, spans, levels)
+            if found and depth + 1 < SKIPPED_DEPTH:
+                found = _fill_skipped(
+                    model, audio_path, found, language, task, spans, levels,
+                    within=(gap_start, gap_end), depth=depth + 1,
+                )
+            filled.extend(found)
+        if index < len(segments):
+            filled.append(segments[index])
+    filled.sort(key=lambda s: s.start_ms)
+    # Never overlapping: a recovered segment ends where the next one starts.
+    for a, b in zip(filled, filled[1:]):
+        if a.end_ms > b.start_ms:
+            a.end_ms = max(a.start_ms + 1, b.start_ms)
+            a.speech = [(s, min(e, a.end_ms), w) for s, e, w in a.speech if s < a.end_ms] or [
+                (a.start_ms, a.end_ms, "")
+            ]
+    return filled
+
+
+def _decode_stretch(model, audio_path, start, end, language, task, spans, levels) -> list[Segment]:
+    """The segments Whisper finds in `start`-`end` of the audio, decoded alone."""
+    clip = audio_path.with_suffix(f".{int(start * 1000)}-{int(end * 1000)}.wav")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-t",
+             f"{end - start:.3f}", "-i", str(audio_path), str(clip)],
+            capture_output=True, timeout=120, check=True,
+        )
+        found, _ = _decode(model, clip, language, task, spans, levels, None, offset=start)
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Could not re-decode %.1f-%.1fs: %s", start, end, exc)
+        return []
+    finally:
+        clip.unlink(missing_ok=True)
+    found = [f for f in found if start <= f.start_ms / 1000 and f.end_ms / 1000 <= end + 0.5]
+    if found:
+        logger.info("Recovered %d segment(s) between %.1fs and %.1fs", len(found), start, end)
+    return found
+
+
+def _duration(audio_path: Path) -> float:
+    """The audio's length in seconds, or 0 if it can't be read."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(audio_path)],
+            capture_output=True, text=True, timeout=30, check=True,
+        ).stdout.strip()
+        return float(out)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 0.0
+
+
+def _decode(model, audio_path, language, task, spans, levels, on_progress, offset: float = 0.0, **options):
+    """
+    One Whisper pass, filtered and retimed into caption segments.
+
+    `offset`: where `audio_path` starts in the video, for a stretch cut out
+    of it (`_fill_skipped`); every time is moved by it.
+    """
     raw_segments, info = model.transcribe(
         str(audio_path),
         vad_filter=settings.whisper_vad_filter,
@@ -646,6 +739,11 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, **opt
         # are said rather than when Whisper's decode window opened. See
         # _spoken_bounds for the measurements; it costs an alignment pass.
         word_timestamps=True,
+        # Each 30-second window decoded on its own audio, not primed with the
+        # last one's text. Primed, a window that ended on a garbled token
+        # dragged the next ones after it: on the Hinglish tutorial two
+        # 20-second stretches of speech came back empty, and without it none.
+        condition_on_previous_text=False,
         **options,
     )
 
@@ -653,7 +751,7 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, **opt
     segments: list[Segment] = []
     dropped = 0
 
-    for index, segment in enumerate(_iter(raw_segments)):
+    for index, segment in enumerate(_iter(_shifted(segment, offset) for segment in raw_segments)):
         text = segment.text.strip()
         if text:
             # Tighten to the words before anything else looks at the timings:
@@ -682,6 +780,7 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, **opt
                         end_ms=int(end * 1000),
                         text=text,
                         confidence=getattr(segment, "avg_logprob", None),
+                        speech=_speech(segment, start, end),
                     )
                 )
 
@@ -698,7 +797,65 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, **opt
 def _iter(segments) -> Iterator:
     """Consuming the generator is what actually performs the decoding."""
     for segment in segments:
-        yield from _split_long(segment)
+        yield from _split_long(_with_plausible_words(segment))
+
+
+# The longest a single word's timing is believed. Alignment can hand the
+# last word before a pause the whole pause: on the Hinglish tutorial ".T."
+# (the end of "S.R.T.") ran from 8.1 to 19.1 s and "हैं।" from 66.0 to 87.8 s,
+# and each was then split off as a caption of its own holding all of it. A
+# held sung note can be long, so this is generous; nothing spoken is near it.
+WORD_MAX_SECONDS = 3.0
+
+
+def _speech(segment, start: float, end: float) -> list[tuple[int, int, str]]:
+    """The segment's words as (start_ms, end_ms, word), kept inside `start`-`end`."""
+    out = []
+    for word in getattr(segment, "words", None) or []:
+        if word.start is None or word.end is None or not word.word.strip():
+            continue
+        s, e = max(word.start, start), min(word.end, end)
+        if e > s:
+            out.append((int(s * 1000), int(e * 1000), word.word.strip()))
+    return out or [(int(start * 1000), int(end * 1000), "")]
+
+
+def _with_plausible_words(segment):
+    """The segment with no word timed longer than WORD_MAX_SECONDS."""
+    words = getattr(segment, "words", None) or []
+    if not any(w.start is not None and w.end is not None and w.end - w.start > WORD_MAX_SECONDS for w in words):
+        return segment
+    capped = [
+        SimpleNamespace(
+            start=w.start, word=w.word, probability=getattr(w, "probability", None),
+            end=(min(w.end, w.start + WORD_MAX_SECONDS) if w.start is not None and w.end is not None else w.end),
+        )
+        for w in words
+    ]
+    ends = [w.end for w in capped if w.end is not None]
+    return SimpleNamespace(
+        text=segment.text, start=segment.start, words=capped,
+        end=min(segment.end, max(ends)) if ends else segment.end,
+        avg_logprob=getattr(segment, "avg_logprob", None),
+    )
+
+
+def _shifted(segment, offset: float):
+    """The segment, and its words, `offset` seconds later."""
+    if not offset:
+        return segment
+    words = [
+        SimpleNamespace(
+            start=None if w.start is None else w.start + offset,
+            end=None if w.end is None else w.end + offset,
+            word=w.word, probability=getattr(w, "probability", None),
+        )
+        for w in (getattr(segment, "words", None) or [])
+    ]
+    return SimpleNamespace(
+        text=segment.text, start=segment.start + offset, end=segment.end + offset,
+        words=words, avg_logprob=getattr(segment, "avg_logprob", None),
+    )
 
 
 # A caption a viewer can read: two lines of ~42 characters, on screen for no
