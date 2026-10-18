@@ -1,4 +1,5 @@
 export type Alignment = "left" | "center" | "right";
+export type LineStyle = "auto" | "balanced" | "stacked";
 
 export interface CaptionStyle {
   video_id: number;
@@ -39,8 +40,12 @@ export interface CaptionStyle {
   pos_y: number;
   /** The box's width as a fraction of the frame's; null is the default for its shape. */
   box_width: number | null;
-  /** Lines before the font shrinks to fit (down to 70%). */
+  /** Lines before the font shrinks to fit (down to 70%). 1-3, or 1-6 when stacked. */
   max_lines: number;
+  /** How lines break: evened out (balanced), filled (auto), or N words a line (stacked). */
+  line_style: LineStyle;
+  /** Words a line in the stacked style, 1-4. */
+  words_per_line: number;
   reference_height: number;
   /**
    * Resolved server-side from `font_key`. With 1301 catalogue families the

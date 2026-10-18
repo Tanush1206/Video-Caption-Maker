@@ -22,7 +22,7 @@
  * and drawn scaled to the player.
  */
 
-import type { Alignment, CaptionStyle } from "@/types/style";
+import type { Alignment, CaptionStyle, LineStyle } from "@/types/style";
 
 export const SAFE_AREA = 0.03;
 export const DEFAULT_WIDTH_LANDSCAPE = 0.8;
@@ -34,6 +34,8 @@ export const MAX_BOX_WIDTH = 0.94;
 export const PLACEMENT_Y = { top: 0.12, middle: 0.5, bottom: 0.88 } as const;
 
 const SHRINK_STEPS = Array.from({ length: 16 }, (_, i) => (100 - 2 * i) / 100);
+/** Past 70%, only to fit the safe area, down to 10% (caption_layout.FIT_STEPS). */
+const FIT_STEPS = Array.from({ length: 30 }, (_, i) => (68 - 2 * i) / 100);
 const MEASURE_EM = 100;
 const OVERHANG_EM = 0.1;
 const BLEED_PX = 2;
@@ -243,16 +245,34 @@ function greedy(tokens: string[], fits: (s: string) => boolean): string[] {
   return lines;
 }
 
-/** caption_layout.wrap: greedy for the line count, then the narrowest width that keeps it. */
-export function wrap(text: string, maxWidth: number, width: (s: string) => number): string[] {
+/**
+ * caption_layout.wrap. Each paragraph (a manual line break starts one) on
+ * its own: balanced (greedy for the line count, then the narrowest width
+ * that keeps it), auto (each line filled to the box), or stacked
+ * (`wordsPerLine` words a line, a group too wide for the box wrapped).
+ */
+export function wrap(
+  text: string,
+  maxWidth: number,
+  width: (s: string) => number,
+  lineStyle: LineStyle = "balanced",
+  wordsPerLine = 2
+): string[] {
   const lines: string[] = [];
   for (const paragraph of text.split("\n")) {
     const words = paragraph.split(/\s+/u).filter(Boolean);
     if (!words.length) continue;
     const fits = (s: string, limit = maxWidth) => width(s) <= limit;
+    if (lineStyle === "stacked") {
+      for (let start = 0; start < words.length; start += wordsPerLine) {
+        const group = words.slice(start, start + wordsPerLine).join(" ");
+        lines.push(...(fits(group) ? [group] : wrap(group, maxWidth, width)));
+      }
+      continue;
+    }
     const tokens = words.flatMap((w) => (fits(w) ? [w] : chunks(w, fits)));
     let result = greedy(tokens, fits);
-    if (result.length > 1) {
+    if (result.length > 1 && lineStyle !== "auto") {
       let lo = Math.max(...tokens.map(width));
       let hi = maxWidth;
       for (let k = 0; k < 12; k++) {
@@ -313,16 +333,35 @@ export function layoutCaption(
   const primarySpan = measure.span(null);
 
   const box = (options.boxWidth ?? boxWidthOf(style, frame)) * frame.width;
-  const maxWidth = Math.max(1, box - 2 * pad);
+  const lineStyle = style.line_style ?? "balanced";
+  const wordsPerLine = style.words_per_line || 2;
+  const safeW = (1 - 2 * SAFE_AREA) * frame.width;
+  const safeH = (1 - 2 * SAFE_AREA) * frame.height;
+  const bleedAt = (shrink: number) => (OVERHANG_EM * size * shrink) / primarySpan + BLEED_PX;
   const widthAt = (shrink: number) => {
     const em = (size * shrink) / primarySpan;
     return (s: string) => (measure.width(s) * em) / MEASURE_EM + spacing * units(s);
+  };
+  // The box's width, or less if the box with its outline, shadow and
+  // overhang would be wider than the safe area (a box at 94%).
+  const maxWidthAt = (shrink: number) => Math.max(1, Math.min(box, safeW - shadow - 2 * bleedAt(shrink)) - 2 * pad);
+  const linesAt = (shrink: number) => wrap(text, maxWidthAt(shrink), widthAt(shrink), lineStyle, wordsPerLine);
+  const build = (shrink: number, texts: string[]) => {
+    const em = (size * shrink) / primarySpan;
+    const width = widthAt(shrink);
+    const lines: Line[] = texts.map((t) => {
+      const segments = measure.segments(t);
+      return { segments, width: width(t), pitch: em * Math.max(...segments.map((s) => measure.span(s.family))) };
+    });
+    const rectW = Math.max(0, ...lines.map((l) => l.width)) + 2 * pad;
+    const rectH = lines.reduce((sum, l) => sum + l.pitch, 0) + 2 * pad;
+    return { lines, rectW, rectH };
   };
 
   let chosen: [number, string[]] | null = null;
   for (const allowed of [style.max_lines, style.max_lines + 1]) {
     for (const shrink of SHRINK_STEPS) {
-      const lines = wrap(text, maxWidth, widthAt(shrink));
+      const lines = linesAt(shrink);
       if (lines.length <= allowed) {
         chosen = [shrink, lines];
         break;
@@ -331,18 +370,24 @@ export function layoutCaption(
     if (chosen) break;
   }
   const last = SHRINK_STEPS[SHRINK_STEPS.length - 1];
-  const [shrink, texts] = chosen ?? [last, wrap(text, maxWidth, widthAt(last))];
+  let [shrink, texts] = chosen ?? [last, linesAt(last)];
+  let { lines, rectW, rectH } = build(shrink, texts);
+
+  // The fit rule: a box taller (or wider) than the safe area keeps shrinking
+  // until it fits, so no caption is ever cut off at an edge.
+  const tooBig = (shrink: number, w: number, h: number) => {
+    const b = bleedAt(shrink);
+    return h + shadow + 2 * b > safeH || w + shadow + 2 * b > safeW;
+  };
+  for (const step of FIT_STEPS) {
+    if (!tooBig(shrink, rectW, rectH)) break;
+    shrink = step;
+    texts = linesAt(step);
+    ({ lines, rectW, rectH } = build(shrink, texts));
+  }
 
   const em = (size * shrink) / primarySpan;
-  const bleed = OVERHANG_EM * em + BLEED_PX;
-  const width = widthAt(shrink);
-  const lines: Line[] = texts.map((t) => {
-    const segments = measure.segments(t);
-    return { segments, width: width(t), pitch: em * Math.max(...segments.map((s) => measure.span(s.family))) };
-  });
-  const textWidth = Math.max(0, ...lines.map((l) => l.width));
-  const rectW = textWidth + 2 * pad;
-  const rectH = lines.reduce((sum, l) => sum + l.pitch, 0) + 2 * pad;
+  const bleed = bleedAt(shrink);
 
   const rectLeft = (center: number, alignment: Alignment) =>
     alignment === "left" ? center - box / 2 : alignment === "right" ? center + box / 2 - rectW : center - rectW / 2;
