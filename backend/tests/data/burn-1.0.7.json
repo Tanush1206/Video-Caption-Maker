@@ -1,0 +1,175 @@
+{
+ "texts": [
+  "Hi there",
+  "Finally, stir everything together until the soup is completely smooth, then serve it hot with fresh bread",
+  "अंत में, सब कुछ चिकना होने तक मिलाएँ और इसे ताज़ी रोटी के साथ परोसें",
+  "Наконец, перемешайте все, пока оно не будет гладким, и подайте его с хлебом",
+  "Donaudampfschifffahrtsgesellschaftskapitän und Rindfleischetikettierungsgesetz",
+  "A line I broke\nby hand, and a second one"
+ ],
+ "styles": {
+  "default": {},
+  "boxed": {
+   "box_opacity": 0.7,
+   "box_padding": 20,
+   "font_size": 64,
+   "pos_x": 0.3,
+   "pos_y": 0.2
+  },
+  "narrow-3": {
+   "box_width": 0.4,
+   "max_lines": 3,
+   "alignment": "left",
+   "uppercase": true
+  },
+  "lato-shadow": {
+   "font_key": "lato",
+   "bold": false,
+   "shadow": 6,
+   "outline_width": 4,
+   "letter_spacing": 3
+  }
+ },
+ "frames": [
+  [
+   1920,
+   1080
+  ],
+  [
+   1080,
+   1920
+  ],
+  [
+   720,
+   720
+  ]
+ ],
+ "documents": {
+  "default@1920x1080": [
+   "Style: Default,Poppins,54,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,5,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Hi there",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Finally, stir everything together until the soup is\\Ncompletely smooth, then serve it hot with fresh bread",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}{\\fnNoto Sans Devanagari\\fs39.96}अंत{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}में{\\fnPoppins\\fs54}, {\\fnNoto Sans Devanagari\\fs39.96}सब{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}कुछ{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}चिकना{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}होने{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}तक{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}मिलाएँ{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}और{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}इसे{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}ताज़ी{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}रोटी{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}के{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}साथ{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}परोसें{\\fnPoppins\\fs54}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}{\\fnNoto Sans\\fs41.74}Наконец{\\fnPoppins\\fs54}, {\\fnNoto Sans\\fs41.74}перемешайте{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}все{\\fnPoppins\\fs54}, {\\fnNoto Sans\\fs41.74}пока{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}оно{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}не{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}будет{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}гладким{\\fnPoppins\\fs54}, {\\fnNoto Sans\\fs41.74}и{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}подайте{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}его{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}с{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}хлебом{\\fnPoppins\\fs54}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Donaudampfschifffahrtsgesellschaftskapitän und Rindfleischetikettierungsgesetz",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}A line I broke\\Nby hand, and a second one"
+  ],
+  "default@1080x1920": [
+   "Style: Default,Poppins,96,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,5,0,5,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs96}Hi there",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs84.48}Finally, stir everything together\\Nuntil the soup is completely smooth,\\Nthen serve it hot with fresh bread",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs96}{\\fnNoto Sans Devanagari\\fs71.05}अंत{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}में{\\fnPoppins\\fs96}, {\\fnNoto Sans Devanagari\\fs71.05}सब{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}कुछ{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}चिकना{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}होने{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}तक{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}मिलाएँ{\\fnPoppins\\fs96}\\N{\\fnNoto Sans Devanagari\\fs71.05}और{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}इसे{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}ताज़ी{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}रोटी{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}के{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}साथ{\\fnPoppins\\fs96} {\\fnNoto Sans Devanagari\\fs71.05}परोसें{\\fnPoppins\\fs96}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs74.88}{\\fnNoto Sans\\fs57.88}Наконец{\\fnPoppins\\fs74.88}, {\\fnNoto Sans\\fs57.88}перемешайте{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}все{\\fnPoppins\\fs74.88}, {\\fnNoto Sans\\fs57.88}пока{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}оно{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}не{\\fnPoppins\\fs74.88}\\N{\\fnNoto Sans\\fs57.88}будет{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}гладким{\\fnPoppins\\fs74.88}, {\\fnNoto Sans\\fs57.88}и{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}подайте{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}его{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}с{\\fnPoppins\\fs74.88} {\\fnNoto Sans\\fs57.88}хлебом{\\fnPoppins\\fs74.88}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs72.96}Donaudampfschifffahrtsgesellschaftskap\\Nitän und Rindfleischetikettierungsgesetz",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs96}A line I broke\\Nby hand, and a second one"
+  ],
+  "default@720x720": [
+   "Style: Default,Poppins,36,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,5,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}Hi there",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}Finally, stir everything together until the soup is\\Ncompletely smooth, then serve it hot with fresh bread",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}{\\fnNoto Sans Devanagari\\fs26.64}अंत{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}में{\\fnPoppins\\fs36}, {\\fnNoto Sans Devanagari\\fs26.64}सब{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}कुछ{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}चिकना{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}होने{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}तक{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}मिलाएँ{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}और{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}इसे{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}ताज़ी{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}रोटी{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}के{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}साथ{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}परोसें{\\fnPoppins\\fs36}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}{\\fnNoto Sans\\fs27.83}Наконец{\\fnPoppins\\fs36}, {\\fnNoto Sans\\fs27.83}перемешайте{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}все{\\fnPoppins\\fs36}, {\\fnNoto Sans\\fs27.83}пока{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}оно{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}не{\\fnPoppins\\fs36}\\N{\\fnNoto Sans\\fs27.83}будет{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}гладким{\\fnPoppins\\fs36}, {\\fnNoto Sans\\fs27.83}и{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}подайте{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}его{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}с{\\fnPoppins\\fs36} {\\fnNoto Sans\\fs27.83}хлебом{\\fnPoppins\\fs36}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}Donaudampfschifffahrtsgesellschaftskapitän\\Nund Rindfleischetikettierungsgesetz",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}A line I broke\\Nby hand, and a second one"
+  ],
+  "boxed@1920x1080": [
+   "Style: Default,Poppins,64,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1",
+   "Dialogue: 0,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an7\\pos(483.75,164)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 184.49 0 184.49 104 0 104{\\p0}",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(576,216)\\fs64}Hi there",
+   "Dialogue: 0,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an7\\pos(63.23,132)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 1034.65 0 1034.65 168 0 168{\\p0}",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(580.56,216)\\fs64}Finally, stir everything together until the soup is\\Ncompletely smooth, then serve it hot with fresh bread",
+   "Dialogue: 0,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an7\\pos(63.23,164)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 1044.24 0 1044.24 104 0 104{\\p0}",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(585.35,216)\\fs64}{\\fnNoto Sans Devanagari\\fs47.36}अंत{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}में{\\fnPoppins\\fs64}, {\\fnNoto Sans Devanagari\\fs47.36}सब{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}कुछ{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}चिकना{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}होने{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}तक{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}मिलाएँ{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}और{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}इसे{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}ताज़ी{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}रोटी{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}के{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}साथ{\\fnPoppins\\fs64} {\\fnNoto Sans Devanagari\\fs47.36}परोसें{\\fnPoppins\\fs64}",
+   "Dialogue: 0,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an7\\pos(176.94,132)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 798.12 0 798.12 168 0 168{\\p0}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(576,216)\\fs64}{\\fnNoto Sans\\fs49.47}Наконец{\\fnPoppins\\fs64}, {\\fnNoto Sans\\fs49.47}перемешайте{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}все{\\fnPoppins\\fs64}, {\\fnNoto Sans\\fs49.47}пока{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}оно{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}не{\\fnPoppins\\fs64}\\N{\\fnNoto Sans\\fs49.47}будет{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}гладким{\\fnPoppins\\fs64}, {\\fnNoto Sans\\fs49.47}и{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}подайте{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}его{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}с{\\fnPoppins\\fs64} {\\fnNoto Sans\\fs49.47}хлебом{\\fnPoppins\\fs64}",
+   "Dialogue: 0,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an7\\pos(124.98,132)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 902.04 0 902.04 168 0 168{\\p0}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(576,216)\\fs64}Donaudampfschifffahrtsgesellschaftskapitän\\Nund Rindfleischetikettierungsgesetz",
+   "Dialogue: 0,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an7\\pos(305.9,132)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 540.2 0 540.2 168 0 168{\\p0}",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(576,216)\\fs64}A line I broke\\Nby hand, and a second one"
+  ],
+  "boxed@1080x1920": [
+   "Style: Default,Poppins,114,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1",
+   "Dialogue: 0,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an7\\pos(159.56,291.11)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 328.87 0 328.87 185.78 0 185.78{\\p0}",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(324,384)\\fs113.78}Hi there",
+   "Dialogue: 0,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an7\\pos(38.92,228.53)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 912.7 0 912.7 310.93 0 310.93{\\p0}",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(495.27,384)\\fs79.64}Finally, stir everything together\\Nuntil the soup is completely smooth,\\Nthen serve it hot with fresh bread",
+   "Dialogue: 0,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an7\\pos(39.95,250.15)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 908.38 0 908.38 267.7 0 267.7{\\p0}",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(494.14,384)\\fs97.85}{\\fnNoto Sans Devanagari\\fs72.41}अंत{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}में{\\fnPoppins\\fs97.85}, {\\fnNoto Sans Devanagari\\fs72.41}सब{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}कुछ{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}चिकना{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}होने{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}तक{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}मिलाएँ{\\fnPoppins\\fs97.85}\\N{\\fnNoto Sans Devanagari\\fs72.41}और{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}इसे{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}ताज़ी{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}रोटी{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}के{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}साथ{\\fnPoppins\\fs97.85} {\\fnNoto Sans Devanagari\\fs72.41}परोसें{\\fnPoppins\\fs97.85}",
+   "Dialogue: 0,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an7\\pos(40.08,197.81)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 901.01 0 901.01 372.37 0 372.37{\\p0}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(490.59,384)\\fs100.12}{\\fnNoto Sans\\fs77.39}Наконец{\\fnPoppins\\fs100.12}, {\\fnNoto Sans\\fs77.39}перемешайте{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}все{\\fnPoppins\\fs100.12},\\N{\\fnNoto Sans\\fs77.39}пока{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}оно{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}не{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}будет{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}гладким{\\fnPoppins\\fs100.12},\\N{\\fnNoto Sans\\fs77.39}и{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}подайте{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}его{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}с{\\fnPoppins\\fs100.12} {\\fnNoto Sans\\fs77.39}хлебом{\\fnPoppins\\fs100.12}",
+   "Dialogue: 0,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an7\\pos(39.57,211.47)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 917.18 0 917.18 345.07 0 345.07{\\p0}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(498.16,384)\\fs91.02}Donaudampfschifffahrtsgesell\\Nschaftskapitän und\\NRindfleischetikettierungsgesetz",
+   "Dialogue: 0,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an7\\pos(40.47,241.05)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 907.88 0 907.88 285.9 0 285.9{\\p0}",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(494.41,384)\\fs106.95}A line I broke\\Nby hand, and a second one"
+  ],
+  "boxed@720x720": [
+   "Style: Default,Poppins,43,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1",
+   "Dialogue: 0,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an7\\pos(154.84,109.67)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 122.33 0 122.33 68.67 0 68.67{\\p0}",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(216,144)\\fs42.67}Hi there",
+   "Dialogue: 0,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an7\\pos(25.59,96.01)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 569.74 0 569.74 95.97 0 95.97{\\p0}",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(310.46,144)\\fs34.99}Finally, stir everything together until the soup is\\Ncompletely smooth, then serve it hot with fresh bread",
+   "Dialogue: 0,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an7\\pos(26.02,88.33)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 390.7 0 390.7 111.33 0 111.33{\\p0}",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(221.37,144)\\fs42.67}{\\fnNoto Sans Devanagari\\fs31.58}अंत{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}में{\\fnPoppins\\fs42.67}, {\\fnNoto Sans Devanagari\\fs31.58}सब{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}कुछ{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}चिकना{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}होने{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}तक{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}मिलाएँ{\\fnPoppins\\fs42.67}\\N{\\fnNoto Sans Devanagari\\fs31.58}और{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}इसे{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}ताज़ी{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}रोटी{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}के{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}साथ{\\fnPoppins\\fs42.67} {\\fnNoto Sans Devanagari\\fs31.58}परोसें{\\fnPoppins\\fs42.67}",
+   "Dialogue: 0,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an7\\pos(26.02,88.33)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 531.41 0 531.41 111.33 0 111.33{\\p0}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(291.73,144)\\fs42.67}{\\fnNoto Sans\\fs32.98}Наконец{\\fnPoppins\\fs42.67}, {\\fnNoto Sans\\fs32.98}перемешайте{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}все{\\fnPoppins\\fs42.67}, {\\fnNoto Sans\\fs32.98}пока{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}оно{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}не{\\fnPoppins\\fs42.67}\\N{\\fnNoto Sans\\fs32.98}будет{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}гладким{\\fnPoppins\\fs42.67}, {\\fnNoto Sans\\fs32.98}и{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}подайте{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}его{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}с{\\fnPoppins\\fs42.67} {\\fnNoto Sans\\fs32.98}хлебом{\\fnPoppins\\fs42.67}",
+   "Dialogue: 0,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an7\\pos(26.02,88.33)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 567.93 0 567.93 111.33 0 111.33{\\p0}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(309.99,144)\\fs42.67}Donaudampfschifffahrtsgesellschaftskapit\\Nän und Rindfleischetikettierungsgesetz",
+   "Dialogue: 0,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an7\\pos(36.27,88.33)\\bord0\\shad0\\1c&H000000&\\1a&H4D&\\p1}m 0 0 l 359.46 0 359.46 111.33 0 111.33{\\p0}",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(216,144)\\fs42.67}A line I broke\\Nby hand, and a second one"
+  ],
+  "narrow-3@1920x1080": [
+   "Style: Default,Poppins,54,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,4,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an4\\pos(579,950.4)\\fs54}HI THERE",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an4\\pos(579,950.4)\\fs54}FINALLY, STIR EVERYTHING TOGETHER\\NUNTIL THE SOUP IS COMPLETELY SMOOTH,\\NTHEN SERVE IT HOT WITH FRESH BREAD",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an4\\pos(579,950.4)\\fs54}{\\fnNoto Sans Devanagari\\fs39.96}अंत{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}में{\\fnPoppins\\fs54}, {\\fnNoto Sans Devanagari\\fs39.96}सब{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}कुछ{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}चिकना{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}होने{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}तक{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}मिलाएँ{\\fnPoppins\\fs54}\\N{\\fnNoto Sans Devanagari\\fs39.96}और{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}इसे{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}ताज़ी{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}रोटी{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}के{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}साथ{\\fnPoppins\\fs54} {\\fnNoto Sans Devanagari\\fs39.96}परोसें{\\fnPoppins\\fs54}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an4\\pos(579,950.4)\\fs54}{\\fnNoto Sans\\fs41.74}НАКОНЕЦ{\\fnPoppins\\fs54}, {\\fnNoto Sans\\fs41.74}ПЕРЕМЕШАЙТЕ{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}ВСЕ{\\fnPoppins\\fs54}, {\\fnNoto Sans\\fs41.74}ПОКА{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}ОНО{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}НЕ{\\fnPoppins\\fs54}\\N{\\fnNoto Sans\\fs41.74}БУДЕТ{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}ГЛАДКИМ{\\fnPoppins\\fs54}, {\\fnNoto Sans\\fs41.74}И{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}ПОДАЙТЕ{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}ЕГО{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}С{\\fnPoppins\\fs54} {\\fnNoto Sans\\fs41.74}ХЛЕБОМ{\\fnPoppins\\fs54}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an4\\pos(579,950.4)\\fs54}DONAUDAMPFSCHIFFFAHRTSGESELLSCHAFTSKAP\\NITÄN UND RINDFLEISCHETIKETTIERUNGSGESETZ",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an4\\pos(579,950.4)\\fs54}A LINE I BROKE\\NBY HAND, AND A SECOND ONE"
+  ],
+  "narrow-3@1080x1920": [
+   "Style: Default,Poppins,96,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,5,0,4,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an4\\pos(329,1689.6)\\fs96}HI THERE",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an4\\pos(329,1616.39)\\fs67.2}FINALLY, STIR\\NEVERYTHING\\NTOGETHER UNTIL THE\\NSOUP IS COMPLETELY\\NSMOOTH, THEN\\NSERVE IT HOT WITH\\NFRESH BREAD",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an4\\pos(329,1689.6)\\fs80.64}{\\fnNoto Sans Devanagari\\fs59.68}अंत{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}में{\\fnPoppins\\fs80.64}, {\\fnNoto Sans Devanagari\\fs59.68}सब{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}कुछ{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}चिकना{\\fnPoppins\\fs80.64}\\N{\\fnNoto Sans Devanagari\\fs59.68}होने{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}तक{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}मिलाएँ{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}और{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}इसे{\\fnPoppins\\fs80.64}\\N{\\fnNoto Sans Devanagari\\fs59.68}ताज़ी{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}रोटी{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}के{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}साथ{\\fnPoppins\\fs80.64} {\\fnNoto Sans Devanagari\\fs59.68}परोसें{\\fnPoppins\\fs80.64}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an4\\pos(329,1665.24)\\fs67.2}{\\fnNoto Sans\\fs51.94}НАКОНЕЦ{\\fnPoppins\\fs67.2},\\N{\\fnNoto Sans\\fs51.94}ПЕРЕМЕШАЙТЕ{\\fnPoppins\\fs67.2}\\N{\\fnNoto Sans\\fs51.94}ВСЕ{\\fnPoppins\\fs67.2}, {\\fnNoto Sans\\fs51.94}ПОКА{\\fnPoppins\\fs67.2} {\\fnNoto Sans\\fs51.94}ОНО{\\fnPoppins\\fs67.2} {\\fnNoto Sans\\fs51.94}НЕ{\\fnPoppins\\fs67.2}\\N{\\fnNoto Sans\\fs51.94}БУДЕТ{\\fnPoppins\\fs67.2} {\\fnNoto Sans\\fs51.94}ГЛАДКИМ{\\fnPoppins\\fs67.2},\\N{\\fnNoto Sans\\fs51.94}И{\\fnPoppins\\fs67.2} {\\fnNoto Sans\\fs51.94}ПОДАЙТЕ{\\fnPoppins\\fs67.2} {\\fnNoto Sans\\fs51.94}ЕГО{\\fnPoppins\\fs67.2} {\\fnNoto Sans\\fs51.94}С{\\fnPoppins\\fs67.2}\\N{\\fnNoto Sans\\fs51.94}ХЛЕБОМ{\\fnPoppins\\fs67.2}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an4\\pos(329,1683.59)\\fs67.2}DONAUDAMPFSCHIFF\\NFAHRTSGESELLSCHAF\\NTSKAPITÄN UND\\NRINDFLEISCHETIKETTI\\NERUNGSGESETZ",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an4\\pos(329,1689.6)\\fs96}A LINE I BROKE\\NBY HAND, AND\\NA SECOND ONE"
+  ],
+  "narrow-3@720x720": [
+   "Style: Default,Poppins,36,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,4,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an4\\pos(218,633.6)\\fs36}HI THERE",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an4\\pos(218,632.2)\\fs30.24}FINALLY, STIR EVERYTHING\\NTOGETHER UNTIL THE SOUP IS\\NCOMPLETELY SMOOTH, THEN\\NSERVE IT HOT WITH FRESH BREAD",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an4\\pos(218,633.6)\\fs36}{\\fnNoto Sans Devanagari\\fs26.64}अंत{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}में{\\fnPoppins\\fs36}, {\\fnNoto Sans Devanagari\\fs26.64}सब{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}कुछ{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}चिकना{\\fnPoppins\\fs36}\\N{\\fnNoto Sans Devanagari\\fs26.64}होने{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}तक{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}मिलाएँ{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}और{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}इसे{\\fnPoppins\\fs36}\\N{\\fnNoto Sans Devanagari\\fs26.64}ताज़ी{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}रोटी{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}के{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}साथ{\\fnPoppins\\fs36} {\\fnNoto Sans Devanagari\\fs26.64}परोसें{\\fnPoppins\\fs36}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an4\\pos(218,633.6)\\fs30.96}{\\fnNoto Sans\\fs23.93}НАКОНЕЦ{\\fnPoppins\\fs30.96}, {\\fnNoto Sans\\fs23.93}ПЕРЕМЕШАЙТЕ{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}ВСЕ{\\fnPoppins\\fs30.96},\\N{\\fnNoto Sans\\fs23.93}ПОКА{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}ОНО{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}НЕ{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}БУДЕТ{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}ГЛАДКИМ{\\fnPoppins\\fs30.96},\\N{\\fnNoto Sans\\fs23.93}И{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}ПОДАЙТЕ{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}ЕГО{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}С{\\fnPoppins\\fs30.96} {\\fnNoto Sans\\fs23.93}ХЛЕБОМ{\\fnPoppins\\fs30.96}",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an4\\pos(218,633.6)\\fs27.36}DONAUDAMPFSCHIFFFAHRTSGESELL\\NSCHAFTSKAPITÄN UND\\NRINDFLEISCHETIKETTIERUNGSGESETZ",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an4\\pos(218,633.6)\\fs36}A LINE I BROKE\\NBY HAND, AND\\NA SECOND ONE"
+  ],
+  "lato-shadow@1920x1080": [
+   "Style: Default,Lato,54,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,3,0,1,4,6,5,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Hi there",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Finally, stir everything together until the soup is\\Ncompletely smooth, then serve it hot with fresh bread",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}{\\fnNoto Sans Devanagari\\fs49.73}अंत{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}में{\\fnLato\\fs54}, {\\fnNoto Sans Devanagari\\fs49.73}सब{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}कुछ{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}चिकना{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}होने{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}तक{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}मिलाएँ{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}और{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}इसे{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}ताज़ी{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}रोटी{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}के{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}साथ{\\fnLato\\fs54} {\\fnNoto Sans Devanagari\\fs49.73}परोसें{\\fnLato\\fs54}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Наконец, перемешайте все, пока оно не\\Nбудет гладким, и подайте его с хлебом",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}Donaudampfschifffahrtsgesellschaftskapitän\\Nund Rindfleischetikettierungsgesetz",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(960,950.4)\\fs54}A line I broke\\Nby hand, and a second one"
+  ],
+  "lato-shadow@1080x1920": [
+   "Style: Default,Lato,96,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,5,0,1,7,11,5,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs96}Hi there",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs67.2}Finally, stir everything\\Ntogether until the soup is\\Ncompletely smooth, then\\Nserve it hot with fresh bread",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs76.8}{\\fnNoto Sans Devanagari\\fs70.73}अंत{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}में{\\fnLato\\fs76.8}, {\\fnNoto Sans Devanagari\\fs70.73}सब{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}कुछ{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}चिकना{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}होने{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}तक{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}मिलाएँ{\\fnLato\\fs76.8}\\N{\\fnNoto Sans Devanagari\\fs70.73}और{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}इसे{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}ताज़ी{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}रोटी{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}के{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}साथ{\\fnLato\\fs76.8} {\\fnNoto Sans Devanagari\\fs70.73}परोसें{\\fnLato\\fs76.8}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs84.48}Наконец, перемешайте все,\\Nпока оно не будет гладким,\\Nи подайте его с хлебом",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs76.8}Donaudampfschifffahrtsgesells\\Nchaftskapitän und\\NRindfleischetikettierungsgesetz",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(540,1689.6)\\fs94.08}A line I broke\\Nby hand, and a second one"
+  ],
+  "lato-shadow@720x720": [
+   "Style: Default,Lato,36,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,3,4,5,0,0,0,1",
+   "Dialogue: 1,0:00:00.00,0:00:00.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}Hi there",
+   "Dialogue: 1,0:00:01.00,0:00:01.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs27.36}Finally, stir everything together until the soup is\\Ncompletely smooth, then serve it hot with fresh bread",
+   "Dialogue: 1,0:00:02.00,0:00:02.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}{\\fnNoto Sans Devanagari\\fs33.15}अंत{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}में{\\fnLato\\fs36}, {\\fnNoto Sans Devanagari\\fs33.15}सब{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}कुछ{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}चिकना{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}होने{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}तक{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}मिलाएँ{\\fnLato\\fs36}\\N{\\fnNoto Sans Devanagari\\fs33.15}और{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}इसे{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}ताज़ी{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}रोटी{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}के{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}साथ{\\fnLato\\fs36} {\\fnNoto Sans Devanagari\\fs33.15}परोसें{\\fnLato\\fs36}",
+   "Dialogue: 1,0:00:03.00,0:00:03.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}Наконец, перемешайте все, пока оно не\\Nбудет гладким, и подайте его с хлебом",
+   "Dialogue: 1,0:00:04.00,0:00:04.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}Donaudampfschifffahrtsgesellschaftskapitä\\Nn und Rindfleischetikettierungsgesetz",
+   "Dialogue: 1,0:00:05.00,0:00:05.90,Default,,0,0,0,,{\\an5\\pos(360,633.6)\\fs36}A line I broke\\Nby hand, and a second one"
+  ]
+ }
+}

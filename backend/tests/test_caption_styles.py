@@ -520,14 +520,38 @@ async def test_placement_round_trips(client, auth_headers, sample_video_bytes):
 
 @pytest.mark.asyncio
 async def test_width_and_line_limit_are_bounded(client, auth_headers, sample_video_bytes):
-    """20% up to the safe area's 94%; one to three lines."""
+    """
+    20% up to the safe area's 94%; one to six lines (six for Stacked); one to
+    four words a line; the three line styles and nothing else.
+    """
     video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
     url = f"/api/videos/{video_id}/style"
 
-    for bad in ({"box_width": 0.1}, {"box_width": 0.95}, {"max_lines": 0}, {"max_lines": 4}):
-        assert (await client.patch(url, headers=auth_headers, json=bad)).status_code == 422, bad
-    for good in ({"box_width": 0.2}, {"box_width": 0.94}, {"max_lines": 1}, {"max_lines": 3}):
-        assert (await client.patch(url, headers=auth_headers, json=good)).status_code == 200, good
+    bad = (
+        {"box_width": 0.1}, {"box_width": 0.95}, {"max_lines": 0}, {"max_lines": 7},
+        {"words_per_line": 0}, {"words_per_line": 5}, {"line_style": "justified"},
+        {"line_style": None}, {"words_per_line": None},
+    )
+    for patch in bad:
+        assert (await client.patch(url, headers=auth_headers, json=patch)).status_code == 422, patch
+    good = (
+        {"box_width": 0.2}, {"box_width": 0.94}, {"max_lines": 1}, {"max_lines": 6},
+        {"words_per_line": 1}, {"words_per_line": 4},
+        {"line_style": "auto"}, {"line_style": "balanced"}, {"line_style": "stacked"},
+    )
+    for patch in good:
+        response = await client.patch(url, headers=auth_headers, json=patch)
+        assert response.status_code == 200, patch
+        key, value = next(iter(patch.items()))
+        assert response.json()[key] == value, patch
+
+
+@pytest.mark.asyncio
+async def test_a_new_style_is_balanced_with_two_words_a_line(client, auth_headers, sample_video_bytes):
+    """The defaults the migration gives every existing row, so nothing moves."""
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    style = (await client.get(f"/api/videos/{video_id}/style", headers=auth_headers)).json()
+    assert (style["line_style"], style["words_per_line"], style["max_lines"]) == ("balanced", 2, 2)
 
 
 @pytest.mark.asyncio

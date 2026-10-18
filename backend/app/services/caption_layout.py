@@ -55,6 +55,9 @@ DEFAULT_WIDTH_PORTRAIT = 0.85
 # list rather than a search, so the browser and this module try exactly the
 # same sizes whatever resolution each is drawing at.
 SHRINK_STEPS: tuple[float, ...] = tuple((100 - 2 * i) / 100 for i in range(16))
+# Past 70%, only to fit the safe area: a caption taller (or wider) than the
+# safe area keeps shrinking in the same steps, down to 10%, until it fits.
+FIT_STEPS: tuple[float, ...] = tuple((68 - 2 * i) / 100 for i in range(30))
 
 # What paints past the layout's rectangle, kept inside the safe area too:
 # glyphs overhang their advance (Noto's Devanagari by up to ~0.1 em, measured),
@@ -242,26 +245,43 @@ def _greedy(tokens: list[str], fits: Callable[[str], bool]) -> list[str]:
     return lines
 
 
-def wrap(text: str, max_width: float, width: Callable[[str], float]) -> list[str]:
+def wrap(
+    text: str,
+    max_width: float,
+    width: Callable[[str], float],
+    line_style: str = "balanced",
+    words_per_line: int = 2,
+) -> list[str]:
     """
-    Break `text` into lines no wider than `max_width`, evened out.
+    Break `text` into lines no wider than `max_width`.
 
-    Greedy first, for the number of lines; then the narrowest width that still
-    gives that many, so a two-line caption isn't one full line and a word.
-    That is what libass's WrapStyle 0 and CSS `text-wrap: balance` both aim
-    for, and it is what the captions looked like before this was explicit.
-    A word wider than the line is broken; newlines in the text are kept.
+    Each paragraph (a manual line break starts one) is broken on its own:
+      - balanced (the default): greedy first, for the number of lines; then
+        the narrowest width that still gives that many, so a two-line caption
+        isn't one full line and a word. What every caption did before v1.0.8;
+      - auto: each line filled to the box width before the next starts, so
+        the last line is often short;
+      - stacked: `words_per_line` words a line whatever the width, and only a
+        group still too wide for the box is broken by width.
+    A word wider than the line is broken at a cluster boundary.
     """
     lines: list[str] = []
     for paragraph in text.split("\n"):
         words = paragraph.split()
         if not words:
             continue
+
         def fits(s: str, limit: float = max_width) -> bool:
             return width(s) <= limit
+
+        if line_style == "stacked":
+            for start in range(0, len(words), words_per_line):
+                group = " ".join(words[start:start + words_per_line])
+                lines.extend([group] if fits(group) else wrap(group, max_width, width))
+            continue
         tokens = [chunk for word in words for chunk in (_chunks(word, fits) if not fits(word) else [word])]
         greedy = _greedy(tokens, fits)
-        if len(greedy) > 1:
+        if len(greedy) > 1 and line_style != "auto":
             lo = max(width(t) for t in tokens)
             hi = max_width
             for _ in range(12):
@@ -306,39 +326,69 @@ def layout_caption(
         text = text.upper()
 
     box = box_width_of(style, frame_width, frame_height) * frame_width
-    max_width = max(1.0, box - 2 * pad)
+    line_style = getattr(style, "line_style", None) or "balanced"
+    line_style = getattr(line_style, "value", line_style)
+    words_per_line = getattr(style, "words_per_line", None) or 2
+    safe_w = (1 - 2 * SAFE_AREA) * frame_width
+    safe_h = (1 - 2 * SAFE_AREA) * frame_height
+
+    def bleed_at(shrink: float) -> float:
+        return OVERHANG_EM * size * shrink / measure.primary_span + BLEED_PX * pixel
 
     def width_at(shrink: float) -> Callable[[str], float]:
         em = size * shrink / measure.primary_span
         return lambda s: measure.width(s) * em / MEASURE_EM + spacing * _units(s)
 
+    def max_width_at(shrink: float) -> float:
+        # The box's width, or less if the box with its outline, shadow and
+        # overhang would be wider than the safe area (a box at 94%).
+        return max(1.0, min(box, safe_w - shadow - 2 * bleed_at(shrink)) - 2 * pad)
+
+    def lines_at(shrink: float) -> list[str]:
+        return wrap(text, max_width_at(shrink), width_at(shrink), line_style, words_per_line)
+
+    def build(shrink: float, texts: list[str]) -> tuple[tuple[Line, ...], float, float]:
+        em = size * shrink / measure.primary_span
+        width = width_at(shrink)
+        lines = tuple(
+            Line(
+                segments=(segments := measure.segments(t)),
+                width=width(t),
+                pitch=em * max(measure.span(s.family) for s in segments),
+            )
+            for t in texts
+        )
+        rect_w = max((line.width for line in lines), default=0.0) + 2 * pad
+        rect_h = sum(line.pitch for line in lines) + 2 * pad
+        return lines, rect_w, rect_h
+
     chosen: tuple[float, list[str]] | None = None
     for allowed in (style.max_lines, style.max_lines + 1):
         for shrink in SHRINK_STEPS:
-            lines = wrap(text, max_width, width_at(shrink))
-            if len(lines) <= allowed:
-                chosen = (shrink, lines)
+            texts = lines_at(shrink)
+            if len(texts) <= allowed:
+                chosen = (shrink, texts)
                 break
         if chosen:
             break
     if chosen is None:
-        chosen = (SHRINK_STEPS[-1], wrap(text, max_width, width_at(SHRINK_STEPS[-1])))
+        chosen = (SHRINK_STEPS[-1], lines_at(SHRINK_STEPS[-1]))
     shrink, texts = chosen
+    lines, rect_w, rect_h = build(shrink, texts)
 
-    em = size * shrink / measure.primary_span
-    bleed = OVERHANG_EM * em + BLEED_PX * pixel
-    width = width_at(shrink)
-    lines = tuple(
-        Line(
-            segments=(segments := measure.segments(t)),
-            width=width(t),
-            pitch=em * max(measure.span(s.family) for s in segments),
-        )
-        for t in texts
-    )
-    text_width = max((line.width for line in lines), default=0.0)
-    rect_w = text_width + 2 * pad
-    rect_h = sum(line.pitch for line in lines) + 2 * pad
+    # The fit rule: a box taller (or wider) than the safe area keeps shrinking
+    # until it fits, so no caption is ever cut off at an edge.
+    def too_big(shrink: float, rect_w: float, rect_h: float) -> bool:
+        b = bleed_at(shrink)
+        return rect_h + shadow + 2 * b > safe_h or rect_w + shadow + 2 * b > safe_w
+
+    for step in FIT_STEPS:
+        if not too_big(shrink, rect_w, rect_h):
+            break
+        shrink, texts = step, lines_at(step)
+        lines, rect_w, rect_h = build(shrink, texts)
+
+    bleed = bleed_at(shrink)
 
     cx = style.pos_x * frame_width
     cy = style.pos_y * frame_height
