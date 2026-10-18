@@ -247,14 +247,14 @@ async def test_a_redo_restores_breaks_on_matching_captions(
         video = await session.get(Video, video_id)
         video.spoken_language, video.caption_language = "en", "same"
         session.add_all([
-            Caption(video_id=video_id, sequence=0, start_ms=0, end_ms=900, text="Hello there\nmy friends"),
-            Caption(video_id=video_id, sequence=1, start_ms=1000, end_ms=1900, text="Stir it\nwell"),
+            Caption(video_id=video_id, sequence=0, start_ms=0, end_ms=900, text="Hello there\nmy friends."),
+            Caption(video_id=video_id, sequence=1, start_ms=1000, end_ms=1900, text="Stir it\nwell."),
         ])
         await session.commit()
 
     segments = [
-        SimpleNamespace(start_ms=0, end_ms=900, text="Hello there my friends", confidence=-0.1),
-        SimpleNamespace(start_ms=1000, end_ms=1900, text="Stir it slowly", confidence=-0.1),
+        SimpleNamespace(start_ms=0, end_ms=900, text="Hello there my friends.", confidence=-0.1),
+        SimpleNamespace(start_ms=1000, end_ms=1900, text="Stir it slowly.", confidence=-0.1),
     ]
     monkeypatch.setattr(transcription, "load_model", lambda *a, **k: None)
     monkeypatch.setattr(transcription, "extract_audio", lambda source, dest: Path(dest).write_bytes(b""))
@@ -270,8 +270,8 @@ async def test_a_redo_restores_breaks_on_matching_captions(
                 select(Caption.text).where(Caption.video_id == video_id).order_by(Caption.sequence)
             )).scalars()
         )
-    first = "Hello there\nmy friends" if keep else "Hello there my friends"
-    assert texts == [first, "Stir it slowly"]
+    first = "Hello there\nmy friends." if keep else "Hello there my friends."
+    assert texts == [first, "Stir it slowly."]
 
 
 # ── Line styles ─────────────────────────────────────────────────────────
