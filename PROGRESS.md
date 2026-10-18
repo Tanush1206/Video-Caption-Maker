@@ -747,7 +747,7 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.0.8 (in progress)
+## v1.0.8 (done, not tagged)
 Brief (Tanush, 2026-10-17): caption line control. Manual line breaks
 (Shift+Enter), a Line style setting (Auto / Balanced / Stacked with Words per
 line), and a fit rule that shrinks past 70% when the box would be taller than
@@ -773,18 +773,18 @@ This section is the resume point.
   Balanced must therefore even the lines further (see decisions).
 
 ### Backlog
-- [ ] L1 Model + migration: `line_style` (auto/balanced/stacked, default
+- [x] L1 Model + migration: `line_style` (auto/balanced/stacked, default
       auto), `words_per_line` (1-4, default 2); `max_lines` up to 6 (Stacked).
-- [ ] L2 Layout (backend + frontend copy): Balanced, Stacked, manual breaks
+- [x] L2 Layout (backend + frontend copy): Balanced, Stacked, manual breaks
       counted as lines, fit rule below 70% until the box fits the safe area.
-- [ ] L3 SRT/VTT written with the layout's lines at the video's own size.
-- [ ] L4 Redo keeps manual breaks on an exact match in the same language.
-- [ ] L5 Style panel: Line style with descriptions, Words per line; Max lines
+- [x] L3 SRT/VTT written with the layout's lines at the video's own size.
+- [x] L4 Redo keeps manual breaks on an exact match in the same language.
+- [x] L5 Style panel: Line style with descriptions, Words per line; Max lines
       range by style; keyboard and screen reader; axe 0.
-- [ ] L6 Tests per the brief; parity per line style x 16:9, 9:16, 1:1.
-- [ ] L7 Docs: PRD, DESIGN_SYSTEM, API, DATABASE, ARCHITECTURE, TESTING,
+- [x] L6 Tests per the brief; parity per line style x 16:9, 9:16, 1:1.
+- [x] L7 Docs: PRD, DESIGN_SYSTEM, API, DATABASE, ARCHITECTURE, TESTING,
       CHANGELOG (Unreleased -> 1.0.8).
-- [ ] L8 Suites, build, GPU E2E (en, hi + one more x each line style), a
+- [x] L8 Suites, build, GPU E2E (en, hi + one more x each line style), a
       burned MP4 per line style in 16:9 and 9:16 by eye; delete every test
       video in both stacks; dev stack stopped.
 
@@ -883,6 +883,41 @@ Decisions:
   only in the job); its test can't fail before, as for the 1.0.7 guard.
 - **Translation quality** (M2M100 into Marathi sometimes invents a line, as
   at 22.8 s of the clip) is unchanged; a model switch is Tanush's call.
+
+### Definition of done (2026-10-18)
+- [x] Every test in both briefs fails before and passes after (or, for the
+      two guards that can't, says so): line control (`test_line_control.py`
+      28 of 34 fail on the old code), bugs (`test_exports.py`,
+      `test_caption_phrasing.py`), and on the real clip
+      `caption_quality.py` + `timing_check.py` FAIL on v1.0.7 output, PASS
+      now.
+- [x] Backend 467 passed, 1 skipped; ruff clean; frontend lint, type-check,
+      `npm test`; production frontend build OK (on this machine it needs the
+      Norton CA as the `extra_ca` build secret since 2026-10-18; CI doesn't).
+- [x] ui-check: `layout-parity` 54/54 (3 line styles x 3 looks x 2 sizes x
+      16:9, 9:16, 1:1, a manual-break caption included); `line-styles` 15/15;
+      export list labels and badge at 375/1440 x light/dark; axe 0.
+- [x] GPU E2E on the final code: soup-169 and soup-916 x en, hi, es ALL
+      PASSED, then every line style exported (MP4, SRT, VTT) for all six: 0
+      failures. Hinglish clip x en, hi, mr, es: both quality checks pass.
+- [x] By eye: a burned MP4 frame per line style in 16:9 and 9:16 (en, hi);
+      Hindi and Marathi SRTs and burned frames; the editor timeline for
+      Hindi and Marathi before and after (phrase blocks on the waveform, no
+      flicker gaps, no stretched words).
+- [x] Docs: PRD, DESIGN_SYSTEM, API, DATABASE (migrations 15-17),
+      ARCHITECTURE, TESTING; CHANGELOG 1.0.8.
+- [x] Test videos: 46 created in the dev stack this release (7497-7539 and
+      the three line-control clips before them, ids recorded as made), all
+      deleted through the API; it holds only 7426 (Tanush's). None created
+      in the installed app. The installed app kept port 3000 throughout (dev
+      UI on 3001); dev stack stopped at the end.
+
+### Next
+- Tanush: push, wait for CI, tag v1.0.8 (commands in the final report).
+- After the tag: backup per DATABASE.md §7, release checklist, `vcm
+  update`, verify (version, alembic `a4d8e2c6f130`, data, guard).
+- Translation quality into Indian languages (M2M100) is unchanged; a model
+  switch is Tanush's call.
 
 ## v1.0.7 (released 2026-10-17, tag on 4064dc1)
 Brief: fix caption dragging, the drag handle and the style sliders; improve
