@@ -1,6 +1,6 @@
 # Database
 
-Data model as of Alembic head **`c8f2a6d41e93`** (v1.0.7). The column lists
+Data model as of Alembic head **`e3a9c71f5b28`** (v1.0.8). The column lists
 below come from `\d` on a running v1.0.4 install's Postgres, cross-checked
 against `backend/app/models/*.py`.
 
@@ -128,6 +128,8 @@ erDiagram
         float pos_y
         float box_width "nullable"
         int max_lines
+        caption_line_style line_style
+        int words_per_line
     }
     exports {
         int id PK
@@ -242,7 +244,9 @@ Sizes are in **reference pixels against a 1080-px-high canvas**
 | `alignment` | enum `caption_alignment` | no | ORM `center` | `left` `center` `right`: how lines justify in the box |
 | `pos_x`, `pos_y` | double | no | ORM 0.5, 0.88 | the caption box's centre, 0..1 of the frame; each caption is slid inside the 3% safe area at layout (`services/caption_layout.py`) |
 | `box_width` | double | yes | | the box's width, 0..1 of the frame's width; NULL = 0.80 (landscape, square) or 0.85 (portrait) |
-| `max_lines` | integer | no | `2` | 1-3; past it the font shrinks to 70%, then one more line |
+| `max_lines` | integer | no | `2` | 1-6 (1-3 offered unless `stacked`); past it the font shrinks to 70%, then more lines; a box taller than the safe area keeps shrinking |
+| `line_style` | enum `caption_line_style` | no | `balanced` | `balanced` (lines evened out), `auto` (each line filled), `stacked` (`words_per_line` words a line) |
+| `words_per_line` | integer | no | `2` | 1-4, used by `stacked` |
 | `created_at`, `updated_at` | timestamptz | no | `now()` | |
 
 Presets (`youtube`, `tiktok`, `minimal`) and the defaults live in
@@ -295,6 +299,7 @@ Keys in use (`backend/app/services/app_settings.py`):
 | `export_status` | `pending`, `processing`, `completed`, `failed` |
 | `export_format` | `srt`, `vtt`, `json`, `mp4` |
 | `caption_alignment` | `left`, `center`, `right` |
+| `caption_line_style` | `auto`, `balanced`, `stacked` |
 
 ## 4. Naming conventions
 
@@ -335,7 +340,8 @@ date is the commit that introduced the file.
 | 11 | `f1c93d05a827` | 2026-10-07 | add `videos.spoken_language` (`auto`), `videos.caption_language` (`same`) |
 | 12 | `a9d3e6f20b14` | 2026-10-07 | create `app_settings`; add `videos.stage_detail`, `videos.notice` |
 | 13 | `b4e7c2d91a36` | 2026-10-11 | add `recovery_attempts` to `videos` and `exports` (shipped in v1.0.2) |
-| 14 | `c8f2a6d41e93` | 2026-10-17 | caption box (v1.0.7, head): add `box_width`, `max_lines`; `pos_x`/`pos_y` become the box centre, NOT NULL; drop `position`, `margin_v`, `margin_h` and enum `caption_vertical_position`. **Converts** every row: an anchored caption gets the centre a one-line caption had (margin + padding or outline + half the font size in from its edge, or the middle); a left/right-aligned one is half the default width (0.40) further in, the side margin read against 1920 px; a centred hand placement keeps its centre. Downgrade restores the columns at their defaults, keeping the centre as a hand placement |
+| 14 | `c8f2a6d41e93` | 2026-10-17 | caption box (v1.0.7): add `box_width`, `max_lines`; `pos_x`/`pos_y` become the box centre, NOT NULL; drop `position`, `margin_v`, `margin_h` and enum `caption_vertical_position`. **Converts** every row: an anchored caption gets the centre a one-line caption had (margin + padding or outline + half the font size in from its edge, or the middle); a left/right-aligned one is half the default width (0.40) further in, the side margin read against 1920 px; a centred hand placement keeps its centre. Downgrade restores the columns at their defaults, keeping the centre as a hand placement |
+| 15 | `e3a9c71f5b28` | 2026-10-18 | caption line style (v1.0.8, head): add enum `caption_line_style` and `caption_styles.line_style` (`balanced` for every row, the line breaking every caption already had) and `words_per_line` (2). Downgrade caps `max_lines` at 3 |
 
 ## 6. Migration rules
 

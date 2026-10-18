@@ -313,6 +313,8 @@ Enum: `left`, `center`, `right`
 | `pos_y` | number | yes | as `pos_x` |
 | `box_width` | number \| null | no | the box's width, 0..1 of the frame's width; null = 0.80 (landscape, square) or 0.85 (portrait) (v1.0.7) |
 | `max_lines` | integer | no | default `2` (v1.0.7) |
+| `line_style` | [LineStyle](#linestyle) | no | default `balanced` (v1.0.8) |
+| `words_per_line` | integer | no | default `2`; words a line when `line_style` is `stacked` (v1.0.8) |
 | `reference_height` | integer | no | default `1080` |
 | `font_family` | string | no | default `""` |
 | `font_css_stack` | string | no | default `""` |
@@ -344,7 +346,9 @@ Enum: `left`, `center`, `right`
 | `pos_x` | number \| null | no | minimum 0, maximum 1 |
 | `pos_y` | number \| null | no | minimum 0, maximum 1 |
 | `box_width` | number \| null | no | minimum 0.2, maximum 0.94; an explicit null is the default width again |
-| `max_lines` | integer \| null | no | minimum 1, maximum 3 |
+| `max_lines` | integer \| null | no | minimum 1, maximum 6 (the panel offers 1-3, or 1-6 when `stacked`) |
+| `line_style` | [LineStyle](#linestyle) \| null | no |  |
+| `words_per_line` | integer \| null | no | minimum 1, maximum 4 |
 
 An explicit `null` for any field but `box_width` is a `422` (v1.0.7): those
 columns are NOT NULL.
@@ -488,6 +492,10 @@ Enum: `pending`, `processing`, `completed`, `failed`
 | `vram_gb` | number \| null | yes |  |
 | `ram_gb` | number | yes |  |
 | `cpu_count` | integer | yes |  |
+
+### LineStyle
+
+Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 
 ### LanguageOption
 

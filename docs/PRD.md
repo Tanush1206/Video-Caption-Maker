@@ -253,6 +253,29 @@ the speech model for every video until changed back.
   - **Top / Middle / Bottom** centre the box horizontally at 12%, 50% or 88%
     of the height; presets and Reset centre it at the bottom (or middle) with
     the default width and line count.
+- **Line control** (v1.0.8):
+  - **manual line breaks:** Shift+Enter in a caption's text inserts a line
+    break (Enter still saves). It is saved with the caption, shown in the
+    preview, burned there in the MP4 and written into SRT and VTT as a real
+    line break; a manual line still too wide for the box also wraps by width
+    inside itself;
+  - **Line style**, for the whole video, beside Max width and Max lines, each
+    with its one-line description in the panel:
+    - **Balanced** (default, and what every caption did before v1.0.8):
+      wraps at the box width with the lines evened out;
+    - **Auto:** fills each line to the box width before starting the next;
+    - **Stacked:** **Words per line** (1–4, default 2) words a line, whatever
+      the box width, unless a group is still too wide for the box (then it
+      wraps). In Stacked, Max lines is 1–6, default 4;
+  - **fit rule** (every style): a caption that needs more than Max lines
+    shrinks to 70% of the chosen size, then gets extra lines; if its box is
+    then taller (or wider) than the safe area, it keeps shrinking until it
+    fits. Text is never cut, and the box stays inside the 3% safe area;
+  - SRT and VTT break each caption into the burn's lines, laid out on the
+    video's own frame, in the words' own letter case;
+  - a **Redo** in the same caption language keeps the manual breaks of every
+    caption that comes back with exactly the same words; a new translation,
+    or changed words, starts without them.
 - **Moving it:** drag the caption anywhere on the frame or by its grab
   handle (a 28 px dot on its top edge, mouse or touch); with the handle
   focused, arrow keys move it 1% of the frame and Shift+arrow 10%. A drag
