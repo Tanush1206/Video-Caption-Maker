@@ -299,6 +299,36 @@ the speech model for every video until changed back.
 - Sidecars are named exactly after the video (`movie.srt`). A burn gets
   `-captions.mp4`. A name the user types replaces both.
 - Deleting a video deletes its export files as well as their rows.
+- Every export records the caption language it was made in and which set of
+  captions it came from (v1.0.8). The list shows the language under each
+  export, and marks one made before a Redo replaced its captions "From
+  earlier captions": an English SRT left in the list after a Redo into Hindi
+  was downloaded as the Hindi one.
+- JSON is written as UTF-8 with real characters, never `\uXXXX` escapes.
+- **Phrase-level captions in every language** (v1.0.8): a caption is a phrase
+  of about 32 characters, cut at punctuation, then at natural word groups
+  (never starting with an auxiliary or postposition such as है / आहे / में,
+  preferring to start at a conjunction), never a lone word unless the speech
+  is one word. Nothing Whisper skipped is left out: a stretch of 4 s or more
+  with no caption is decoded again on its own.
+- **Caption timing follows the speech** (v1.0.8), from Whisper's word
+  timestamps, kept with the video and through translation:
+  - wherever words were heard, a caption is on screen; a translation is
+    spread over the stretches of speech it came from, by how long each was
+    spoken;
+  - a gap under 0.5 s between captions closes to 2 frames (80 ms), so
+    nothing flickers off and on; 0.5 s or more of silence stays a gap;
+  - a caption ends at most 0.5 s after its last spoken word and never spans
+    silence or other speech; it lasts 0.8–7 s and never overlaps the next;
+  - these rules are applied by the transcription job only. A caption the user
+    retimes in the editor keeps its timing until they press Redo.
+
+  Measured on a 228-second Hinglish tutorial in Hindi, Marathi, English and
+  Spanish: caption counts within 10% of English's, at most 2 single words,
+  nothing over 4.8 s, and every rule above met against the stored word
+  timings (`backend/scripts/timing_check.py`). Before: Hindi and Marathi at
+  0.54 and 0.42 of English's count, single words held for up to 21.8 s,
+  20-second stretches of speech uncaptioned.
 
 **Edge cases**: export with no captions → 409. Download of an export that
 isn't finished → 409. Render queue unreachable → 503, and the export row is

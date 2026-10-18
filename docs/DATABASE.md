@@ -1,6 +1,6 @@
 # Database
 
-Data model as of Alembic head **`e3a9c71f5b28`** (v1.0.8). The column lists
+Data model as of Alembic head **`a4d8e2c6f130`** (v1.0.8). The column lists
 below come from `\d` on a running v1.0.4 install's Postgres, cross-checked
 against `backend/app/models/*.py`.
 
@@ -96,6 +96,7 @@ erDiagram
         varchar32 stage "nullable"
         varchar200 stage_detail "nullable"
         varchar300 notice "nullable"
+        json speech "nullable"
         varchar16 spoken_language
         varchar16 caption_language
         int recovery_attempts
@@ -139,6 +140,8 @@ erDiagram
         varchar512 storage_path "nullable"
         bigint size_bytes "nullable"
         int height "nullable"
+        varchar16 caption_language "nullable"
+        timestamptz captions_from "nullable"
         int progress
         int recovery_attempts
         text error_message "nullable"
@@ -192,6 +195,7 @@ values are applied by SQLAlchemy at flush time and are **not** in the schema.
 | `stage` | varchar(32) | yes | | `downloading` `extracting` `transcribing` `translating` `embedding` |
 | `stage_detail` | varchar(200) | yes | | e.g. "Downloading speech model large-v3 · 1.2 of 3.1 GB" |
 | `notice` | varchar(300) | yes | | non-fatal note on a finished job (fallbacks, low confidence) |
+| `speech` | json | yes | | `[[start_ms, end_ms], ...]`, one pair a word: the Whisper word timings the captions were timed to (v1.0.8); written by each transcription, NULL before |
 | `spoken_language` | varchar(16) | no | `'auto'` | `auto` or a language code |
 | `caption_language` | varchar(16) | no | `'same'` | `same` or a caption language (`services/languages.py`: `en` `hi` `bn` `mr` `ta` `ml` `fr` `de` `nl` `es` `pt` `it` `ru`) |
 | `recovery_attempts` | integer | no | `0` | automatic requeues; reset by a manual retry |
@@ -264,6 +268,8 @@ not in the database.
 | `storage_path` | varchar(512) | yes | | relative, `user_N/exports/<uuid>.<fmt>`; NULL until written |
 | `size_bytes` | bigint | yes | | |
 | `height` | integer | yes | | output height of a burn; NULL = source size |
+| `caption_language` | varchar(16) | yes | | the video's caption language when the export was made (v1.0.8); NULL before |
+| `captions_from` | timestamptz | yes | | when the captions it was made from were written (their oldest `created_at`); a Redo writes a new set, so an export whose value differs is from earlier captions |
 | `progress` | integer | no | `0` | |
 | `recovery_attempts` | integer | no | `0` | |
 | `error_message` | text | yes | | |
@@ -341,7 +347,9 @@ date is the commit that introduced the file.
 | 12 | `a9d3e6f20b14` | 2026-10-07 | create `app_settings`; add `videos.stage_detail`, `videos.notice` |
 | 13 | `b4e7c2d91a36` | 2026-10-11 | add `recovery_attempts` to `videos` and `exports` (shipped in v1.0.2) |
 | 14 | `c8f2a6d41e93` | 2026-10-17 | caption box (v1.0.7): add `box_width`, `max_lines`; `pos_x`/`pos_y` become the box centre, NOT NULL; drop `position`, `margin_v`, `margin_h` and enum `caption_vertical_position`. **Converts** every row: an anchored caption gets the centre a one-line caption had (margin + padding or outline + half the font size in from its edge, or the middle); a left/right-aligned one is half the default width (0.40) further in, the side margin read against 1920 px; a centred hand placement keeps its centre. Downgrade restores the columns at their defaults, keeping the centre as a hand placement |
-| 15 | `e3a9c71f5b28` | 2026-10-18 | caption line style (v1.0.8, head): add enum `caption_line_style` and `caption_styles.line_style` (`balanced` for every row, the line breaking every caption already had) and `words_per_line` (2). Downgrade caps `max_lines` at 3 |
+| 15 | `e3a9c71f5b28` | 2026-10-18 | caption line style (v1.0.8): add enum `caption_line_style` and `caption_styles.line_style` (`balanced` for every row, the line breaking every caption already had) and `words_per_line` (2). Downgrade caps `max_lines` at 3 |
+| 16 | `f7c1d2e8a940` | 2026-10-18 | exports record their captions (v1.0.8): add `exports.caption_language` and `exports.captions_from` (when that set of captions was written: its oldest caption's `created_at`), both nullable and left null on existing rows |
+| 17 | `a4d8e2c6f130` | 2026-10-18 | add `videos.speech` (v1.0.8, head): the word timings captions are timed to; nullable, NULL until a video's next transcription |
 
 ## 6. Migration rules
 

@@ -440,6 +440,8 @@ Enum: `srt`, `vtt`, `json`, `mp4`
 | `error_message` | string \| null | yes |  |
 | `created_at` | string (date-time) | yes |  |
 | `height` | integer \| null | no |  |
+| `caption_language` | string \| null | no | the video's caption language when it was made (`same` or a code); null for an export from before v1.0.8 |
+| `current` | boolean \| null | no | false once a Redo has replaced the captions it was made from; null when unknown |
 
 ### ExportResolution
 

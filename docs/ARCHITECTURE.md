@@ -158,9 +158,10 @@ sequenceDiagram
     W->>DB: DELETE captions; W->>V: delete vectors (idempotent re-run)
     W->>W: 0 downloading: load Whisper (unloads translator)
     W->>W: 1 extracting: FFmpeg → <src>.transcode.wav
-    W->>W: 2 transcribing: detect language (30 s) if auto, then decode
+    W->>W: 2 transcribing: detect language (30 s) if auto, then decode, then re-decode skipped stretches
     W->>W: 2b translating: Gemini → fallback M2M100 (unloads Whisper)
-    W->>DB: INSERT captions
+    W->>W: 3 phrases: rephrase and time to the word timestamps
+    W->>DB: INSERT captions, videos.speech
     W->>V: 4 embedding: upsert "{video}:{caption}" vectors
     W->>DB: status=completed, notice
     loop every 2 s while busy
@@ -187,6 +188,31 @@ Rules the code enforces:
   it.
 - **Settings are read per job, not per process**, so a model change in
   Settings applies to the next job.
+- **Nothing Whisper heard is skipped** (v1.0.8). Each window is decoded
+  without the previous one's text (`condition_on_previous_text=False`), no
+  word's timing is believed past 3 s (`WORD_MAX_SECONDS`: alignment hands
+  the last word before a pause the whole pause), and every stretch of 4 s or
+  more with no caption is cut out and decoded again on its own, repeatedly
+  inside what that finds, three levels deep (`_fill_skipped`). Invented text
+  over silence is dropped by the same silence check as the rest.
+- **Captions are phrases timed to the speech** (v1.0.8,
+  `services/phrasing.py`), the last step before saving, in every language:
+  - each segment carries its words' timings (`Segment.speech`), kept through
+    translation; the video keeps them too (`videos.speech`);
+  - captions are joined into sentences (punctuation, or a pause over 1 s),
+    split into runs of speech at every pause of 0.5 s or more, and each run
+    into phrases of about 32 characters (punctuation, then natural word
+    groups: never starting with an auxiliary or postposition, preferably
+    starting at a conjunction; no lone words);
+  - untranslated phrases start and end on their own words; a translation is
+    spread over its runs by speaking time;
+  - then: a breath under 0.5 s closes to 2 frames (80 ms), a pause stays at
+    least 0.5 s, a caption ends at most 0.5 s after its last word and lasts
+    0.8-7 s (a squeezed one joins the neighbour the speech runs into);
+  - the words are checked unchanged and in order.
+  Only this job applies the rules: a caption retimed in the editor keeps its
+  times until a Redo. `scripts/caption_quality.py` and
+  `backend/scripts/timing_check.py` check a real video against them.
 
 ### 4.2 Caption edits → `reindex_captions`
 
