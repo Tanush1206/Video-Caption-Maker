@@ -747,6 +747,86 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## v1.0.9 (planned: Hinglish speech recognition and Roman-script captions)
+Starts after v1.0.8 is released and the install is updated (Tanush,
+2026-10-19). v1.0.8 ships with no transcription changes from this work.
+
+### Decisions (Tanush, 2026-10-19)
+- **Truth script: Roman only.** `test-assets/truth-hi.txt` (first 60 s of
+  `hinglish.mp4`, natural Roman Hinglish, one caption a line with its start
+  time). Score Whisper's output after converting it to Roman, with the caveat
+  that the conversion adds its own errors; lean on CER too.
+- **Also report "English-word accuracy":** of the English words in the truth
+  (captions, SRT file, customize, auto generate, …), how many come out right.
+  That is the real Hinglish problem.
+- **Roman-script captions:** evaluate IndicXlit first. Ship it only if, on the
+  clip, English loanwords come back in English spelling and it clearly beats
+  the rule-based version; show Tanush 10 sample lines from each before
+  deciding. Otherwise put it on the roadmap.
+- **Then Phase 2** (transcription settings), keeping only what measurably
+  helps, with a before/after table per setting and hardware tier. Ask before
+  any model change.
+
+### Status
+- `hinglish.mp4` is in `test-assets/` (2026-10-19); its audio is identical to
+  `bug-mr.mp4.mp4`'s (same decoded MD5, 228.32 s), so the draft's caption
+  times hold.
+- `truth-hi.txt`: the draft (19 lines marked [?]) as written on 2026-10-19;
+  Tanush's listened corrections not yet in the file when last checked.
+
+### Speech recognition for non-English speech — Phase 1, measured (2026-10-19)
+Brief (Tanush): transcription works for English but not other spoken
+languages; measure before changing anything, then improve without switching
+models. No code changed for this phase.
+
+Setup: dev stack (v1.0.8 code), the app's own `transcribe()` with each model
+loaded explicitly. `test-assets/hinglish.mp4` and `truth-hi.txt` were **not
+in the folder**, so the Hinglish clip is the same audio taken from
+`bug-mr.mp4.mp4`, and it has no ground truth yet: no WER for it. Two more
+clips with exact transcripts were generated with Piper TTS (open voices
+`hi_IN-pratham-medium`, `es_ES-davefx-medium`): plain Hindi (45.6 s, 138
+words) and Spanish (39.5 s, 136 words). WER/CER on NFC-normalised text,
+punctuation and nukta ignored.
+
+**Language detection:** once, over the first 30 s, then forced for the whole
+file (`detect_language` → `transcribe(language=hint)`); not per segment.
+Hinglish detected as `hi` (large-v3 0.98, turbo 0.55, small 0.98).
+
+| Clip | Model / device | WER | CER | Time |
+|---|---|---|---|---|
+| Spanish (TTS) | large-v3 / GPU | 0.066 | 0.044 | 4 s |
+| | large-v3-turbo / CPU | 0.103 | 0.071 | 10 s |
+| | small / CPU | 0.140 | 0.083 | 5 s |
+| Hindi (TTS) | large-v3 / GPU | 0.225 | 0.103 | 12 s |
+| | large-v3-turbo / CPU | 0.275 | 0.146 | 23 s |
+| | small / CPU | 0.486 | 0.199 | 12 s |
+| Hinglish (real) | all | — (no truth) | — | 82 / 143 / 283 s |
+
+Error examples:
+- Spanish, large-v3: numbers as digits ("quince"→"15"), a few dropped short
+  words ("los", "la"), "apaga"→"apara". Mostly fine: non-English in general
+  is not the problem.
+- Hindi (TTS), large-v3: spelling variants that count as errors but read
+  fine (आँच→आंच, सीखेंगे→सिखेंगे, मिनट→मिनिट, ऊपर→उपर), digits
+  (पंद्रह→15), and real errors around compound verbs (डालकर→कर,
+  "छलनी से छानकर"→"छली से च्छान कर"). Small: much worse (घर→गर,
+  टमाटर→तमातर, सूप→सुभ).
+- Hinglish (real, first 60 s): no stretches missing (the v1.0.8 re-decode
+  fills them; before it, 8-29 s was lost) and no repetition loops beyond a
+  lone repeated "में"/"है". The problems are script and English words:
+  - large-v3 writes the English words in Devanagari, misheard: "कैप्शन्स
+    ऑटो जेनेरेट" (captions auto generate), "यूजिंग" (using), "ओडियो इंदी"
+    (audio Hindi), "केप्टिशन्स"; only "SRT" in Latin (209 Devanagari, 6
+    Latin words);
+  - large-v3-turbo writes them in Latin ("captions auto generate", "using
+    srt file", "customize"): 199 Devanagari, 29 Latin — closer to how
+    Hinglish is written, but detection was only 0.55 sure;
+  - small garbles both (अड़़द़ईट, युजिं सर्टी फाई).
+
+Waiting on: `hinglish.mp4` and `truth-hi.txt` (Tanush) for the Hinglish WER,
+which Phase 2 must improve.
+
+
 ## v1.0.8 (done, not tagged)
 Brief (Tanush, 2026-10-17): caption line control. Manual line breaks
 (Shift+Enter), a Line style setting (Auto / Balanced / Stacked with Words per
