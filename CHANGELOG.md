@@ -6,7 +6,7 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.8] - 2026-10-18
+## [1.0.8] - 2026-10-19
 
 Caption line control, and captions that follow the speech in every
 language. **Three migrations**, run on start: every style gets the Balanced
