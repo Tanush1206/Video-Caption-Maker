@@ -747,32 +747,66 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.0.9 (planned: Hinglish speech recognition and Roman-script captions)
-Starts after v1.0.8 is released and the install is updated (Tanush,
-2026-10-19). v1.0.8 ships with no transcription changes from this work.
+## v1.0.9 (in progress: caption timing, then Hinglish recognition)
+Started 2026-10-19, after v1.0.8 was released and the install updated.
+Order (Tanush, 2026-10-19): Problem 1, then Problem 2, then transcription
+settings (Phase 2). The UI redesign is v1.1.0, when Tanush sends it.
+
+### Problem 1 — captions about 1 s late
+Seen on the installed v1.0.8 after Redo on video 84 (Hindi).
+- [ ] Measure on `hinglish.mp4` (dev, port 3001) in Hindi, "Same as spoken"
+      and English: each caption's start vs when its first word is spoken
+      (`truth-hi.txt` times, the waveform, spot checks by ear), separately in
+      the stored timings, SRT/VTT, the burned MP4 and the editor preview while
+      playing; mean and max offset per place and language; constant or
+      growing.
+- [ ] Root cause. Suspects: Whisper word timestamps starting late (VAD
+      padding, alignment); the onset snap (`_snap_to_onset`); v1.0.8's
+      re-timing (phrasing, minimum duration, gap closing, re-decoded gaps);
+      the preview on `timeupdate` (~250 ms) instead of requestAnimationFrame;
+      FFmpeg burn offsets or frame-rate rounding.
+- [ ] Fix: a caption appears no later than 100 ms after its first word and
+      no earlier than 200 ms before it, in the editor, SRT/VTT and the burned
+      MP4, in every language; the v1.0.8 rules still hold.
+- [ ] Tests (fail before, pass after) for all three places in Hindi, English
+      and one more language; the preview shows the right caption within one
+      frame of the video's current time.
+
+### Problem 2 — Hindi/Hinglish captions still very bad
+Replaces the IndicXlit plan (IndicXlit kept only as a fallback).
+- [ ] Candidates, Whisper fine-tunes that write Roman Hinglish with English
+      words in English spelling: `Oriserve/Whisper-Hindi2Hinglish-Prime`
+      (large-v3 fine-tune, GPU) and `Oriserve/Whisper-Hindi2Hinglish-Apex`
+      (large-v3-turbo fine-tune, CPU). Check each licence on its model card
+      (stated Apache-2.0) and any training-data terms; **stop and tell Tanush
+      if either isn't usable commercially.**
+- [ ] Convert each to CTranslate2 for faster-whisper (float16 GPU, int8 CPU)
+      with word timestamps working.
+- [ ] Score on `hinglish.mp4` against `truth-hi.txt` (Roman): WER, CER,
+      English-word accuracy, caption start offsets (Problem 1); against
+      today's large-v3, large-v3-turbo and small; speed, memory and download
+      size for each.
+- [ ] 10 sample lines from each model beside `truth-hi.txt`.
+- [ ] Then ONE question with a recommendation: add a "Hindi (Hinglish, Roman
+      script)" speech option on the winning models (Prime on GPU, Apex on CPU,
+      downloaded only when first chosen), and whether it should be the
+      default when Hindi is detected. **No change to the default for existing
+      users without Tanush's answer.**
+
+### Then: transcription settings (Phase 2)
+Keep only what measurably helps, with a before/after table per setting and
+hardware tier. Ask before any model change.
 
 ### Decisions (Tanush, 2026-10-19)
 - **Truth script: Roman only.** `test-assets/truth-hi.txt` (first 60 s of
   `hinglish.mp4`, natural Roman Hinglish, one caption a line with its start
-  time). Score Whisper's output after converting it to Roman, with the caveat
-  that the conversion adds its own errors; lean on CER too.
+  time), verified by listening. Score Whisper's output after converting it
+  to Roman, with the caveat that the conversion adds its own errors; lean on
+  CER too.
 - **Also report "English-word accuracy":** of the English words in the truth
   (captions, SRT file, customize, auto generate, …), how many come out right.
-  That is the real Hinglish problem.
-- **Roman-script captions:** evaluate IndicXlit first. Ship it only if, on the
-  clip, English loanwords come back in English spelling and it clearly beats
-  the rule-based version; show Tanush 10 sample lines from each before
-  deciding. Otherwise put it on the roadmap.
-- **Then Phase 2** (transcription settings), keeping only what measurably
-  helps, with a before/after table per setting and hardware tier. Ask before
-  any model change.
-
-### Status
-- `hinglish.mp4` is in `test-assets/` (2026-10-19); its audio is identical to
-  `bug-mr.mp4.mp4`'s (same decoded MD5, 228.32 s), so the draft's caption
-  times hold.
-- `truth-hi.txt`: the draft (19 lines marked [?]) as written on 2026-10-19;
-  Tanush's listened corrections not yet in the file when last checked.
+- `hinglish.mp4`'s audio is identical to `bug-mr.mp4.mp4`'s (same decoded
+  MD5, 228.32 s).
 
 ### Speech recognition for non-English speech — Phase 1, measured (2026-10-19)
 Brief (Tanush): transcription works for English but not other spoken
