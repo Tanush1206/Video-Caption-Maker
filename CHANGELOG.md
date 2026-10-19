@@ -13,6 +13,8 @@ language. **Three migrations**, run on start: every style gets the Balanced
 line style and 2 words a line (how every caption already broke, so existing
 videos look exactly as before); exports record which captions they hold;
 videos keep the word timings their captions are timed to.
+Expected update from 1.0.7: about 8 MB (backend app code; frontend app
+layers ~7 MB); no dependency layer changes. Measured after release.
 
 ### Added
 - **Manual line breaks.** Shift+Enter in a caption's text starts a new line
