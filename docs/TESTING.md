@@ -225,6 +225,7 @@ Baselines:
 | 1.0.2 → 1.0.3 | CUDA 10/14 layers, 2245.7 MB; CPU 764.6 MB | 5/9, 6.2 MB |
 | 1.0.3 → 1.0.4 | **0/14 layers** (CPU and CUDA) | **3/9, 6.1 MB** |
 | 1.0.6 → 1.0.7 | CUDA 9/15 layers, 4.6 MB (HarfBuzz, fonts, app); dependency layer reused | 4/10, 7.2 MB |
+| 1.0.7 → 1.0.8 | CUDA 4/15 layers, 0.2 MB (app code only) | 4/10, 7.2 MB |
 
 Full layer digests are in PROGRESS.md.
 

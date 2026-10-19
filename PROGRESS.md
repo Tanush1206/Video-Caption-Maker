@@ -827,7 +827,7 @@ Waiting on: `hinglish.mp4` and `truth-hi.txt` (Tanush) for the Hinglish WER,
 which Phase 2 must improve.
 
 
-## v1.0.8 (done, not tagged)
+## v1.0.8 (released 2026-10-19, tag on 236b9ce)
 Brief (Tanush, 2026-10-17): caption line control. Manual line breaks
 (Shift+Enter), a Line style setting (Auto / Balanced / Stacked with Words per
 line), and a fit rule that shrinks past 70% when the box would be taller than
@@ -991,10 +991,30 @@ Decisions:
       in the installed app. The installed app kept port 3000 throughout (dev
       UI on 3001); dev stack stopped at the end.
 
+### Release check (2026-10-19)
+- CI green on 236b9ce; `release.yml` 4/4 green; 8 assets, all 7 match
+  SHA256SUMS; 1.0.8 images fetch anonymously (200).
+- Backup per DATABASE.md §7 before the update (31 s downtime):
+  `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.0.8` (vcm.dump, vcm-media.tgz
+  284 MB, .env copy, rowcounts: 1 video, 76 captions, 5 exports, 1 style,
+  caption-text md5). Kept until Tanush confirms.
+- `vcm update` (Windows GPU) in 27 s: VCM_VERSION 1.0.8, alembic
+  `a4d8e2c6f130` (head); rows and caption-text md5 unchanged; the style
+  became Balanced / 2 words; the 5 older exports carry no language (made
+  before it was recorded); video 84 gets stored word timings at its next
+  transcription. Download **7.4 MB**: backend CUDA 4/15 layers, 0.2 MB;
+  frontend 4/10 layers, 7.2 MB.
+- Guard: own origin 200 at localhost and 127.0.0.1; other origin,
+  cross-site, rebinding Host 403. `flow.js` PASS at both addresses.
+- E2E on the install (GPU): soup-169 x same,hi,es and soup-916 x hi ALL
+  PASSED; `timing_check.py` (fed on stdin) passes on its output. Test videos
+  85-88 deleted (85 and 87 by flow.js, 86 and 88 through the API); the
+  install holds only video 84 again.
+- Secrets: none in history or images (public CA bundles only).
+
 ### Next
-- Tanush: push, wait for CI, tag v1.0.8 (commands in the final report).
-- After the tag: backup per DATABASE.md §7, release checklist, `vcm
-  update`, verify (version, alembic `a4d8e2c6f130`, data, guard).
+- Tanush: confirm the updated install; then the pre-1.0.8 backup is deleted
+  and v1.0.9 starts.
 - Translation quality into Indian languages (M2M100) is unchanged; a model
   switch is Tanush's call.
 
