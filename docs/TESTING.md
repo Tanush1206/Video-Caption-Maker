@@ -139,6 +139,7 @@ node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/14
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
 node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step script-fonts
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
+VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 caption-timing   # read-only; VCM_CHECK_SECONDS (default 20) of playback
 VCM_SAFE_VIDEOS=<16:9 id>,<9:16 id>,<1:1 id> node checks.js http://localhost:3000 caption-safe-area layout-parity   # the same; layout-parity needs the dev stack
 node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes data: test installs only
 ```
@@ -170,6 +171,7 @@ what the 9:16 run is for.
 | `checks.js caption-width` | at 375 or 1440 px, by mouse or touch, dragging a width handle doesn't resize the box about its centre or rewrap the text inside it, isn't saved, isn't shown by the Max width slider; the slider doesn't move the box and its handles; arrow keys on a handle don't step 1%; the width or lines change when the box is dragged to any edge; Max lines 1 and 2 don't shrink the font (to no less than 70%) or exceed one extra line |
 | `checks.js caption-snap` | no guide or snap at the frame's centre lines, no guide at the safe-area edge, guides left after the drag; Top / Middle / Bottom don't centre the box at 12/50/88% inside the safe area; Reset doesn't restore the centre, width and line count |
 | `checks.js layout-parity` | the editor's lines or painted rectangle (within 0.5% of the frame) differ from the burn's layout (`backend/scripts/caption_layout.py`, through `docker compose exec`), for each line style (Balanced, Auto, Stacked; `VCM_LINE_STYLES` limits them) x the texts (one with a manual break), looks and sizes above, on each video in `VCM_SAFE_VIDEOS`. Dev stack only |
+| `checks.js caption-timing` | while the video plays, on any presented frame (`requestVideoFrameCallback`) the overlay shows another caption than the one the API says covers that frame's time, unless a caption starts or ends within a frame of it. Read-only. Measured for v1.0.9 on the Hinglish tutorial (24 fps) in Hindi, Same as spoken and English: 721 frames each, 0 off; it fails on captions shifted 250 ms |
 | `flow.js` | the guarded UI flow (delete, settings change and back, SRT and MP4 export and download) fails, or the guard refuses any of the app's own requests |
 
 Required for every UI change (PROGRESS.md, v1.0.4 rules):
@@ -197,6 +199,44 @@ captions, speech with no caption on screen, a caption more than 0.5 s past
 its last word, or one outside 0.8-7 s. Measured for v1.0.8 on a 228-second
 Hinglish tutorial: both pass for Hindi, Marathi, English and Spanish; on the
 v1.0.7 code both fail. Delete the videos afterwards (AGENTS.md rule 20).
+
+### Caption starts against the speech (v1.0.9)
+
+The rule: a caption appears no later than 100 ms after its first word is
+said and no earlier than 200 ms before it, in the editor, SRT/VTT and the
+burned MP4. The places themselves are tested: `test_exports.py`
+(SRT and VTT cues at the stored start to the millisecond; a real burn at
+24 fps shows each caption on the first frame at or after its start) and
+`checks.js caption-timing` (the preview, within one frame). What is left is
+the stored start against the speech, which `test_caption_phrasing.py`
+checks on the shape that drifted (Hindi, English, Spanish) and the
+measurement below checks on real speech.
+
+Measured by forcing the known text onto the audio (torchaudio's MMS
+aligner, outside the app, within ~0.05 s of Whisper's own starts where both
+are clear) and comparing each caption's start with its first word's: the
+Hinglish tutorial's first 61 s against `test-assets/truth-hi.txt`, and two
+synthesized clips with known text (English, Windows "Zira"; Spanish, Piper).
+Offset = caption start − first word said; mean / worst late / worst early,
+and how many captions are outside the rule:
+
+| Clip | Model | v1.0.8 | v1.0.9 |
+|---|---|---|---|
+| Hindi, 32 captions | large-v3 (the install's video 84) | +0.30 / **+2.61** / −0.74 s, 23 out | −0.10 / +0.13 / −0.26 s, 3 out |
+| Hindi | medium | +0.48 / **+2.67** / −0.52 s, 17 out | +0.06 / +0.15* / −0.23 s, 4 out |
+| English, 25 captions | large-v3 | −0.16 / +0.13 / −0.44 s, 10 out | −0.09 / +0.10 / −0.26 s, 3 out |
+| English | medium | +0.03 / +0.16 / −0.17 s, 3 out | +0.03 / +0.16 / −0.17 s, 3 out |
+| Spanish, 22 captions | large-v3 | −0.15 / +0.04 / −0.55 s, 4 out | −0.14 / +0.02 / −0.55 s, 4 out |
+| Spanish | medium | +0.03 / +0.16 / −0.09 s, 3 out | +0.02 / +0.16 / −0.09 s, 3 out |
+
+\* the scorer matched one caption to the wrong word (+2.67 s); against its
+own word it is +0.15 s.
+
+The drift is gone: v1.0.8 spread a segment whose text had a word Whisper
+had not timed over the whole run of speech, and captions drifted seconds
+late. What is left out of the rule is Whisper's own word timestamps, up to
+about 0.15 s late and 0.25 s early (0.55 s on one long Spanish word); the
+pipeline adds 0-20 ms to them.
 
 ### Update download size: `scripts/update_layers.py`
 

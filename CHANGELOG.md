@@ -6,6 +6,19 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Captions came up late, by up to 2.6 s** (v1.0.8, on a Hindi talk after
+  Redo). A segment whose first words were cut off at its start, and so no
+  longer matched its text, was spread over the whole stretch of speech
+  around it. Every word is now timed on its own and each caption starts on
+  its first word. On the Hindi tutorial the worst caption went from 2.61 s
+  late to 0.13 s. Captions made before the fix keep their timings until you
+  press Redo.
+- A word Whisper placed in the pause before it (up to 0.5 s early) now starts
+  where the voice comes back.
+
 ## [1.0.8] - 2026-10-19
 
 Caption line control, and captions that follow the speech in every

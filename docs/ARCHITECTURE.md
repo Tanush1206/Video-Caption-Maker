@@ -204,8 +204,19 @@ Rules the code enforces:
     into phrases of about 32 characters (punctuation, then natural word
     groups: never starting with an auxiliary or postposition, preferably
     starting at a conjunction; no lone words);
-  - untranslated phrases start and end on their own words; a translation is
-    spread over its runs by speaking time;
+  - every word gets its own time (v1.0.9): matched to Whisper's timed words
+    in order (a sequence match, so a word Whisper left out loses nothing
+    else), and an unmatched word is placed between its timed neighbours,
+    never anywhere else in the run; untranslated phrases start on their
+    first word and end on their last; a sentence that is mostly a
+    translation is spread over its runs by speaking time;
+  - the words are timed as Whisper timed them, not clipped to the segment's
+    onset-snapped start, and kept at zero length (v1.0.9);
+  - each word's start is checked on a 20 ms speech-band envelope
+    (`_words_on_onsets`): a word that starts in, or just before, a quiet
+    stretch of 200 ms or more starts where the voice comes back; a stop
+    consonant's closure or a sibilant (both quiet in that band for up to
+    ~150 ms) is not a pause;
   - then: a breath under 0.5 s closes to 2 frames (80 ms), a pause stays at
     least 0.5 s, a caption ends at most 0.5 s after its last word and lasts
     0.8-7 s (a squeezed one joins the neighbour the speech runs into);

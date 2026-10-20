@@ -754,23 +754,56 @@ settings (Phase 2). The UI redesign is v1.1.0, when Tanush sends it.
 
 ### Problem 1 — captions about 1 s late
 Seen on the installed v1.0.8 after Redo on video 84 (Hindi).
-- [ ] Measure on `hinglish.mp4` (dev, port 3001) in Hindi, "Same as spoken"
-      and English: each caption's start vs when its first word is spoken
-      (`truth-hi.txt` times, the waveform, spot checks by ear), separately in
-      the stored timings, SRT/VTT, the burned MP4 and the editor preview while
-      playing; mean and max offset per place and language; constant or
-      growing.
-- [ ] Root cause. Suspects: Whisper word timestamps starting late (VAD
-      padding, alignment); the onset snap (`_snap_to_onset`); v1.0.8's
-      re-timing (phrasing, minimum duration, gap closing, re-decoded gaps);
-      the preview on `timeupdate` (~250 ms) instead of requestAnimationFrame;
-      FFmpeg burn offsets or frame-rate rounding.
-- [ ] Fix: a caption appears no later than 100 ms after its first word and
-      no earlier than 200 ms before it, in the editor, SRT/VTT and the burned
-      MP4, in every language; the v1.0.8 rules still hold.
-- [ ] Tests (fail before, pass after) for all three places in Hindi, English
-      and one more language; the preview shows the right caption within one
-      frame of the video's current time.
+- [x] Measure on `hinglish.mp4` (dev, port 3001) in Hindi, "Same as spoken"
+      and English, per place. Truth word times by forcing `truth-hi.txt` onto
+      the audio (torchaudio MMS aligner, scratch only; within ~0.05 s of
+      Whisper's starts and the waveform where both are clear). Installed
+      video 84 (v1.0.8, large-v3): mean +0.30 s, worst **+2.61 s late**, in
+      stretches of +1.3 to +2.6 s, not growing over the video (drift inside
+      each run of speech, reset at every pause). SRT/VTT = stored to the ms;
+      the burn shows each caption on the first frame at or after its start
+      (+0 to +42 ms at 24 fps, mean +21); the preview matches the playhead on
+      every frame (721 of 721, three videos). So all of it was in the stored
+      times.
+- [x] Root cause. Not Whisper (its raw word starts: median −0.12 s against
+      the truth, 2 of 185 more than 0.1 s late), not the preview (it already
+      follows requestAnimationFrame while playing), not FFmpeg. It was
+      v1.0.8's re-timing: `_speech` clipped each segment's words to its
+      onset-snapped start, so the first words of 18 of 89 segments fell off;
+      text and timed words then differed, and `rephrase` spread such a
+      sentence by its share of the text over the whole run of speech
+      (median run 11.2 s, longest 78 s), every caption after the first in a
+      run drifting further. Only 2 of 6 sentences took the exact path.
+- [x] Fix (`services/phrasing.py`, `services/transcription.py`):
+      - words kept as Whisper timed them (not clipped to the snapped start;
+        zero-length words kept);
+      - every word timed on its own by a sequence match, an untimed word
+        placed between its timed neighbours (or for its text's length next to
+        the one known neighbour, never past its segment's end); each caption
+        starts on its first word and ends on its last; a sentence mostly
+        translated keeps the old by-share spreading;
+      - word starts checked on a 20 ms speech-band envelope
+        (`_words_on_onsets`): a word timed into a pause of 200 ms or more
+        starts where the voice comes back. Measured: large-v3 English mean
+        −0.31 → −0.09 s, captions over 0.2 s early 17 → 3.
+      Result, offset per caption against the speech (docs/TESTING.md has the
+      table): Hindi large-v3 worst +2.61 → +0.13 s late, 23 → 3 captions
+      outside the rule; English and Spanish no worse on either model.
+- [ ] Still outside the rule: Whisper's own word timestamps, up to ~0.15 s
+      late and ~0.25 s early (one long Spanish word 0.55 s early), 3-4
+      captions in 22-35 per clip. The pipeline adds 0-20 ms. Closing that
+      needs a forced aligner (a wav2vec2/MMS model) after Whisper: a model
+      addition, so Tanush's call.
+- [x] Tests, fail on v1.0.8 and pass now: `test_caption_phrasing.py`
+      (Hindi, English, Spanish sentences in one run with untimed first words:
+      +230 / −428 / −251 ms before; an untimed word between neighbours),
+      `test_transcription.py` (words not clipped to the snapped start;
+      zero-length words kept; a word after a pause, a word inside a pause).
+      Guards that pass before and after: SRT/VTT cues at the stored start
+      and a real 24 fps burn within one frame (`test_exports.py`), a word said
+      before a pause and a consonant closure not moved, a guessed last word
+      not pushing the next caption. Preview: `checks.js caption-timing`
+      (every frame within one frame; fails on a 250 ms shift).
 
 ### Problem 2 — Hindi/Hinglish captions still very bad
 Replaces the IndicXlit plan (IndicXlit kept only as a fallback).
