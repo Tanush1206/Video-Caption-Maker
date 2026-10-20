@@ -1178,3 +1178,68 @@ async def test_a_retimed_caption_keeps_its_timing_through_reload_and_export(expo
         ticket = (await client.post(f"/api/exports/{created['id']}/download-token", headers=auth_headers)).json()
         body = (await client.get(f"/api/exports/{created['id']}/download?token={ticket['token']}")).text
         assert stamp in body, (fmt, body[:120])
+
+
+# ── Caption starts in every output (v1.0.9) ─────────────────────────────
+#
+# A caption appears no later than 100 ms after its stored start, no earlier
+# than 200 ms before it: in SRT, VTT and the burned video, in Hindi, English
+# and Spanish. Starts off the frame grid on purpose (24 fps, as the Hindi
+# tutorial), since that is where rounding would show.
+TIMED = [(1013, 1900, "और आपके कैप्शन"), (2371, 3100, "and drag your video"), (3555, 4300, "primero corta dos")]
+
+
+def _timed_captions():
+    return [a_caption(sequence=i, start_ms=s, end_ms=e, text=t) for i, (s, e, t) in enumerate(TIMED)]
+
+
+def _cue_starts(text: str) -> list[int]:
+    import re
+
+    out = []
+    for h, m, s, ms in re.findall(r"^(\d+):(\d\d):(\d\d)[,.](\d{3}) -->", text, re.M):
+        out.append(((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms))
+    return out
+
+
+def test_srt_and_vtt_start_each_caption_at_its_stored_start():
+    captions = _timed_captions()
+    assert _cue_starts(subtitles.to_srt(captions)) == [s for s, _, _ in TIMED]
+    assert _cue_starts(subtitles.to_vtt(captions)) == [s for s, _, _ in TIMED]
+
+
+def test_the_burn_shows_each_caption_within_a_frame_of_its_start(tmp_path):
+    import numpy as np
+
+    from app.services import rendering
+
+    width, height, fps = 320, 180, 24
+    source = tmp_path / "black.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d=5:r={fps}",
+            "-f", "lavfi", "-i", "sine=duration=5",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            str(source),
+        ],
+        capture_output=True, timeout=120, check=True,
+    )
+    style = a_style(font_key="sans", font_size=60, box_opacity=0.0)
+    ass = tmp_path / "captions.ass"
+    ass.write_text(subtitles.to_ass(_timed_captions(), style, width, height), encoding="utf-8")
+    burned = tmp_path / "burned.mp4"
+    rendering.burn_captions(source, ass, burned, duration_ms=5000)
+
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(burned), "-pix_fmt", "gray", "-f", "rawvideo", "-"],
+        capture_output=True, timeout=120, check=True,
+    ).stdout
+    frames = np.frombuffer(raw, dtype=np.uint8).reshape(-1, height, width)
+    inked = [bool((frame > 128).any()) for frame in frames]
+    appeared = [i * 1000 / fps for i in range(1, len(inked)) if inked[i] and not inked[i - 1]]
+    assert len(appeared) == len(TIMED), appeared
+    for (start, _, text), at in zip(TIMED, appeared):
+        assert -200 <= at - start <= 100, f"{text!r} appears {at - start:+.0f} ms from its start"
+        # And on the first frame at or after it: nothing later than one frame.
+        assert at - start < 1000 / fps

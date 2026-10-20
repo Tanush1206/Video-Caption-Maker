@@ -231,6 +231,51 @@ function burnLayout(style, texts, frame) {
 }
 
 const CHECKS = {
+  // While the video plays, the overlay shows the caption under the playhead
+  // within one frame: on every presented frame (requestVideoFrameCallback),
+  // its text against the caption the API says covers that frame's time. A
+  // mismatch counts only if no caption starts or ends within a frame of it.
+  // Plays VCM_CHECK_SECONDS (default 20) from the first caption; reads only.
+  async "caption-timing"(browser, base) {
+    const page = await browser.newPage();
+    const id = await editorVideo(page, base);
+    const captions = (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items;
+    await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("video")?.readyState >= 2);
+    const seconds = Number(process.env.VCM_CHECK_SECONDS || 20);
+    const frames = await page.evaluate(async ({ from, seconds }) => {
+      const video = document.querySelector("video");
+      video.muted = true;
+      video.currentTime = from / 1000;
+      await new Promise((resolve) => video.addEventListener("seeked", resolve, { once: true }));
+      const out = [];
+      await new Promise((resolve) => {
+        const onFrame = (_, meta) => {
+          out.push({ t: meta.mediaTime * 1000, text: document.querySelector("[data-caption-text]")?.textContent ?? "" });
+          if (meta.mediaTime * 1000 - from > seconds * 1000) resolve();
+          else video.requestVideoFrameCallback(onFrame);
+        };
+        video.requestVideoFrameCallback(onFrame);
+        video.play();
+      });
+      video.pause();
+      return out;
+    }, { from: Math.max(0, captions[0].start_ms - 500), seconds });
+    const steps = frames.slice(1).map((f, i) => f.t - frames[i].t).filter((d) => d > 0).sort((a, b) => a - b);
+    const frame = steps[Math.floor(steps.length / 2)] || 1000 / 30;
+    const bare = (s) => s.replace(/\s+/g, "");
+    const late = [];
+    for (const { t, text } of frames) {
+      const want = captions.find((c) => c.start_ms <= t && t < c.end_ms)?.text ?? "";
+      if (bare(want) === bare(text)) continue;
+      const boundary = captions.some((c) => Math.abs(c.start_ms - t) <= frame + 1 || Math.abs(c.end_ms - t) <= frame + 1);
+      if (!boundary) late.push(`${(t / 1000).toFixed(3)}s shows "${text.slice(0, 16)}" for "${want.slice(0, 16)}"`);
+    }
+    ok(`caption-timing: ${frames.length} frames sampled (frame ${frame.toFixed(1)} ms)`, frames.length > seconds * 10);
+    ok("caption-timing: overlay matches the playhead within one frame", late.length === 0, `${late.length} off: ${late.slice(0, 3).join(" | ")}`);
+    await page.close();
+  },
+
   // Settings → Interface theme offers Light, Dark and System. System stores
   // nothing, follows the OS, and follows it live when the OS changes.
   async theme(browser, base) {
