@@ -503,7 +503,7 @@ def test_nothing_past_the_no_speech_check_retries_without_it(tmp_path, monkeypat
 
     monkeypatch.setattr(transcription, "get_model", lambda: Model())
     monkeypatch.setattr(transcription, "silent_spans", lambda path: [])
-    monkeypatch.setattr(transcription, "vocal_envelope", lambda path: [])
+    monkeypatch.setattr(transcription, "vocal_envelope", lambda path, *_: [])
 
     segments, language = transcription.transcribe(tmp_path / "a.wav", language="hi")
 
@@ -827,3 +827,112 @@ def test_segments_without_word_timings_are_not_split():
 
     seg = SimpleNamespace(text="x" * 300, start=0.0, end=20.0, words=None, avg_logprob=None)
     assert list(transcription._split_long(seg)) == [seg]
+
+
+# ── Word starts on the waveform (v1.0.9) ────────────────────────────────
+
+
+def _envelope(*stretches, total_ms=4000):
+    """A 20 ms speech-band envelope: [(from_ms, to_ms, dB), ...] over silence."""
+    from app.services.transcription import SILENT_DB, WORD_ONSET_WINDOW_MS
+
+    levels = [SILENT_DB] * (total_ms // WORD_ONSET_WINDOW_MS)
+    for start, end, db in stretches:
+        for i in range(start // WORD_ONSET_WINDOW_MS, end // WORD_ONSET_WINDOW_MS):
+            levels[i] = db
+    return levels
+
+
+def _onsets(speech, levels, start_ms=None):
+    from app.services.transcription import Segment, _words_on_onsets
+
+    segment = Segment(start_ms=start_ms or speech[0][0], end_ms=speech[-1][1], text="", confidence=None, speech=speech)
+    return [s for s, _, _ in _words_on_onsets([segment], levels)[0].speech]
+
+
+def test_a_word_after_a_short_pause_starts_where_the_voice_comes_back():
+    """
+    "और" was timed from the end of "करेगी" (13.16 s) and said at 13.52, after
+    0.34 s of room tone 10-15 dB down: its caption came up 0.36 s early.
+    """
+    levels = _envelope((0, 1160, -20), (1160, 1220, -23), (1220, 1520, -36), (1520, 2400, -20))
+    starts = _onsets([(800, 1160, "करेगी"), (1160, 1580, "और"), (1580, 1800, "आपके")], levels)
+    assert starts == [800, 1520, 1580]
+
+
+def test_a_word_timed_inside_the_silence_before_it_starts_on_the_voice():
+    """ "You" timed from 32.24 s, into a pause, and said at 32.72. """
+    levels = _envelope((0, 600, -20), (1480, 2400, -20))
+    starts = _onsets([(1000, 1480, "You"), (1480, 1620, "can")], levels)
+    assert starts == [1480, 1480]
+
+
+def test_a_word_said_before_a_pause_stays_where_it_was_said():
+    """ "two," was said in 0.12 s and Whisper stretched it over the 0.4 s pause after. """
+    levels = _envelope((0, 600, -22), (1100, 2000, -20))
+    starts = _onsets([(200, 480, "or"), (480, 980, "two,"), (1100, 1500, "depending")], levels)
+    assert starts == [200, 480, 1100]
+
+
+def test_a_consonant_closure_is_not_a_pause():
+    """The "t" of "That's" is quiet for 0.14 s inside the word."""
+    levels = _envelope((640, 760, -18), (760, 900, -40), (900, 1400, -16))
+    starts = _onsets([(720, 980, "That's"), (980, 1140, "all")], levels)
+    assert starts[0] == 720
+
+
+def test_no_envelope_leaves_the_words_alone():
+    from app.services.transcription import Segment, _words_on_onsets
+
+    segment = Segment(start_ms=0, end_ms=500, text="a", confidence=None, speech=[(0, 500, "a")])
+    assert _words_on_onsets([segment], [])[0].speech == [(0, 500, "a")]
+
+
+def test_a_word_whisper_timed_at_zero_length_is_kept():
+    """ "और" came back at 32.68-32.68; dropped, its caption began on the word after it. """
+    from types import SimpleNamespace
+
+    from app.services.transcription import _speech
+
+    words = [SimpleNamespace(start=32.52, end=32.68, word=" हैं"), SimpleNamespace(start=32.68, end=32.68, word=" और"),
+             SimpleNamespace(start=32.68, end=32.98, word=" क्लिप")]
+    segment = SimpleNamespace(words=words)
+    assert [w for _, _, w in _speech(segment, 32.52, 32.98)] == ["हैं", "और", "क्लिप"]
+
+
+def test_word_timings_are_not_clipped_to_the_snapped_start(tmp_path, monkeypatch):
+    """
+    The caption's start moves to the waveform's onset; the words it is timed
+    to must not. Clipped, the first words of 18 of 89 segments of the Hindi
+    tutorial fell off and their captions drifted up to 2.6 s late.
+    """
+    from types import SimpleNamespace
+
+    from app.services import transcription
+
+    words = [SimpleNamespace(start=1.0, end=1.4, word=" तो"), SimpleNamespace(start=1.4, end=2.0, word=" वीडियो")]
+    seg = SimpleNamespace(text=" तो वीडियो", start=1.0, end=2.0, words=words, avg_logprob=-0.3)
+
+    class Model:
+        def transcribe(self, path, **options):
+            return iter([seg]), SimpleNamespace(duration=10.0, language="hi")
+
+    monkeypatch.setattr(transcription, "get_model", lambda: Model())
+    monkeypatch.setattr(transcription, "silent_spans", lambda path: [])
+    monkeypatch.setattr(transcription, "vocal_envelope", lambda path, *_: [])
+    monkeypatch.setattr(transcription, "_snap_to_onset", lambda start, end, levels, floor: 1.5)
+
+    [segment], _ = transcription.transcribe(tmp_path / "a.wav", language="hi")
+    assert segment.start_ms == 1500
+    assert [w for _, _, w in segment.speech] == ["तो", "वीडियो"]
+    assert segment.speech[0][0] == 1000
+
+
+def test_a_zero_length_word_at_the_end_of_a_segment_is_kept():
+    """ "है" at 43.80-43.80, where its segment ends. """
+    from types import SimpleNamespace
+
+    from app.services.transcription import _speech
+
+    words = [SimpleNamespace(start=43.68, end=43.8, word=" रहा"), SimpleNamespace(start=43.8, end=43.8, word=" है")]
+    assert [w for _, _, w in _speech(SimpleNamespace(words=words), 43.68, 43.8)] == ["रहा", "है"]

@@ -351,7 +351,7 @@ ONSET_LEVEL_REACH_SECONDS = 2.0
 SILENT_DB = -120.0
 
 
-def vocal_envelope(audio_path: Path) -> list[float]:
+def vocal_envelope(audio_path: Path, window_seconds: float = ONSET_WINDOW_SECONDS) -> list[float]:
     """
     The loudness of the speech band, once per window, for the whole file.
 
@@ -360,7 +360,7 @@ def vocal_envelope(audio_path: Path) -> list[float]:
     the probe fails, which turns the refinement below into a no-op — the same
     failing-open that `silent_spans` does, and for the same reason.
     """
-    samples = int(16000 * ONSET_WINDOW_SECONDS)
+    samples = int(16000 * window_seconds)
     chain = (
         f"highpass=f={ONSET_BAND_LOW_HZ},lowpass=f={ONSET_BAND_HIGH_HZ},"
         # Fixed-size frames, so every reported window covers the same duration
@@ -466,6 +466,93 @@ def _snap_to_onset(start: float, end: float, levels: list[float], floor: float) 
         or _steps_up(start, end, levels, floor)
         or start
     )
+
+
+# Refining each word's start, which is what a caption starts on.
+#
+# Whisper starts a word where the one before it ended, so a short pause goes
+# to the word after it: on the Hindi tutorial "और" was timed from 13.16 s, at
+# the end of "करेगी", and is said at 13.52 after 0.34 s of room tone, and its
+# caption came up 0.36 s early. The pause is plain at a 20 ms resolution (10 to
+# 15 dB under the word before) and invisible at the 250 ms one above. A word
+# whose first WORD_PAUSE_LEAD_MS run into a quiet stretch of WORD_PAUSE_MS or
+# more starts where the voice comes back. Quiet is measured against the sound
+# the word was timed to start on, since room tone sits anywhere from 10 to
+# 30 dB down; at 8 dB the tutorial's captions came out the same, at 12 dB the
+# 0.36 s stayed. Shorter stretches are left alone: a stop consonant's closure
+# is quiet for 50-100 ms inside a word.
+#
+# Measured against forced-aligned truth on the first 61 s (32 captions): before,
+# mean -0.12 s and 3 captions more than 0.2 s early (worst -0.36); after, mean
+# -0.09 s, worst -0.20 s early and +0.09 s late.
+WORD_ONSET_WINDOW_MS = 20
+WORD_PAUSE_DB = 10.0
+WORD_PAUSE_MS = 200
+WORD_PAUSE_LEAD_MS = 150
+WORD_SPEAKING_PERCENTILE = 0.8
+
+
+def _words_on_onsets(segments: list[Segment], levels: list[float]) -> list[Segment]:
+    """
+    Each segment's words with their starts on the voice: after a pause the
+    word swallowed (above), and the first no earlier than the segment's own
+    start when `_snap_to_onset` moved that inside it — the song whose first
+    word was timed into the instrumental before it.
+    """
+    if not levels:
+        return segments
+
+    def level(ms: int) -> float:
+        index = ms // WORD_ONSET_WINDOW_MS
+        return levels[index] if 0 <= index < len(levels) else SILENT_DB
+
+    for segment in segments:
+        words = []
+        body = sorted(
+            level(ms) for ms in range(segment.speech[0][0], segment.speech[-1][1], WORD_ONSET_WINDOW_MS)
+        ) or [SILENT_DB]
+        speaking = body[int(len(body) * WORD_SPEAKING_PERCENTILE)]
+        for position, (start, end, word) in enumerate(segment.speech):
+            if position == 0 and start < segment.start_ms < end:
+                start = segment.start_ms
+            # The voice may come back as late as the next word's start: Whisper
+            # can time a word wholly inside the pause before it.
+            following = segment.speech[position + 1][0] if position + 1 < len(segment.speech) else end
+            reference = max(
+                speaking,
+                *(level(ms) for ms in range(start, start + 3 * WORD_ONSET_WINDOW_MS, WORD_ONSET_WINDOW_MS)),
+            )
+            ms = start
+            while ms < min(end, start + WORD_PAUSE_LEAD_MS) and level(ms) >= reference - WORD_PAUSE_DB:
+                ms += WORD_ONSET_WINDOW_MS
+            if ms < min(end, start + WORD_PAUSE_LEAD_MS):
+                quiet_from = ms
+                # Quiet from its very start, the word may sit wholly in the
+                # pause ("You" timed 0.48 s early); after a little sound, that
+                # is the word before trailing off, and the voice has to come
+                # back inside this word ("और"). If it doesn't, the sound was
+                # this word, said quickly before the pause ("two,").
+                limit = max(end, following) if quiet_from == start else end
+                while ms < limit and level(ms) < reference - WORD_PAUSE_DB:
+                    ms += WORD_ONSET_WINDOW_MS
+                if ms <= limit and level(ms) >= reference - WORD_PAUSE_DB and ms - quiet_from >= WORD_PAUSE_MS:
+                    start = ms
+                    end = max(end, start + 1)
+            else:
+                # Already voiced: if the voice arrived just before, after a
+                # pause, the word starts there ("Finally" timed 80 ms after it).
+                earliest = max(words[-1][1] if words else 0, start - WORD_PAUSE_LEAD_MS)
+                ms = start
+                while ms - WORD_ONSET_WINDOW_MS >= earliest and level(ms - WORD_ONSET_WINDOW_MS) >= reference - WORD_PAUSE_DB:
+                    ms -= WORD_ONSET_WINDOW_MS
+                onset = ms
+                while ms - WORD_ONSET_WINDOW_MS >= 0 and level(ms - WORD_ONSET_WINDOW_MS) < reference - WORD_PAUSE_DB:
+                    ms -= WORD_ONSET_WINDOW_MS
+                if onset < start and onset - WORD_ONSET_WINDOW_MS >= earliest and onset - ms >= WORD_PAUSE_MS:
+                    start = onset
+            words.append((start, end, word))
+        segment.speech = words
+    return segments
 
 
 def _silent_fraction(start: float, end: float, spans: list[tuple[float, float]]) -> float:
@@ -629,6 +716,8 @@ def transcribe(
         if segments:
             low_confidence_note = LOW_CONFIDENCE_NOTE
 
+    if segments:
+        segments = _words_on_onsets(segments, vocal_envelope(audio_path, WORD_ONSET_WINDOW_MS / 1000))
     return segments, info.language or "unknown"
 
 
@@ -759,6 +848,11 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, offse
             # handed, and Whisper's own can be tens of seconds wide of the
             # speech they describe.
             start, end = _spoken_bounds(segment)
+            # The words as Whisper timed them, before the start is moved below:
+            # captions are timed to these. Clipped to the snapped start, the
+            # first words of 18 of 89 segments of a Hindi talk fell off, and
+            # their captions drifted up to 2.6 s late.
+            words = _speech(segment, start, end)
 
             # Whisper invents text over silence — reliably enough that VAD was
             # switched on to prevent it, at the cost of most of the audio in
@@ -780,7 +874,7 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, offse
                         end_ms=int(end * 1000),
                         text=text,
                         confidence=getattr(segment, "avg_logprob", None),
-                        speech=_speech(segment, start, end),
+                        speech=words,
                     )
                 )
 
@@ -815,8 +909,11 @@ def _speech(segment, start: float, end: float) -> list[tuple[int, int, str]]:
         if word.start is None or word.end is None or not word.word.strip():
             continue
         s, e = max(word.start, start), min(word.end, end)
-        if e > s:
-            out.append((int(s * 1000), int(e * 1000), word.word.strip()))
+        # Whisper times a short word at zero length ("और" at 32.68-32.68 on
+        # the Hindi tutorial); dropped, the caption it starts began on the
+        # word after it.
+        if e >= s:
+            out.append((int(s * 1000), max(int(e * 1000), int(s * 1000) + 1), word.word.strip()))
     return out or [(int(start * 1000), int(end * 1000), "")]
 
 

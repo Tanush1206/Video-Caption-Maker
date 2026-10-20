@@ -251,3 +251,116 @@ def test_a_word_squeezed_between_two_captions_joins_one():
     phrases = phrasing.rephrase(before)
     _rules(phrases, [w for c in before for w in c.speech])
     assert all(p.text != "फाइल।" for p in phrases)
+
+
+# ── Caption starts (v1.0.9) ─────────────────────────────────────────────
+#
+# Captions came up to 2.6 s late on the Hindi tutorial: segments whose text
+# had a word Whisper's timed words didn't (18 of 89) were spread over the
+# whole run of speech by their share of its text, and every caption after the
+# first in a run drifted. Each caption now starts on its own first word.
+# Allowed: no later than 100 ms after it, no earlier than 200 ms before.
+
+
+def _starts_on_their_words(phrases, words):
+    """Every phrase starts within the allowed window of its first word."""
+    said = iter(words)
+    for phrase in phrases:
+        first = phrase.text.split()[0]
+        for start, _, word in said:
+            if word == first:
+                break
+        offset = phrase.start_ms - start
+        assert -200 <= offset <= 100, f"{phrase.text!r} starts {offset:+} ms from its first word"
+        for _ in phrase.text.split()[1:]:
+            next(said)
+
+
+def _run(sentences):
+    """
+    One long run of speech, no pause: one segment per (text, words) line,
+    words as (start_s, end_s, word); a word Whisper left out of `speech` is
+    spread by the old code over the whole run.
+    """
+    segments = []
+    for text, words in sentences:
+        speech = [(int(a * 1000), int(b * 1000), w) for a, b, w in words]
+        segments.append(Segment(start_ms=speech[0][0], end_ms=speech[-1][1], text=text, confidence=-0.2, speech=speech))
+    return segments
+
+
+def _sentence_of(words, start, untimed_first=False):
+    """`words` said back to back from `start`, 0.35 s each; the first left untimed if asked."""
+    timed = [(start + i * 0.35, start + (i + 1) * 0.35, w) for i, w in enumerate(words)]
+    return " ".join(words), timed[1:] if untimed_first else timed, timed
+
+
+def _check_language(lines):
+    sentences, truth = [], []
+    at = 0.0
+    for k, words in enumerate(lines):
+        text, timed, said = _sentence_of(words, at, untimed_first=k % 3 == 1)
+        sentences.append((text, timed))
+        truth += [(int(a * 1000), int(b * 1000), w) for a, b, w in said]
+        at += len(words) * 0.35
+    phrases = phrasing.rephrase(_run(sentences))
+    _starts_on_their_words(phrases, truth)
+    return phrases
+
+
+def test_hindi_captions_start_on_their_first_word():
+    _check_language([
+        "तो वीडियो में कैप्शन ऑटो जनरेट करने का ऐसा तरीका आपको बताने वाले हैं".split(),
+        "और आपके कैप्शन पूरी तरह से कस्टमाइज भी होंगे अब ये फाइल".split(),
+        "जो कि मुश्किल से काफी कम लोगों को पता है हम लोग ये सब करने वाले हैं".split(),
+        "चाहे आपकी ऑडियो हिंदी में क्यों ना हो ये बिल्कुल एक्यूरेसी के साथ".split(),
+        "सबसे पहले आपको गूगल पर जाना है और क्लिपचैंप वेब एप्लीकेशन को ओपन कर लेना".split(),
+        "बस फाइल डाउनलोड करना है तो वीडियो को टाइमलाइन में यहाँ ऐड कर लो".split(),
+    ])
+
+
+def test_english_captions_start_on_their_first_word():
+    _check_language([
+        "today I want to show you how to add captions to any video".split(),
+        "first open the app and drag your video into the window".split(),
+        "it takes a minute or two depending on how long the video is".split(),
+        "while it works you can make a cup of tea and wait".split(),
+        "when it is done pick the language you want the captions in".split(),
+        "you can keep the language that was spoken or translate it".split(),
+    ])
+
+
+def test_spanish_captions_start_on_their_first_word():
+    _check_language([
+        "hoy vamos a aprender a preparar una sopa de tomate en casa".split(),
+        "primero corta dos cebollas en trozos pequeños y fríelas a fuego lento".split(),
+        "después añade cuatro tomates maduros un diente de ajo y jengibre".split(),
+        "ahora agrega dos vasos de agua tapa la olla y deja que se cocine".split(),
+        "cuando los tomates estén deshechos apaga el fuego y deja enfriar".split(),
+        "luego pon todo en la batidora y tritúralo bien hasta que quede fino".split(),
+    ])
+
+
+def test_a_word_with_no_timing_takes_the_time_between_its_neighbours():
+    """One untimed word in the middle: between the words around it, not anywhere in the caption."""
+    words = [(10.0, 10.3, "we"), (10.3, 10.6, "will"), (11.0, 11.4, "soup")]
+    caption = _timed("we will make soup", words)
+    times, matched = phrasing._word_times(caption)
+    assert matched == 3
+    assert times[2] == (10600, 11000)
+
+
+def test_a_guessed_last_word_does_not_push_the_next_caption_late():
+    """
+    "है" had no timing at the end of its segment (43.80 s) and was given its
+    text's length, to 44.18 s: "हमको", said at 43.80, then started there.
+    """
+    first = _timed("कोई एडिटिंग नहीं कर रहा है", [(42.8, 43.0, "कोई"), (43.02, 43.4, "एडिटिंग"), (43.4, 43.5, "नहीं"),
+                                                 (43.5, 43.68, "कर"), (43.68, 43.8, "रहा")], end=43.8)
+    second = _timed("हमको बस SRT फाइल डाउनलोड करना है", [(43.8, 44.14, "हमको"), (44.14, 44.42, "बस"), (44.42, 44.88, "SRT"),
+                                                        (44.88, 45.0, "फाइल"), (45.0, 45.3, "डाउनलोड"), (45.3, 45.64, "करना"),
+                                                        (45.64, 45.68, "है")])
+    phrases = phrasing.rephrase([first, second])
+    # On screen by the time it is said, whichever caption it falls in.
+    start = next(p.start_ms for p in phrases if "हमको" in p.text.split())
+    assert start - 43_800 <= 100, start
