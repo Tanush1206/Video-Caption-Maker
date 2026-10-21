@@ -39,6 +39,10 @@ dependencies = [
     # Tokenizer for the local M2M100 translator (CTranslate2 comes with
     # faster-whisper).
     "sentencepiece>=0.2.0",
+    # Converts the Hinglish speech model to CTranslate2 on first use
+    # (services/hinglish.py). Came with sentence-transformers already; named
+    # because it is now used directly.
+    "transformers>=4.40.0",
 
     # Fonts. Google ships its most popular families as variable fonts only, and
     # libass takes the default instance and fakes a bold while the browser

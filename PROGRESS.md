@@ -883,13 +883,61 @@ Replaces the IndicXlit plan (IndicXlit kept only as a fallback).
       Prime is not used: no more accurate than Apex, 3x slower, twice the
       memory and download, and its caption starts run early.
 
-### Problem 2, implementation (planned)
-- [ ] Measure the translation source first (it decides the pipeline):
-      Hinglish (Apex) vs Devanagari (large-v3) → mr, es, en through the
-      app's translator; scored against references made from `truth-hi.txt`.
-- [ ] Then plan the files to touch (model store entry and download progress,
-      speech-language option list from the API, language-step choice,
-      detection-confidence rule, worker pipeline, docs) and build it.
+### Problem 2, implementation
+Decisions (Tanush, 2026-10-21):
+- Translation source for Hindi spoken as Hinglish: **B**, Apex's Roman
+  Hinglish → IndicXlit (Roman → Devanagari) → M2M100, all-caps words (SRT,
+  AI) kept as they are. A (Roman straight into M2M100) barely translates:
+  it copies English and Spanish through and invents Marathi. 15 English, 5
+  Marathi and 5 Spanish lines are in the scratch report. IndicXlit's
+  rescoring dictionaries changed nothing (and unpack to 7.5 GB): not used.
+- **English captions keep Whisper's own translate pass** (today's path):
+  the Hindi script choice decides how Hindi is written and the source of
+  the other translations, and doesn't apply to English. Measured: Whisper's
+  English for this clip reads "In the videos, I am going to tell you how to
+  auto-generate captions… known to very few people", far better than A or
+  B through M2M100.
+- **Flow:** upload when the file is picked; the worker detects the spoken
+  language from the first 30 s while the caption language is chosen.
+  Hindi at 70%+: "Hindi captions in: Hinglish (Roman) / हिन्दी (Devanagari)",
+  preset to Hinglish. Marathi or Hindi under 70%: the same choice (plus
+  मराठी when Marathi was heard) with nothing preset, and Start waits for a
+  pick. Detection over 15 s: the choice without a preset, and Start is
+  allowed (the worker then applies the same rule). Back or closing the page
+  deletes the upload and its files; uploads never started are swept after
+  an hour. The PRD's "nothing is sent before Start" changes.
+- **Models download on first use, from their original repos, pinned:**
+  `Oriserve/Whisper-Hindi2Hinglish-Apex` at `f3214eed20b4e4d4144e739982d911f87b9cb223`
+  (`model.safetensors` sha256 `5560830f…ebca80`, 1.62 GB) and
+  `ai4bharat/IndicXlit` at `e7049fe725b11c0a187d42edeb2f56aa1ffee5fd`
+  (`indicxlit-en-indic-v1.0/transformer/indicxlit.pt` sha256 `2f03fe0d…224a09f7`,
+  138 MB). Each is checked against its sha256 and converted on the machine
+  (CTranslate2; IndicXlit without fairseq, from the raw weights: 352 of
+  353 words identical to fairseq's output, the other differs only in the
+  package's own apostrophe handling). Nothing is baked into an image.
+  Existing videos keep their captions until Redo; the API default for a
+  client that doesn't send a script stays Devanagari.
+
+Plan (files, in commit order):
+1. Models: `services/hinglish.py` (new: pinned download, sha256 check,
+   conversion, transliteration), `services/model_store.py` (revision),
+   `pyproject.toml` (`transformers` explicit), tests.
+2. Data and API: `models/video.py` (`held`, `hindi_script`,
+   `detected_language`, `detected_confidence`), a migration,
+   `schemas/video.py`, `services/video.py` (held videos unlisted, swept),
+   `api/videos.py` (`hold` on upload, script options with download size,
+   Start through `POST …/transcribe`), tests.
+3. Worker: `detect_language` task, Apex for Hindi in Roman,
+   transliteration before M2M100 (`workers/transcription.py`,
+   `services/hardware.py`, `services/transcription.py`,
+   `services/languages.py`), tests.
+4. UI: upload on pick, detection status and the script choice in the
+   language step, the same choice in the editor's Redo, delete on Back or
+   page close; `checks.js hindi-script`.
+5. Docs: PRD, ARCHITECTURE, API, DATABASE, SECURITY, TESTING, DECISIONS,
+   CHANGELOG.
+Verify: backend suite, frontend lint/type-check/test, ui-check (axe 0),
+`scripts/e2e.py` on the dev stack, a real Hinglish upload end to end.
 
 ### Then: transcription settings (Phase 2)
 Keep only what measurably helps, with a before/after table per setting and
