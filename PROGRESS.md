@@ -921,7 +921,9 @@ Decisions (Tanush, 2026-10-21):
 Plan (files, in commit order):
 1. Models: `services/hinglish.py` (new: pinned download, sha256 check,
    conversion, transliteration), `services/model_store.py` (revision),
-   `pyproject.toml` (`transformers` explicit), tests.
+   tests. (`transformers` stays implicit, via sentence-transformers: naming
+   it in `pyproject.toml` would change the dependency layer every update
+   downloads, 2.2 GB on CUDA last time; a test fails if it goes missing.)
 2. Data and API: `models/video.py` (`held`, `hindi_script`,
    `detected_language`, `detected_confidence`), a migration,
    `schemas/video.py`, `services/video.py` (held videos unlisted, swept),
@@ -969,7 +971,8 @@ Done (2026-10-21), all committed:
 - [x] `scripts/e2e.py` (same, en, mr; SRT, VTT, MP4) ALL PASSED: uploads
       without the new fields behave as before (Hindi in Devanagari).
 - [x] Backend suite 511 passed, 1 skipped; ruff clean; frontend lint,
-      type-check and tests clean.
+      type-check and tests clean; frontend production build
+      (`docker build --target build frontend`) succeeds.
 - [x] Test data: dev videos 7546–7550 (created by the first, unmocked check
       run: the dev frontend calls the API on :8000, so origin-based mocks
       missed; the mocks now match by path), 7580–7581 (close/navigate

@@ -155,3 +155,15 @@ def test_an_indicxlit_shaped_checkpoint_converts_without_fairseq_and_runs(tmp_pa
     translator = ctranslate2.Translator(str(out), device="cpu", compute_type="float32")
     [result] = translator.translate_batch([["__hi__", "a", "b"]], beam_size=1, max_decoding_length=4)
     assert result.hypotheses[0] is not None
+
+
+def test_the_image_can_convert_the_hinglish_model():
+    """
+    transformers isn't named in pyproject.toml: it comes with
+    sentence-transformers, and naming it would change the dependency layer
+    every update downloads again (2.2 GB on CUDA the last time it changed).
+    This fails if it, or CTranslate2's converter for it, ever goes missing.
+    """
+    import transformers  # noqa: F401
+    from ctranslate2.converters import TransformersConverter  # noqa: F401
+    from ctranslate2.converters import fairseq  # noqa: F401
