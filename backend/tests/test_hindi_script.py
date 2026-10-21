@@ -7,6 +7,7 @@ asks otherwise, and Start is POST /{id}/transcribe. A held upload is in no
 list, no count and no recovery, and is swept if never started.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -224,6 +225,8 @@ async def test_auto_decides_from_detection_and_is_remembered(client, auth_header
     async with AsyncSessionLocal() as session:
         video = await session.get(Video, video_id)
         assert video.hindi_script == "roman" and video.status == VideoStatus.COMPLETED
+        # What was heard, so the editor's Redo offers the script choice.
+        assert (video.detected_language, video.detected_confidence) == ("hi", 0.94)
 
 
 async def test_a_video_from_before_stays_in_devanagari(client, auth_headers, sample_video_bytes, fake_pipeline):
@@ -281,3 +284,23 @@ async def test_the_language_steps_detection_is_stored(client, auth_headers, samp
     assert (body["detected_language"], body["detected_confidence"], body["stage"]) == ("hi", 0.941, None)
     # Only the window detection listens to.
     assert clips == [transcription.DETECTION_SECONDS]
+
+
+async def test_a_failed_detection_stops_showing_detecting(client, auth_headers, sample_video_bytes, monkeypatch):
+    """A file with no usable audio: the step asks without a preset instead of waiting."""
+    from app.services import transcription
+    from app.workers import transcription as job
+
+    monkeypatch.setattr(transcription, "load_model", lambda *a, **k: None)
+
+    def no_audio(*a, **k):
+        raise RuntimeError("This video has no audio track, so there is nothing to transcribe")
+
+    monkeypatch.setattr(transcription, "extract_audio", no_audio)
+    held = await _upload(client, auth_headers, sample_video_bytes, hold="true")
+
+    result = await asyncio.to_thread(job.detect_spoken_language, held["id"])
+
+    assert "error" in result
+    body = (await client.get(f"/api/videos/{held['id']}", headers=auth_headers)).json()
+    assert body["stage"] is None and body["detected_language"] is None

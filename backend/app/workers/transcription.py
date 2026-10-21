@@ -206,7 +206,8 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
         #
         # One encoder pass over thirty seconds, against minutes for the
         # transcription it precedes.
-        if spoken == languages.AUTO:
+        detected_now = spoken == languages.AUTO
+        if detected_now:
             hint, confidence = await asyncio.to_thread(
                 transcription.detect_language, audio_path
             )
@@ -395,6 +396,11 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             video.error_message = None
             video.notice = " ".join(notices)[:300] or None
             video.speech = spoken
+            if detected_now or video.detected_language is None:
+                # What was heard, so the editor's Redo knows to offer the
+                # Hindi script choice.
+                video.detected_language = hint
+                video.detected_confidence = round(float(confidence), 3)
             if chosen_script == languages.SCRIPT_AUTO and script is not None:
                 # Decided now; a Redo repeats it rather than deciding again.
                 video.hindi_script = script
@@ -506,7 +512,17 @@ def detect_spoken_language(video_id: int) -> dict:
         # The language step then asks without a preset, as it does when
         # detection is slow; nothing is lost but a default.
         logger.error("Language detection failed for video %s: %s", video_id, exc)
+        asyncio.run(_detection_failed(video_id))
         return {"video_id": video_id, "error": str(exc)[:200]}
+
+
+async def _detection_failed(video_id: int) -> None:
+    """Stop the language step showing "listening" for a detection that won't come."""
+    async with worker_session() as session:
+        video = await session.get(Video, video_id)
+        if video is not None and video.stage == "detecting":
+            video.stage = None
+            await session.commit()
 
 
 @celery_app.task(name="transcribe_video", bind=True)
