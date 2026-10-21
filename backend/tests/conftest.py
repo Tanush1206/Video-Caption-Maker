@@ -154,6 +154,8 @@ def dont_queue_transcription(monkeypatch):
     monkeypatch.setattr(
         "app.api.videos._enqueue_transcription", lambda video_id, keep_breaks=False: True
     )
+    # Held uploads (the language step) queue detection instead; same reason.
+    monkeypatch.setattr("app.api.videos._enqueue_detection", lambda video_id: None)
 
 
 @pytest.fixture

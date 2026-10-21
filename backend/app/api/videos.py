@@ -13,6 +13,7 @@ from app.dependencies import CurrentUser, DbSession
 from app.models.video import VideoStatus
 from app.schemas.caption import CaptionCreate, CaptionList, CaptionRead
 from app.schemas.video import (
+    HindiScriptOption,
     LanguageOption,
     LanguageOptions,
     StreamTicket,
@@ -23,7 +24,7 @@ from app.schemas.video import (
     Waveform,
 )
 from app.services import caption as caption_service
-from app.services import languages
+from app.services import hinglish, languages
 from app.services import media, storage
 from app.services import video as video_service
 from app.utils.filenames import safe_stem
@@ -56,6 +57,10 @@ def _to_read(video) -> VideoRead:
         has_thumbnail=bool(video.thumbnail_path),
         spoken_language=video.spoken_language,
         caption_language=video.caption_language,
+        hindi_script=video.hindi_script,
+        detected_language=video.detected_language,
+        detected_confidence=video.detected_confidence,
+        held=video.held,
         progress=video.progress,
         stage=video.stage,
         stage_detail=video.stage_detail,
@@ -81,6 +86,16 @@ def _enqueue_transcription(video_id: int, keep_breaks: bool = False) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.error("Could not enqueue transcription for video %s: %s", video_id, exc)
         return False
+
+
+def _enqueue_detection(video_id: int) -> None:
+    """Hear the first 30 s of a held upload, for the language step. Swallowed on failure like the rest."""
+    try:
+        from app.workers.transcription import detect_spoken_language
+
+        detect_spoken_language.delay(video_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Could not enqueue language detection for video %s: %s", video_id, exc)
 
 
 def _queue_reindex(video_id: int, caption_ids: list[int]) -> None:
@@ -150,6 +165,12 @@ async def upload_video(
     # produces the captions that were asked for rather than a default to be
     # redone. Optional: an old client that omits it gets "same as spoken".
     caption_language: str = Form(default=languages.SAME),
+    # The language step uploads as soon as a file is picked (v1.0.9), so the
+    # spoken language can be heard while the caption language is chosen:
+    # held, the video is only probed and listened to, and waits for
+    # POST /{id}/transcribe to start. Off for old clients and scripts, which
+    # are transcribed straight away as before.
+    hold: bool = Form(default=False),
 ) -> VideoRead:
     if not languages.is_caption_language(caption_language):
         raise HTTPException(
@@ -177,6 +198,9 @@ async def upload_video(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"Unsupported file extension: {suffix or '(none)'}",
         )
+
+    # Uploads a closed language step left behind, if the page couldn't delete them.
+    await video_service.sweep_held(db, user.id)
 
     absolute, relative = storage.build_storage_path(user.id, file.filename)
     size = await _stream_to_disk(file, absolute)
@@ -216,7 +240,14 @@ async def upload_video(
             db, video, duration_ms=duration_ms, thumbnail_path=thumbnail_relative
         )
 
-    _enqueue_transcription(video.id)
+    if hold:
+        video.held = True
+        video.stage = "detecting"
+        await db.commit()
+        await db.refresh(video)
+        _enqueue_detection(video.id)
+    else:
+        _enqueue_transcription(video.id)
 
     return _to_read(video)
 
@@ -275,6 +306,22 @@ async def language_options(user: CurrentUser) -> LanguageOptions:
             )
             for code in (languages.SAME, *languages.LANGUAGES)
         ],
+        hindi_scripts=[
+            HindiScriptOption(
+                code=code,
+                label=label,
+                short=short,
+                # What Hinglish downloads the first time; known from the
+                # models volume the API shares with the worker.
+                download_bytes=(
+                    hinglish.APEX_DOWNLOAD_BYTES
+                    if code == languages.ROMAN and not hinglish.apex_ready()
+                    else None
+                ),
+            )
+            for code, (label, short) in languages.HINDI_SCRIPTS.items()
+        ],
+        hinglish_min_confidence=languages.HINGLISH_MIN_CONFIDENCE,
         # Always true. English comes from Whisper's own translate pass, and the
         # others from M2M100, which runs on this machine with no key. A
         # Gemini key only changes which engine translates, never whether one
@@ -326,13 +373,16 @@ async def retranscribe(
     keep_breaks = payload is None or payload.caption_language in (None, video.caption_language)
 
     if payload is not None and (
-        payload.spoken_language is not None or payload.caption_language is not None
+        payload.spoken_language is not None
+        or payload.caption_language is not None
+        or payload.hindi_script is not None
     ):
         video = await video_service.set_languages(
             db,
             video,
             spoken=payload.spoken_language,
             caption=payload.caption_language,
+            hindi_script=payload.hindi_script,
         )
 
     if video.status == VideoStatus.PROCESSING:
@@ -341,6 +391,8 @@ async def retranscribe(
             detail="This video is already being transcribed",
         )
 
+    # Starting a held upload is this same call: the language step's Start.
+    video.held = False
     video = await video_service.mark_queued(db, video)
 
     if not _enqueue_transcription(video.id, keep_breaks):

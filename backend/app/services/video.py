@@ -1,5 +1,7 @@
 """Video persistence. Ownership is enforced here, not left to callers."""
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,7 +69,8 @@ async def list_videos(
     for failed videos on page one and you get however many of the newest
     twelve happen to have failed, which looks like an answer and is not one.
     """
-    conditions = [Video.owner_id == owner_id]
+    # Held uploads are the language step's, not the library's, until started.
+    conditions = [Video.owner_id == owner_id, Video.held.is_(False)]
     if status is not None:
         conditions.append(Video.status == status)
 
@@ -172,7 +175,12 @@ async def delete_video(db: AsyncSession, video: Video) -> None:
 
 
 async def set_languages(
-    db: AsyncSession, video: Video, *, spoken: str | None, caption: str | None
+    db: AsyncSession,
+    video: Video,
+    *,
+    spoken: str | None,
+    caption: str | None,
+    hindi_script: str | None = None,
 ) -> Video:
     """
     Record what to transcribe into, before the job is queued.
@@ -189,7 +197,32 @@ async def set_languages(
         video.spoken_language = spoken
     if caption is not None:
         video.caption_language = caption
+    if hindi_script is not None:
+        video.hindi_script = hindi_script
 
     await db.commit()
     await db.refresh(video)
     return video
+
+
+# A held upload whose language step was closed without a word (a crash, a
+# lost connection) is deleted after this long. The page itself deletes it on
+# Back and on close; this is for when it couldn't.
+HELD_MAX_AGE = timedelta(hours=1)
+
+
+async def sweep_held(db: AsyncSession, owner_id: int) -> int:
+    """Delete this user's uploads that were held and never started. Returns how many."""
+    cutoff = datetime.now(timezone.utc) - HELD_MAX_AGE
+    stale = list(
+        (
+            await db.execute(
+                select(Video).where(
+                    Video.owner_id == owner_id, Video.held.is_(True), Video.created_at < cutoff
+                )
+            )
+        ).scalars()
+    )
+    for video in stale:
+        await delete_video(db, video)
+    return len(stale)

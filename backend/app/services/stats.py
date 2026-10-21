@@ -48,7 +48,8 @@ async def library_stats(db: AsyncSession, owner_id: int) -> LibraryStats:
                 func.coalesce(func.sum(Video.size_bytes), 0),
                 func.coalesce(func.sum(Video.duration_ms), 0),
             )
-            .where(Video.owner_id == owner_id)
+            # Held uploads (the language step still open) aren't in the library yet.
+            .where(Video.owner_id == owner_id, Video.held.is_(False))
             .group_by(Video.status)
         )
     ).all()

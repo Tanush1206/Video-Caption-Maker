@@ -148,7 +148,12 @@ async def recover(session, held: set[tuple[str, int]]) -> Recovery:
     """
     result = Recovery()
     videos = await session.scalars(
-        select(Video).where(Video.status.in_([VideoStatus.PENDING, VideoStatus.PROCESSING]))
+        select(Video).where(
+            Video.status.in_([VideoStatus.PENDING, VideoStatus.PROCESSING]),
+            # An upload waiting on the language step was never started: queuing
+            # it would transcribe a video nobody has said how to caption.
+            Video.held.is_(False),
+        )
     )
     for video in videos:
         if ("video", video.id) in held:
