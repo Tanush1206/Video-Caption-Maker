@@ -137,7 +137,7 @@ or a dev server. On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first.
 cd scripts/ui-check && npm ci && npx playwright install chromium
 node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
-node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step script-fonts
+node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script script-fonts
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 caption-timing   # read-only; VCM_CHECK_SECONDS (default 20) of playback
 VCM_SAFE_VIDEOS=<16:9 id>,<9:16 id>,<1:1 id> node checks.js http://localhost:3000 caption-safe-area layout-parity   # the same; layout-parity needs the dev stack
@@ -159,7 +159,8 @@ what the 9:16 run is for.
 | `checks.js not-found` | an unknown address isn't a 404 with the app's own page and a working way back |
 | `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
 | `checks.js editor-languages` | the editor's caption-language picker doesn't offer every served language with its own and English name, or its search (English name, own name, accents optional), Enter, Escape or outside click don't work. Read-only |
-| `checks.js language-step` | the language step lacks a card per served language, or its search by English name, own name or code doesn't filter the cards, or a found language can't be chosen. Read-only (a file is picked, never uploaded) |
+| `checks.js language-step` | the language step lacks a card per served language, or its search by English name, own name or code doesn't filter the cards, or a found language can't be chosen. Read-only: the upload a picked file starts (v1.0.9) is answered by the check itself |
+| `checks.js hindi-script` | at 375 or 1440 px, with the API's answers mocked: Hindi heard at 94% doesn't preset Hinglish or say what was heard; Marathi doesn't ask with nothing preset, offer three answers and hold Start until one is picked; no answer in 15 s doesn't ask without holding Start; English captions ask; Back doesn't delete the upload; Start doesn't send exactly the choice (`spoken_language`, `caption_language`, `hindi_script`); axe isn't 0 with the choice open, in light and dark. Read-only (v1.0.9) |
 | `checks.js script-fonts` | an Indic caption isn't drawn in its bundled Noto face (Chromium's own report of the fonts used), or the Latin words in it are. Read-only |
 | `checks.js style-sliders` | any style slider at 375 or 1440 px doesn't follow a drag, moves while dragged, ignores a click or an arrow key, shows a different number, doesn't update the preview within 0.5 s, or doesn't survive a reload |
 | `checks.js caption-drag` | the caption, dragged by mouse or touch at 375 or 1440 px, jumps on grab or release, doesn't follow the pointer, leaves the safe area or changes size past any edge, isn't saved where it was dropped, toggles playback, or moves on reload |

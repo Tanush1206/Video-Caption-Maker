@@ -298,12 +298,22 @@ transcribe, translate, export, search) makes **no outbound requests**.
 |---|---|---|---|
 | `github.com` (release assets) | install, `vcm update` | nothing about the user | `install/*`, `vcm` |
 | `ghcr.io` | install, `vcm update` (image pulls) | nothing about the user | compose |
-| `huggingface.co` | first use of each model (Whisper size, M2M100 size, MiniLM) | model repo requests | `services/model_store.py`, `transcription.py`, `translation.py`, `embeddings.py` |
+| `huggingface.co` | first use of each model (Whisper size, M2M100 size, MiniLM; v1.0.9: the Hinglish speech model and IndicXlit) | model repo requests | `services/model_store.py`, `transcription.py`, `translation.py`, `embeddings.py`, `hinglish.py` |
 | `raw.githubusercontent.com/google/fonts/<commit>/` | the first time a Google Font from the library is used | the font path, at the commit pinned in `app/data/google_fonts.json` | `services/font_library.py` |
 | Gemini API (`google-genai`) | **only with a key**: translating to hi/fr/de/nl, and `POST /api/ask` | **caption text only**: up to 25 lines per translation batch, up to 6 retrieved captions plus the question for answers. **Never the video or audio.** | `services/translation.py`, `services/rag.py` |
 | Google OAuth | accounts mode only | OAuth exchange | `api/auth.py` |
 
 - `HF_HUB_DISABLE_IMPLICIT_TOKEN=1`: no Hugging Face token is ever sent.
+- **The Hinglish models are pinned and checked** (v1.0.9,
+  `services/hinglish.py`). Each comes from its original repo at a fixed
+  commit (`Oriserve/Whisper-Hindi2Hinglish-Apex`, Apache-2.0;
+  `ai4bharat/IndicXlit`, MIT), and its weights are hashed after download and
+  compared with the sha256 Hugging Face publishes for that commit; a
+  mismatch deletes the download and fails the job. They are converted on the
+  machine, never fetched pre-converted from anywhere else, and never built
+  into an image. IndicXlit's checkpoint is a pickle: it is read with
+  `torch.load(weights_only=True)`, allowing only `argparse.Namespace`, and
+  only after its hash has matched.
 - Font files are served by the backend itself, never by redirecting the
   browser to Google, so the user's IP isn't shared with a third party while
   they browse fonts (`api/fonts.py`).
@@ -319,7 +329,9 @@ transcribe, translate, export, search) makes **no outbound requests**.
 `backend/app/api/videos.py`, `backend/app/services/storage.py`,
 `backend/app/utils/filenames.py`.
 
-1. **The caption language** must be `same` or one of the five codes, or 422.
+1. **The caption language** must be `same` or one of the thirteen codes, or
+   422; the Hindi script (`hindi_script`) must be `roman`, `devanagari` or
+   `auto`, or 422.
 2. **Both** the declared content type **and** the extension must be on the
    allow-lists (415 otherwise). The extensions are `.mp4 .mov .mkv .webm
    .avi .m4v`; the types are the matching `video/*`.
@@ -335,10 +347,15 @@ transcribe, translate, export, search) makes **no outbound requests**.
 6. **ffprobe reads the file** for its duration. If the file isn't really
    video, probing fails, the upload is kept without metadata, and
    transcription fails later with "This file couldn't be read as a video…".
-7. **Files live outside any webroot.** They are served only by
+7. **A held upload** (v1.0.9, `hold=true`) is stored and probed like any
+   other, then only listened to (the first 30 s) until it is started. The
+   page deletes it on Back or close, and any held upload never started is
+   deleted with its files after an hour, on its owner's next upload, so an
+   abandoned upload doesn't stay on disk.
+8. **Files live outside any webroot.** They are served only by
    `GET /stream` (token) and `GET /thumbnail` (owner). API responses never
    contain a filesystem path (`VideoRead` has `has_thumbnail`, not the path).
-8. **Download names typed by the user** go through `safe_stem`:
+9. **Download names typed by the user** go through `safe_stem`:
    - directories are dropped (`../../etc/passwd` → `passwd`);
    - control characters, including **CR/LF, which would split the
      `Content-Disposition` header**, are removed, as are `/ \ : * ? " < > |`;

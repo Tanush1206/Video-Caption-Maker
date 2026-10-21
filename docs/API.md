@@ -113,7 +113,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi bn mr ta ml fr de nl es pt it ru`) | `201` [VideoRead](#videoread); transcription is queued | 400 no filename / empty file · 413 too large · 415 type or extension · 422 unknown language · 507 disk full |
+| POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi bn mr ta ml fr de nl es pt it ru`), `hold` (default `false`) | `201` [VideoRead](#videoread); transcription is queued, or, with `hold`, the upload waits (`held`, stage `detecting`) while the worker detects the language from the first 30 s; `POST …/transcribe` starts it. Held uploads aren't listed or counted, and are deleted after an hour if never started (v1.0.9) | 400 no filename / empty file · 413 too large · 415 type or extension · 422 unknown language · 507 disk full |
 | GET* | `/api/videos` | query `limit` 1–100 (50), `offset` ≥ 0 (0), `status` [VideoStatus](#videostatus) | `200` [VideoList](#videolist) (newest first; `total` counts all matches) | 422 |
 | GET* | `/api/videos/languages` | — | `200` [LanguageOptions](#languageoptions). `translation_available` is **always `true`**: English comes from Whisper, and the others from local M2M100, with no key needed. Each option carries its own-language name (`native`) | — |
 | GET* | `/api/videos/{video_id}` | — | `200` [VideoRead](#videoread) | 404 `Video not found` |
@@ -499,6 +499,15 @@ Enum: `pending`, `processing`, `completed`, `failed`
 
 Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 
+### HindiScriptOption
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `code` | string | yes | `roman` or `devanagari` |
+| `label` | string | yes | e.g. `Hinglish (Roman)` |
+| `short` | string | yes | e.g. `Hinglish` |
+| `download_bytes` | integer \| null | no | what choosing it downloads the first time; null if nothing |
+
 ### LanguageOption
 
 | Field | Type | Required | Constraints / default |
@@ -513,6 +522,8 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 |---|---|---|---|
 | `spoken` | [LanguageOption](#languageoption)[] | yes |  |
 | `caption` | [LanguageOption](#languageoption)[] | yes |  |
+| `hindi_scripts` | [HindiScriptOption](#hindiscriptoption)[] | no | how Hindi captions can be written (v1.0.9) |
+| `hinglish_min_confidence` | number | no | default `0.7`; Hindi detected at or above it presets Hinglish |
 | `translation_available` | boolean | yes |  |
 
 ### PasswordChange
@@ -619,6 +630,7 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 |---|---|---|---|
 | `spoken_language` | string \| null | no |  |
 | `caption_language` | string \| null | no |  |
+| `hindi_script` | string \| null | no | `roman`, `devanagari` or `auto` (decided from detection); 422 otherwise. Also how a held upload is started |
 
 ### UserCreate
 
@@ -673,6 +685,10 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `has_thumbnail` | boolean | yes |  |
 | `spoken_language` | string | no | default `"auto"` |
 | `caption_language` | string | no | default `"same"` |
+| `hindi_script` | string \| null | no | `roman`, `devanagari` or `auto`; null for a video from before v1.0.9 (Devanagari) |
+| `detected_language` | string \| null | no | what detection heard (the language step's, or the job's) |
+| `detected_confidence` | number \| null | no | 0–1 |
+| `held` | boolean | no | default `false`; uploaded, not started (v1.0.9) |
 | `progress` | integer | yes |  |
 | `stage` | string \| null | yes |  |
 | `stage_detail` | string \| null | no |  |

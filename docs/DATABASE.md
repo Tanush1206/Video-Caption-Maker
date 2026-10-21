@@ -1,6 +1,6 @@
 # Database
 
-Data model as of Alembic head **`a4d8e2c6f130`** (v1.0.8). The column lists
+Data model as of Alembic head **`b6e0f4a9c2d1`** (v1.0.9). The column lists
 below come from `\d` on a running v1.0.4 install's Postgres, cross-checked
 against `backend/app/models/*.py`.
 
@@ -11,7 +11,7 @@ against `backend/app/models/*.py`.
 | **Postgres** (`db` volume) | users, videos, captions, caption styles, exports, install settings | everything relational, all status and progress | everything |
 | **ChromaDB** (`vectors` volume, collection `captions`) | one embedding per caption, plus metadata | nothing; it is **derived** from `captions` | search only (rebuilt by re-indexing) |
 | **Media volume** (`media` → `/app/storage`) | the uploaded files, thumbnails, waveform caches, export files, `audit.log` | the bytes | the videos themselves |
-| **Models volume** (`models` → `/root/.cache/huggingface`) | Whisper, M2M100 and MiniLM weights | nothing | re-downloaded on next use |
+| **Models volume** (`models` → `/root/.cache/huggingface`) | Whisper, M2M100 and MiniLM weights; under `vcm-converted/`, the Hinglish speech model and the IndicXlit transliterator, converted on first use from their pinned downloads (v1.0.9) | nothing | re-downloaded (and re-converted) on next use |
 | **Fonts volume** (`fonts` → `/usr/share/fonts/truetype/vcm-cache`) | Google Fonts fetched on demand | nothing | re-downloaded on next use |
 | **Redis** (no persistence in prod) | Celery queue, unacked set, results; rate-limit and denylist keys (accounts mode) | nothing durable | in-flight jobs (recovered at worker start) |
 
@@ -44,6 +44,7 @@ Rules:
     ├── <uuid>.jpg                   thumbnail
     ├── <uuid>.peaks.json            waveform cache (derived, disposable)
     ├── <uuid>.transcode.wav         temporary, deleted after each job
+    ├── <uuid>.detect.wav            first 30 s, temporary, deleted after detection (v1.0.9)
     └── exports/<uuid>.<srt|vtt|json|mp4>
 ```
 
@@ -99,6 +100,10 @@ erDiagram
         json speech "nullable"
         varchar16 spoken_language
         varchar16 caption_language
+        varchar16 hindi_script "nullable"
+        varchar16 detected_language "nullable"
+        float detected_confidence "nullable"
+        bool held
         int recovery_attempts
         timestamptz created_at
         timestamptz updated_at
@@ -198,6 +203,10 @@ values are applied by SQLAlchemy at flush time and are **not** in the schema.
 | `speech` | json | yes | | `[[start_ms, end_ms], ...]`, one pair a word: the Whisper word timings the captions were timed to (v1.0.8); written by each transcription, NULL before |
 | `spoken_language` | varchar(16) | no | `'auto'` | `auto` or a language code |
 | `caption_language` | varchar(16) | no | `'same'` | `same` or a caption language (`services/languages.py`: `en` `hi` `bn` `mr` `ta` `ml` `fr` `de` `nl` `es` `pt` `it` `ru`) |
+| `hindi_script` | varchar(16) | yes | | how Hindi is written (v1.0.9): `roman` (Hinglish, on the Apex model), `devanagari`, or `auto` (decided from detection, then replaced by the result); NULL on older videos, which stay Devanagari until a Redo |
+| `detected_language` | varchar(16) | yes | | what detection heard from the first 30 s: the language step's (held upload), then the job's (v1.0.9) |
+| `detected_confidence` | double precision | yes | | its confidence, 0–1, rounded to 3 places |
+| `held` | boolean | no | `false` | uploaded while the language step is open, not started (v1.0.9): not listed, not counted, not recovered, and deleted after an hour if never started |
 | `recovery_attempts` | integer | no | `0` | automatic requeues; reset by a manual retry |
 | `created_at`, `updated_at` | timestamptz | no | `now()` | |
 
@@ -349,7 +358,8 @@ date is the commit that introduced the file.
 | 14 | `c8f2a6d41e93` | 2026-10-17 | caption box (v1.0.7): add `box_width`, `max_lines`; `pos_x`/`pos_y` become the box centre, NOT NULL; drop `position`, `margin_v`, `margin_h` and enum `caption_vertical_position`. **Converts** every row: an anchored caption gets the centre a one-line caption had (margin + padding or outline + half the font size in from its edge, or the middle); a left/right-aligned one is half the default width (0.40) further in, the side margin read against 1920 px; a centred hand placement keeps its centre. Downgrade restores the columns at their defaults, keeping the centre as a hand placement |
 | 15 | `e3a9c71f5b28` | 2026-10-18 | caption line style (v1.0.8): add enum `caption_line_style` and `caption_styles.line_style` (`balanced` for every row, the line breaking every caption already had) and `words_per_line` (2). Downgrade caps `max_lines` at 3 |
 | 16 | `f7c1d2e8a940` | 2026-10-18 | exports record their captions (v1.0.8): add `exports.caption_language` and `exports.captions_from` (when that set of captions was written: its oldest caption's `created_at`), both nullable and left null on existing rows |
-| 17 | `a4d8e2c6f130` | 2026-10-18 | add `videos.speech` (v1.0.8, head): the word timings captions are timed to; nullable, NULL until a video's next transcription |
+| 17 | `a4d8e2c6f130` | 2026-10-18 | add `videos.speech` (v1.0.8): the word timings captions are timed to; nullable, NULL until a video's next transcription |
+| 18 | `b6e0f4a9c2d1` | 2026-10-21 | add `videos.hindi_script`, `videos.detected_language`, `videos.detected_confidence` (all nullable, NULL on existing rows) and `videos.held` (`false`) (v1.0.9, head). Changes nothing already captioned |
 
 ## 6. Migration rules
 
