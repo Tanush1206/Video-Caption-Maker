@@ -8,6 +8,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Hindi in Roman script ("Hinglish"), chosen before anything is transcribed.
+**One migration**, run on start: videos gain how Hindi is written, what was
+heard, and a "held" flag; every existing video keeps its captions exactly
+as they are.
+
+### Added
+- **Hinglish captions.** Hindi can now be captioned in Latin letters, with
+  English words in English spelling ("To video mein captions auto
+  generate"), by a speech model made for it (Oriserve's Apex). On a 228 s
+  Hinglish tutorial it got 65 of 73 English words right where the old
+  model got 12, made far fewer mistakes overall, and ran in 8 s instead of
+  109 s on a GPU. It downloads once, 1.5 GB, the first time it's used, and
+  the language step says so.
+- **The language step listens first.** The video starts uploading as soon
+  as you pick it, and the app hears what language it is while you choose
+  the caption language. When it's Hindi it asks "Hindi captions in:
+  Hinglish (Roman) / हिन्दी (Devanagari)", set to Hinglish when it is sure;
+  when it isn't sure, or hears Marathi, it asks you to choose. Back, or
+  closing the page, deletes the upload.
+- **Redo** offers "Hindi in" for videos heard as Hindi.
+- Translations of Hinglish into other languages go through Devanagari
+  first (IndicXlit, a 138 MB download on first use), because the
+  translator can't read Roman Hinglish. English captions are still made by
+  the speech model itself.
+
 ### Fixed
 - **Captions came up late, by up to 2.6 s** (v1.0.8, on a Hindi talk after
   Redo). A segment whose first words were cut off at its start, and so no

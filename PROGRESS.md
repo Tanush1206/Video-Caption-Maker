@@ -817,7 +817,7 @@ Seen on the installed v1.0.8 after Redo on video 84 (Hindi).
       not pushing the next caption. Preview: `checks.js caption-timing`
       (every frame within one frame; fails on a 250 ms shift).
 
-### Problem 2 — Hindi/Hinglish captions still very bad
+### Problem 2 — Hindi/Hinglish captions still very bad (done)
 Replaces the IndicXlit plan (IndicXlit kept only as a fallback).
 - [x] Candidates, Whisper fine-tunes that write Roman Hinglish with English
       words in English spelling: `Oriserve/Whisper-Hindi2Hinglish-Prime`
@@ -938,6 +938,50 @@ Plan (files, in commit order):
    CHANGELOG.
 Verify: backend suite, frontend lint/type-check/test, ui-check (axe 0),
 `scripts/e2e.py` on the dev stack, a real Hinglish upload end to end.
+
+Done (2026-10-21), all committed:
+- [x] 1. Models: `services/hinglish.py` (a5e8744). Through the app's own
+      code on the dev stack: IndicXlit downloaded, checked and converted
+      in 16 s; Apex in 147 s, byte-identical to the scratch conversion it
+      was scored with. 7 tests, no network.
+- [x] 2. Data and API (39e29f7, 655e701): migration `b6e0f4a9c2d1`; held
+      uploads left out of the list, stats and startup recovery (which would
+      have started them); swept after an hour.
+- [x] 3. Worker (717b107, 7d06d32): detection task; Apex for Hindi in Roman;
+      IndicXlit before Gemini/M2M100; English still Whisper's translation;
+      the job records what it heard (for the Redo) and the script `auto`
+      resolved to; a failed detection clears "detecting". 22 tests.
+- [x] 4. UI (2396b5f, 020eaea, 1ab86f0): upload on pick; "Hindi · heard at
+      98%"; the choice per the rules; Start while uploading starts when it
+      lands; Back and page close delete the upload (checked against the
+      real backend: both 404 afterwards); Redo's "Hindi in".
+      `checks.js hindi-script` passes at 375 and 1440 px, axe 0 in light
+      and dark; screenshots looked at in both themes.
+- [x] Real flow, dev stack (large-v3 auto, RTX 5080), no mocks:
+      `hinglish.mp4` picked → "Hindi · heard at 98%" 5.5 s later, upload
+      included → Hinglish preset → Start. Apex transcribed 228 s in 9 s;
+      captions "To videos mein captions auto / generate karne ka aisa
+      tarika aapko …"; caption starts **0 of 43 outside the timing rule**
+      (mean −0.07 s, worst +0.03 / −0.18 s). Spanish went through
+      IndicXlit (Gemini answered 503 three times, M2M100 took over);
+      English stayed Whisper's translation. A second upload's detection
+      waited 28.6 s behind a running job, as designed.
+- [x] `scripts/e2e.py` (same, en, mr; SRT, VTT, MP4) ALL PASSED: uploads
+      without the new fields behave as before (Hindi in Devanagari).
+- [x] Backend suite 511 passed, 1 skipped; ruff clean; frontend lint,
+      type-check and tests clean.
+- [x] Test data: dev videos 7546–7550 (created by the first, unmocked check
+      run: the dev frontend calls the API on :8000, so origin-based mocks
+      missed; the mocks now match by path), 7580–7581 (close/navigate
+      deletion test, deleted by the page itself), 7582–7587 (real flow and
+      e2e): all deleted through the API. Scratch models (3.1 GB in the
+      worker's /tmp, 9 GB of Prime earlier), the IndicXlit test container
+      and the python:3.10/3.11-slim images removed.
+- Note: sizes are shown in binary GB like the rest of the app, so Apex's
+  1.62 billion bytes reads "1.5 GB" in the language step and the download
+  progress.
+- Open: Gemini is given IndicXlit's Devanagari too; measuring it on Roman
+  Hinglish needs a working key (it answered 503 today).
 
 ### Then: transcription settings (Phase 2)
 Keep only what measurably helps, with a before/after table per setting and
