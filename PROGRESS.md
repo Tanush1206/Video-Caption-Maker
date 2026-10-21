@@ -819,24 +819,77 @@ Seen on the installed v1.0.8 after Redo on video 84 (Hindi).
 
 ### Problem 2 — Hindi/Hinglish captions still very bad
 Replaces the IndicXlit plan (IndicXlit kept only as a fallback).
-- [ ] Candidates, Whisper fine-tunes that write Roman Hinglish with English
+- [x] Candidates, Whisper fine-tunes that write Roman Hinglish with English
       words in English spelling: `Oriserve/Whisper-Hindi2Hinglish-Prime`
       (large-v3 fine-tune, GPU) and `Oriserve/Whisper-Hindi2Hinglish-Apex`
-      (large-v3-turbo fine-tune, CPU). Check each licence on its model card
-      (stated Apache-2.0) and any training-data terms; **stop and tell Tanush
-      if either isn't usable commercially.**
-- [ ] Convert each to CTranslate2 for faster-whisper (float16 GPU, int8 CPU)
-      with word timestamps working.
-- [ ] Score on `hinglish.mp4` against `truth-hi.txt` (Roman): WER, CER,
-      English-word accuracy, caption start offsets (Problem 1); against
-      today's large-v3, large-v3-turbo and small; speed, memory and download
-      size for each.
-- [ ] 10 sample lines from each model beside `truth-hi.txt`.
-- [ ] Then ONE question with a recommendation: add a "Hindi (Hinglish, Roman
-      script)" speech option on the winning models (Prime on GPU, Apex on CPU,
-      downloaded only when first chosen), and whether it should be the
-      default when Hindi is detected. **No change to the default for existing
-      users without Tanush's answer.**
+      (large-v3-turbo fine-tune, CPU). **Licences (2026-10-21): both usable
+      commercially.** Apache-2.0 in the card metadata (not gated); the
+      GitHub repo `OriserveAI/Whisper-Hindi2Hinglish` has an Apache-2.0
+      LICENSE; bases are OpenAI Whisper (MIT); no use restrictions stated.
+      Caveats: the model repos have no LICENSE file of their own; training
+      data is only described ("~550 h proprietary" for Prime, "~700 h
+      open-source and proprietary" for Apex, auto-labelled by an unnamed
+      model then corrected by hand), with no terms passed to users.
+- [x] Converted with the worker's own `ct2-transformers-converter`
+      (CTranslate2 4.8.1), float16 weights; int8 chosen at load on CPU.
+      Neither repo ships `alignment_heads`, which word timestamps need: the
+      base models' (OpenAI's `generation_config.json`) were written in
+      first. Apex 1.62 GB (download 1.62 GB), Prime 3.09 GB (download 6.17
+      GB, float32); each converts in about 5 s. Both decode with
+      `language="en"`, as their cards say (`hi` gives the same Roman text).
+- [x] Scored through the app's own `transcribe()` + `rephrase()` on the
+      whole 228 s clip, against `truth-hi.txt` (first 62.8 s: 264 words, 73
+      of them English). Base models' Devanagari romanised first by a fixed
+      table (the caveat: it adds errors of its own; CER and "loose" WER,
+      with spelling variants folded the same way for every model, lean on
+      it less). Caption starts against the forced-aligned words (Problem 1).
+      Dev machine: RTX 5080; CPU runs in the dev worker.
+
+      | Model | WER | WER, loose | CER | English words | Starts outside rule | 228 s takes | Memory | Download |
+      |---|---|---|---|---|---|---|---|---|
+      | Prime, GPU | 31.1% | 20.8% | 13.9% | 66/73 | 9 of 42 (worst −0.36 s) | 24.9 s | 4.2 GB VRAM | 6.2 GB |
+      | **Apex, GPU** | 31.1% | 20.8% | 14.1% | 65/73 | **0 of 42** | **7.6 s** | 2.5 GB VRAM | **1.6 GB** |
+      | **Apex, CPU int8** | 30.7% | 20.5% | 13.8% | 66/73 | 1 of 43 | 35.5 s | 1.8 GB RAM | 1.6 GB |
+      | large-v3, GPU (today's GPU default) | 73.9% | 56.4% | 47.9% | 12/73 | 3 of 31 | 109.4 s | 5.3 GB VRAM | (installed) |
+      | large-v3-turbo, GPU | 64.8% | 53.8% | 40.0% | 26/73 | 2 of 33 | 37.4 s | 2.5 GB VRAM | (installed) |
+      | large-v3-turbo, CPU int8 | 65.5% | 52.7% | 41.1% | 29/73 | 2 of 32 | 114.8 s | 1.8 GB RAM | (installed) |
+      | small, CPU int8 | 79.5% | 69.7% | 47.1% | 14/73 | 3 of 34 | 369.5 s | 1.4 GB RAM | (installed) |
+
+      The fine-tunes cover the whole clip (~1,000 words, no gap over 3 s;
+      small leaves 192-222 s uncaptioned) and are fast because they don't
+      need the re-decoding of skipped stretches the base models do.
+      Apex is as accurate as Prime, 3x faster, half the memory and download,
+      and its word timings are clean; Prime's run early with large-v3's
+      alignment heads. So **Apex wins on both tiers**, not Prime on GPU.
+- [x] 10 sample lines, every model beside `truth-hi.txt`: in the scratch
+      report (not committed: it quotes the test clip). E.g. at 0.00 s,
+      truth "To video mein captions auto generate"; Apex "To videos mein
+      captions auto generate"; large-v3 "तो वीडियोस में कैप्शन्स ऑटो जेनेरेट";
+      small "तो वीडियोंस में कैप्ष्यंस अड़़द़ईट".
+- [x] The question (2026-10-21). **Tanush: add it on Apex (GPU and CPU),
+      Hinglish the default for Hindi, on these conditions:**
+      - the language step, when the spoken language is Hindi (detected or
+        chosen), shows "Hindi captions in: Hinglish (Roman) / हिन्दी
+        (Devanagari)", defaulting to Hinglish, changeable before processing;
+      - translation into other languages doesn't take the Roman Hinglish as
+        its source unless measured to translate as well: Hinglish → Marathi,
+        Spanish and English on `hinglish.mp4`, against translating from the
+        large-v3 Devanagari transcript; use whichever is clearly better, and
+        report the extra time if it needs a second transcription pass;
+      - detected Marathi, or Hindi detected below about 70% confidence: no
+        Hinglish default, the language step asks instead;
+      - existing videos keep their captions until Redo;
+      - the 1.6 GB download's size and progress are shown the first time.
+      Prime is not used: no more accurate than Apex, 3x slower, twice the
+      memory and download, and its caption starts run early.
+
+### Problem 2, implementation (planned)
+- [ ] Measure the translation source first (it decides the pipeline):
+      Hinglish (Apex) vs Devanagari (large-v3) → mr, es, en through the
+      app's translator; scored against references made from `truth-hi.txt`.
+- [ ] Then plan the files to touch (model store entry and download progress,
+      speech-language option list from the API, language-step choice,
+      detection-confidence rule, worker pipeline, docs) and build it.
 
 ### Then: transcription settings (Phase 2)
 Keep only what measurably helps, with a before/after table per setting and
