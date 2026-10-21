@@ -230,6 +230,39 @@ function burnLayout(style, texts, frame) {
   return JSON.parse(out);
 }
 
+/**
+ * Answer the language step's own requests, so a check picks a file without
+ * uploading it (v1.0.9 uploads on pick). Matched by path, not origin: the dev
+ * frontend calls the API on its own port. `heard` is what detection says, or
+ * null for "not yet"; the returned log holds what Start and Back sent.
+ */
+async function mockHeldUpload(page, base, heard) {
+  const id = 999_000_001;
+  const log = { started: null, deleted: false };
+  const video = (extra = {}) => ({
+    id, title: "clip", original_filename: "clip.mp4", size_bytes: 18, content_type: "video/mp4",
+    duration_ms: 60000, status: "pending", error_message: null, has_thumbnail: false,
+    spoken_language: "auto", caption_language: "same", hindi_script: null,
+    detected_language: null, detected_confidence: null, held: true, progress: 0,
+    stage: "detecting", stage_detail: null, notice: null,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...extra,
+  });
+  const json = (route, body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route(/\/api\/videos$/, (route) => (route.request().method() === "POST" ? json(route, video(), 201) : route.fallback()));
+  await page.route(new RegExp(`/api/videos/${id}$`), (route) => {
+    if (route.request().method() === "DELETE") {
+      log.deleted = true;
+      return route.fulfill({ status: 204 });
+    }
+    return json(route, heard ? video({ detected_language: heard[0], detected_confidence: heard[1], stage: null }) : video());
+  });
+  await page.route(new RegExp(`/api/videos/${id}/transcribe$`), (route) => {
+    log.started = route.request().postDataJSON();
+    return json(route, video({ held: false, status: "pending", stage: null }));
+  });
+  return log;
+}
+
 const CHECKS = {
   // While the video plays, the overlay shows the caption under the playhead
   // within one frame: on every presented frame (requestVideoFrameCallback),
@@ -438,6 +471,7 @@ const CHECKS = {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       const at = `language-step@${width}`;
       const served = (await (await page.request.get(`${base}/api/videos/languages`)).json()).caption;
+      await mockHeldUpload(page, base, ["en", 0.99]);
       await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
       await page.locator('input[type="file"]').first().setInputFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not really a video") });
       const group = page.getByRole("radiogroup", { name: "Caption into" });
@@ -461,6 +495,85 @@ const CHECKS = {
       await search.fill("");
       ok(`${at}: clearing the search shows them all`, (await cards.count()) === served.length);
       await page.close();
+    }
+  },
+
+  // The language step's Hindi script choice (v1.0.9), with the API mocked so
+  // each detection outcome is certain: Hindi heard surely presets Hinglish;
+  // Marathi asks with nothing preset and Start waits; no answer in 15 s asks
+  // without holding Start; English captions don't ask; Back deletes the
+  // upload. Checks what Start sends each time. Read-only.
+  async "hindi-script"(browser, base) {
+    const pick = async (page) => {
+      await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
+      await page.locator('input[type="file"]').first().setInputFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not really a video") });
+    };
+    const start = (page) => page.getByRole("button", { name: /Start generating captions/ });
+    const group = (page) => page.getByRole("radiogroup", { name: /captions in/i });
+
+    const { AxeBuilder } = require("@axe-core/playwright");
+    for (const theme of ["light", "dark"]) {
+      const context = await browser.newContext({ colorScheme: theme, viewport: { width: 1440, height: 900 } });
+      await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+      const page = await context.newPage();
+      await mockHeldUpload(page, base, ["mr", 0.81]);
+      await pick(page);
+      await group(page).waitFor();
+      await page.waitForTimeout(1000);
+      const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+      ok(`hindi-script: axe 0 with the choice open (${theme})`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+      await context.close();
+    }
+
+    for (const width of [1440, 375]) {
+      const at = `hindi-script@${width}`;
+      let page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      let log = await mockHeldUpload(page, base, ["hi", 0.94]);
+      await pick(page);
+      await group(page).waitFor();
+      ok(`${at}: Hindi heard surely presets Hinglish`, await group(page).getByRole("radio", { checked: true }).evaluate((e) => e.value === "roman"));
+      ok(`${at}: says what it heard`, await page.getByText("Hindi · heard at 94%").isVisible());
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: Start sends Hinglish`, JSON.stringify(log.started) === JSON.stringify({ spoken_language: "hi", caption_language: "same", hindi_script: "roman" }), JSON.stringify(log.started));
+      await page.context().close();
+
+      page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      log = await mockHeldUpload(page, base, ["mr", 0.81]);
+      await pick(page);
+      await group(page).waitFor();
+      ok(`${at}: Marathi asks with nothing preset`, (await group(page).getByRole("radio", { checked: true }).count()) === 0);
+      ok(`${at}: Marathi is one of the answers`, (await group(page).getByRole("radio").count()) === 3);
+      ok(`${at}: Start waits for an answer`, await start(page).isDisabled());
+      await group(page).locator("label").nth(1).click();
+      ok(`${at}: an answer enables Start`, await start(page).isEnabled());
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: Start sends Devanagari`, log.started?.hindi_script === "devanagari" && log.started?.spoken_language === "hi", JSON.stringify(log.started));
+      await page.context().close();
+
+      page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      log = await mockHeldUpload(page, base, null);
+      await pick(page);
+      ok(`${at}: nothing asked while listening`, (await group(page).count()) === 0);
+      await group(page).waitFor({ timeout: 20000 });
+      ok(`${at}: after 15 s it asks with nothing preset`, (await group(page).getByRole("radio", { checked: true }).count()) === 0);
+      ok(`${at}: and Start doesn't wait`, await start(page).isEnabled());
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: unanswered, the job decides`, log.started?.hindi_script === "auto" && log.started?.spoken_language === "auto", JSON.stringify(log.started));
+      await page.context().close();
+
+      page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      log = await mockHeldUpload(page, base, ["hi", 0.94]);
+      await pick(page);
+      await group(page).waitFor();
+      await page.getByRole("radiogroup", { name: "Caption into" }).locator("label", { hasText: "English" }).first().click();
+      ok(`${at}: English captions don't ask`, (await group(page).count()) === 0);
+      await page.getByRole("button", { name: "Choose a different video" }).click();
+      await page.waitForTimeout(300);
+      ok(`${at}: Back deletes the upload`, log.deleted);
+      await page.context().close();
     }
   },
 
