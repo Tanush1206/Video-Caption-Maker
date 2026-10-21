@@ -23,6 +23,7 @@ from app.services import (
     app_settings,
     embeddings,
     hardware,
+    hinglish,
     languages,
     model_store,
     phrasing,
@@ -139,6 +140,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
         source_relative = video.storage_path
         spoken = video.spoken_language or languages.AUTO
         wanted = video.caption_language or languages.SAME
+        chosen_script = video.hindi_script
         video.notice = None
         await session.commit()
 
@@ -210,20 +212,44 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             )
             logger.info("Video %s: heard %s (%.2f)", video_id, hint, confidence)
         else:
-            hint = spoken
+            # Named by the person: as sure as it gets.
+            hint, confidence = spoken, 1.0
+
+        # Hindi in Roman script comes from its own model (services/hinglish.py).
+        # Not for English captions: those are Whisper's own translation, which
+        # reads far better than anything M2M100 makes of either script.
+        script = (
+            languages.hindi_script_for(chosen_script, hint, confidence)
+            if hint == "hi"
+            else None
+        )
+        roman = script == languages.ROMAN and wanted != "en"
+        if roman:
+            profile = hardware.hinglish_profile(hardware.detect())
+            await _set_progress(video_id, STAGE_DOWNLOADING, 0, "Preparing the Hinglish speech model")
+            await asyncio.to_thread(
+                transcription.load_model,
+                profile,
+                _download_reporter(video_id, loop, "the Hinglish speech model (first use only)"),
+            )
+            await _set_progress(video_id, STAGE_TRANSCRIBING, 0)
 
         segments, language = await asyncio.to_thread(
             transcription.transcribe,
             audio_path,
-            language=hint,
+            # Apex writes Hinglish under Whisper's English token, as its card says.
+            language=hinglish.APEX_LANGUAGE if roman else hint,
             # "translate" is Whisper's English-only path, taken in this same
             # pass when English is what was asked for. Anything else is
             # translated after the fact, below. Decided on the hint rather than
             # the raw setting, so "auto" on English audio does not take the
             # translate path to reach English.
-            task=languages.whisper_task(hint, wanted),
+            task="transcribe" if roman else languages.whisper_task(hint, wanted),
             on_progress=report,
         )
+        if roman:
+            # It is Hindi, whatever token it was decoded under.
+            language = "hi"
         logger.info("Video %s: %d segments (%s)", video_id, len(segments), language)
         if transcription.low_confidence_note:
             notices.append(transcription.low_confidence_note)
@@ -249,9 +275,19 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
                 _set_progress(video_id, STAGE_TRANSLATING, percent), loop
             )
 
+        texts = [segment.text for segment in segments]
+        if roman:
+            # M2M100 can't read Roman Hinglish (it copies it through, or
+            # invents something), so it gets Devanagari: measured, PROGRESS.md
+            # v1.0.9. Gemini gets the same, until it is measured on Roman.
+            texts = await asyncio.to_thread(
+                hinglish.to_devanagari,
+                texts,
+                _download_reporter(video_id, loop, "the Hindi transliterator (first use only)"),
+            )
         result = await asyncio.to_thread(
             translation.translate_texts,
-            [segment.text for segment in segments],
+            texts,
             wanted,
             source=language,
             api_key=gemini_key or None,
@@ -359,6 +395,9 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             video.error_message = None
             video.notice = " ".join(notices)[:300] or None
             video.speech = spoken
+            if chosen_script == languages.SCRIPT_AUTO and script is not None:
+                # Decided now; a Redo repeats it rather than deciding again.
+                video.hindi_script = script
             await session.commit()
 
     return {"video_id": video_id, "segments": len(segments), "language": language}
@@ -419,6 +458,55 @@ def reindex_captions(video_id: int, caption_ids: list[int] | None = None) -> dic
         # error against an edit the user already saw succeed.
         logger.error("Reindex failed for video %s: %s", video_id, exc)
         return {"video_id": video_id, "error": str(exc)}
+
+
+async def _detect(video_id: int) -> dict:
+    """
+    Hear the first 30 s of a held upload, for the language step (v1.0.9).
+
+    The same model and window the job itself detects with, so what the step
+    shows is what the job would decide.
+    """
+    async with worker_session() as session:
+        video = await session.get(Video, video_id)
+        if video is None:
+            return {"video_id": video_id, "skipped": "video deleted"}
+        source_relative = video.storage_path
+        whisper_choice = await app_settings.whisper_override(session)
+
+    source = storage.resolve(source_relative)
+    clip = source.with_suffix(".detect.wav")
+    try:
+        profile = hardware.whisper_profile(hardware.detect(), whisper_choice)
+        await asyncio.to_thread(transcription.load_model, profile)
+        await asyncio.to_thread(
+            transcription.extract_audio, source, clip, transcription.DETECTION_SECONDS
+        )
+        language, confidence = await asyncio.to_thread(transcription.detect_language, clip)
+    finally:
+        clip.unlink(missing_ok=True)
+    logger.info("Video %s: language step heard %s (%.2f)", video_id, language, confidence)
+
+    async with worker_session() as session:
+        video = await session.get(Video, video_id)
+        if video is not None:
+            video.detected_language = language
+            video.detected_confidence = round(float(confidence), 3)
+            if video.held:
+                video.stage = None
+            await session.commit()
+    return {"video_id": video_id, "language": language, "confidence": confidence}
+
+
+@celery_app.task(name="detect_spoken_language")
+def detect_spoken_language(video_id: int) -> dict:
+    try:
+        return asyncio.run(_detect(video_id))
+    except Exception as exc:  # noqa: BLE001
+        # The language step then asks without a preset, as it does when
+        # detection is slow; nothing is lost but a default.
+        logger.error("Language detection failed for video %s: %s", video_id, exc)
+        return {"video_id": video_id, "error": str(exc)[:200]}
 
 
 @celery_app.task(name="transcribe_video", bind=True)

@@ -34,6 +34,9 @@ WHISPER_FILES = [
     "vocabulary.*",
 ]
 
+# The Hinglish speech model's name in a WhisperProfile (services/hinglish.py).
+HINGLISH = "hinglish"
+
 _model = None
 _model_key: tuple[str, str, str] | None = None
 # Set when the GPU was asked for and could not be used, so the job can say
@@ -95,9 +98,14 @@ def load_model(profile, on_download: model_store.Progress | None = None):
 
     from faster_whisper import WhisperModel
 
-    path = model_store.ensure(
-        _repo_for(profile.model), allow_patterns=WHISPER_FILES, on_progress=on_download
-    )
+    if profile.model == HINGLISH:
+        from app.services import hinglish
+
+        path = hinglish.apex_dir(on_download)
+    else:
+        path = model_store.ensure(
+            _repo_for(profile.model), allow_patterns=WHISPER_FILES, on_progress=on_download
+        )
     logger.info(
         "Loading Whisper '%s' on %s (%s)", profile.model, profile.device, profile.compute_type
     )
@@ -605,9 +613,9 @@ def vad_parameters() -> dict:
     }
 
 
-def extract_audio(source: Path, destination: Path) -> None:
+def extract_audio(source: Path, destination: Path, seconds: float | None = None) -> None:
     """
-    Pull a 16kHz mono WAV out of the video.
+    Pull a 16kHz mono WAV out of the video (the first `seconds` of it, if given).
 
     Whisper resamples to 16kHz mono internally, so doing it once up front is
     both faster and smaller than handing it the original file. Raises on
@@ -630,6 +638,7 @@ def extract_audio(source: Path, destination: Path) -> None:
             "-acodec", "pcm_s16le",
             "-ar", "16000",     # 16kHz, what Whisper expects
             "-ac", "1",         # mono
+            *(["-t", str(seconds)] if seconds else []),
             str(destination),
         ],
         capture_output=True,

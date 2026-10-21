@@ -199,6 +199,25 @@ def whisper_profile(hw: Hardware, user_model: str | None = None) -> WhisperProfi
     return WhisperProfile(model=model, device=device, compute_type=compute, source=source)
 
 
+def hinglish_profile(hw: Hardware) -> WhisperProfile:
+    """
+    Hindi in Roman script, on its own model whatever the Settings choice.
+
+    It is a large-v3-turbo fine-tune, as light as turbo (2.5 GB of VRAM, 1.8
+    GB of RAM at int8, measured), so every tier can run it.
+    """
+    from app.services.transcription import HINGLISH
+
+    settings = get_settings()
+    device = settings.whisper_device if settings.whisper_device != AUTO else None
+    if device is None or (device == "cuda" and not hw.cuda):
+        device = "cuda" if hw.cuda else "cpu"
+    return WhisperProfile(
+        model=HINGLISH, device=device, compute_type="float16" if device == "cuda" else "int8",
+        source="hinglish",
+    )
+
+
 def translator_profile(hw: Hardware) -> TranslatorProfile:
     settings = get_settings()
     model = settings.translation_model
