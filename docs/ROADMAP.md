@@ -63,6 +63,26 @@ The original 10-milestone build plan is historical and lives in
   both have to change, and the preview's and libass's line breaking would
   have to agree without spaces to break at.
 
+### Forced alignment of word timings
+- **What:** after Whisper, force its own text onto the audio with a CTC
+  aligner (a wav2vec2/MMS model) and time captions to those word starts
+  instead of Whisper's.
+- **Why:** since v1.0.9 the pipeline passes Whisper's word starts through
+  to within 0-20 ms, so what is left of the caption-start error is
+  Whisper's own word timestamps. Measured for v1.0.9 against forced-aligned
+  truth (docs/TESTING.md, "Caption starts against the speech"): 3-4
+  captions per clip outside the rule (no later than +100 ms, no earlier than
+  −200 ms), up to about +0.15 s late and −0.26 s early, one long Spanish word
+  −0.55 s. The same MMS aligner (torchaudio `MMS_FA`), run outside the app,
+  is what those measurements use, and it lands within ~0.05 s of the
+  waveform where both are clear.
+- **Why not yet:** it is a model addition (a download per install, more
+  memory, more time per video) and only shaves the last tenths of a second.
+  Tanush, 2026-10-20: not now.
+- **Must:** measured per hardware tier (time, memory, download) against
+  today's numbers; romanisation for scripts the aligner can't read
+  (Devanagari and others); the v1.0.8 timing rules still hold.
+
 ## Possible, not planned
 - **More caption languages.** Thirteen are offered (v1.0.7). Telugu is not in
   M2M100; Kannada, Gujarati and Punjabi came out of it unusable (samples in

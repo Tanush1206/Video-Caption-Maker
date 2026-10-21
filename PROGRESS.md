@@ -789,11 +789,23 @@ Seen on the installed v1.0.8 after Redo on video 84 (Hindi).
       Result, offset per caption against the speech (docs/TESTING.md has the
       table): Hindi large-v3 worst +2.61 → +0.13 s late, 23 → 3 captions
       outside the rule; English and Spanish no worse on either model.
-- [ ] Still outside the rule: Whisper's own word timestamps, up to ~0.15 s
+- [x] Still outside the rule: Whisper's own word timestamps, up to ~0.15 s
       late and ~0.25 s early (one long Spanish word 0.55 s early), 3-4
       captions in 22-35 per clip. The pipeline adds 0-20 ms. Closing that
-      needs a forced aligner (a wav2vec2/MMS model) after Whisper: a model
-      addition, so Tanush's call.
+      needs a forced aligner (a wav2vec2/MMS model) after Whisper. Tanush,
+      2026-10-20: not now; on docs/ROADMAP.md with these numbers.
+- [x] Confirmed on automatic model selection (2026-10-21). With the
+      `WHISPER_*` lines gone from the dev `.env`, the dev worker picks
+      large-v3 on CUDA. Fresh uploads, stored captions: Hindi (7543) and
+      Same as spoken (7544) mean −0.10 s, worst +0.13 s late and −0.26 s
+      early, 3 of 32 outside the rule. That is the harness result exactly.
+- [x] English translated from Hindi (7545) has no first word to measure
+      against: Whisper's English words are timed against Hindi audio, and an
+      English sentence rarely starts on the word its Hindi does. Against
+      the Hindi phrase each caption translates (7 spot checks, by hand):
+      v1.0.8 ran +0.60 to −0.52 s, now −0.04 to −0.63 s. The late ones are
+      gone; what's left runs early. A limitation of translating in Whisper,
+      not a timing bug.
 - [x] Tests, fail on v1.0.8 and pass now: `test_caption_phrasing.py`
       (Hindi, English, Spanish sentences in one run with untimed first words:
       +230 / −428 / −251 ms before; an untimed word between neighbours),
