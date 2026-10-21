@@ -83,12 +83,25 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
    - waits for `/api/health`, then opens `http://localhost:<VCM_PORT>`.
 2. **Upload** (stepper step 1): drag a file onto the drop zone or pick one.
    The client accepts `.mp4 .mov .mkv .webm .avi .m4v`.
-3. **Language** (step 2, before anything is sent): "Same as spoken" (the
-   default) or one of the thirteen caption languages, shown as cards with
-   each language's own name and its English one, and searchable by either
-   or by code. The spoken
-   language is always auto-detected on upload. The file is then uploaded with
-   `caption_language`, and the browser goes to `/editor/{id}`.
+3. **Language** (step 2, while the file uploads, v1.0.9): the file is sent
+   as soon as it is picked, held, and the worker detects the spoken language
+   from its first 30 s; the step shows what was heard ("Hindi · heard at
+   98%"). Meanwhile "Same as spoken" (the default) or one of the thirteen
+   caption languages is chosen, shown as cards with each language's own
+   name and its English one, and searchable by either or by code.
+   **When the captions will be Hindi** (Same as spoken, or Hindi), the step
+   also asks **"Hindi captions in: Hinglish (Roman) / हिन्दी (Devanagari)"**:
+   - Hindi heard at 70% or more: preset to Hinglish;
+   - Hindi under 70%, or Marathi heard: nothing preset (Marathi adds a
+     "मराठी" answer), and Start waits for a pick;
+   - nothing heard within 15 s (the worker is busy): asked with nothing
+     preset, and Start doesn't wait; the job then decides by the same rule.
+   Hinglish says what it downloads the first time ("Downloads 1.5 GB the
+   first time"). **Start** sends the choice (`POST /api/videos/{id}/transcribe`)
+   and the browser goes to `/editor/{id}`; pressed while uploading, it starts
+   as soon as the upload lands. **Back**, or closing or leaving the page,
+   deletes the upload and its files; one never started is deleted after an
+   hour regardless.
 4. **Processing** (on the video page): the worker runs
    download model → extract audio → transcribe → translate (if needed) → embed.
    Each stage shows its progress, and an ETA appears once the observed rate
@@ -130,7 +143,10 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 
 **Acceptance criteria**
 - `POST /api/videos` (multipart: `file`, optional `caption_language`) returns
-  `201` with the video, then queues transcription.
+  `201` with the video, then queues transcription. With `hold` (the language
+  step, v1.0.9) it queues language detection instead; the video is held
+  (not listed, not counted, not recovered) until `POST …/transcribe` starts
+  it, and deleted if never started within an hour.
 - Both the content type and the extension must be on the allow-lists in
   `backend/app/services/storage.py`.
 - The stored filename is a UUID, and the user's filename is kept only as a
@@ -155,6 +171,19 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
   [§7](#7-supported-languages-formats-models-and-hardware-tiers)).
 - English captions for non-English audio come from Whisper's own `translate`
   task in the same pass.
+- **Hindi in Roman script ("Hinglish", v1.0.9)** comes from its own speech
+  model, Oriserve's Apex fine-tune of large-v3-turbo, on every hardware tier:
+  Hindi in Latin letters with English words in English spelling. Measured
+  on a 228 s Hinglish tutorial: 31% WER (21% with spelling variants folded)
+  against large-v3's 74%, 65 of 73 English words right against 12, 7.6 s on
+  the GPU against 109 s, and every caption start within the timing rule.
+  It downloads (1.6 GB) the first time it is used.
+- Other targets from Hinglish are translated from Devanagari: IndicXlit
+  transliterates it first (138 MB, first use), because M2M100 can't read
+  Roman Hinglish. English captions are still Whisper's own translation.
+- A video made before v1.0.9, or by a client that doesn't send a script,
+  keeps Hindi in Devanagari; the editor's Redo offers "Hindi in" for videos
+  heard as Hindi.
 - Other targets are transcribed first, then translated by Gemini if a key is
   set, and by local M2M100 otherwise.
 - Caption timings are never changed by translation.
@@ -174,6 +203,8 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 **Edge cases**
 | Case | Result |
 |---|---|
+| A Hinglish model download doesn't match its pinned sha256 | The download is deleted and the job fails: "The downloaded model didn't match the expected file, so it wasn't used. Try again; …" |
+| Language detection fails on a held upload (no audio) | The step stops listening and asks without a preset; the job then fails with the no-audio sentence |
 | Gemini fails (no network, quota, bad key) | Local M2M100 is used; notice "Gemini couldn't be used, so the captions were translated on this computer instead." |
 | Neither engine can translate | Captions stay in the spoken language, with a notice; the job does **not** fail |
 | GPU fails to load the model | Runs on CPU int8; notice "The GPU couldn't be used, so this ran on the CPU." |
@@ -393,6 +424,11 @@ removed.
 | `en` | yes | From non-English audio: Whisper `task="translate"` in the same pass |
 | `hi`, `bn`, `mr`, `ta`, `ml`, `fr`, `de`, `nl`, `es`, `pt`, `it`, `ru` | yes | Transcribe, then translate (Gemini or M2M100). Weak locally: the Indian languages (Tamil and Malayalam most), see §10 |
 | `auto` | spoken-language value | Default for `spoken_language`; Whisper detects from the first 30 s |
+
+**How Hindi is written** (`hindi_script`, v1.0.9): `roman` (Hinglish, the
+Apex model), `devanagari` (Whisper), or `auto` (Roman for Hindi detected at
+70% or more, else Devanagari). The language step presets Hinglish for sure
+Hindi; videos from before keep Devanagari.
 
 ### Input formats
 `.mp4 .mov .mkv .webm .avi .m4v`, with content types `video/mp4`,

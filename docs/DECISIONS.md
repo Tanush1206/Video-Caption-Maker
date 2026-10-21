@@ -554,6 +554,55 @@ captions get the default width, so a caption that filled ~94% of a
 landscape frame before may now take one more line. The baseline inside a
 line can differ by a pixel or two between the renderers.
 
+## D17. Hindi in Roman script on its own model, asked for before processing
+
+**Date:** v1.0.9 (2026-10-21)
+
+**Context.** Hindi/Hinglish captions were the weakest result in the app:
+on a 228 s Hinglish tutorial large-v3 scored 74% WER after romanising, got
+12 of 73 English words right (it writes "कैप्शन्स" for "captions") and
+skipped stretches of speech. Most people who speak Hinglish also type it in
+Latin letters.
+
+**Decision.**
+- Hindi can be written in Roman script ("Hinglish") by Oriserve's Apex, a
+  large-v3-turbo fine-tune (Apache-2.0): 31% WER, 65 of 73 English words,
+  7.6 s on the GPU and 35.5 s on the CPU for the clip, every caption start
+  within the timing rule. Prime (the large-v3 fine-tune) was measured and
+  not used: no more accurate, 3× slower, twice the memory and download, and
+  its word timings run early.
+- Hinglish is the default for Hindi heard at 70% or more. The language step
+  asks "Hindi captions in: Hinglish (Roman) / हिन्दी (Devanagari)" before
+  anything is transcribed, so the upload starts when a file is picked and
+  the language is detected meanwhile. Below 70%, or for Marathi, nothing is
+  preset and Start waits; after 15 s without an answer the step asks
+  without holding Start.
+- Translations of Hinglish go through IndicXlit's Devanagari: M2M100 can't
+  read Roman Hinglish. English captions stay Whisper's own translation.
+- Both models download on first use from their original repos, pinned to a
+  commit and checked against their sha256, and are converted on the
+  machine; nothing is baked into an image.
+- Existing videos, and clients that don't send a script, stay Devanagari.
+
+**Alternatives.**
+- IndicXlit on large-v3's Devanagari (the original plan): it can only
+  re-spell what large-v3 heard, and large-v3 is what was wrong.
+- Roman Hinglish straight into M2M100: it copies English and Spanish
+  through and invents Marathi.
+- Hosting converted models ourselves: another thing to publish, version and
+  trust; converting on the machine keeps the source the original repo.
+- Asking about the script on the video page after detection, or always
+  showing it: the first asks too late, the second asks about Hindi for
+  every video.
+
+**Trade-offs.** The upload now starts before Start, so Back and closing the
+page have to delete it (and an hour's sweep catches what they can't). Two
+more downloads (1.6 GB and 138 MB) on first use. IndicXlit transliterates
+word by word, and translations of Hinglish carry its mistakes ("To" → टो).
+Gemini gets the Devanagari too until it is measured on Roman.
+
+---
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open

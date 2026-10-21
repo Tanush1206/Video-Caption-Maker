@@ -148,18 +148,25 @@ sequenceDiagram
     participant W as worker
     participant DB as postgres
     participant V as chromadb
-    UI->>API: POST /api/videos (file, caption_language)
+    UI->>API: POST /api/videos (file, hold=true) as soon as a file is picked
     API->>API: stream to /app/storage/user_N/<uuid>.<ext>, ffprobe duration, thumbnail
-    API->>DB: INSERT videos (status=pending)
-    API->>Q: transcribe_video.delay(id)
+    API->>DB: INSERT videos (status=pending, held, stage=detecting)
+    API->>Q: detect_spoken_language.delay(id)
     API-->>UI: 201 VideoRead
+    Q->>W: detect: first 30 s → videos.detected_language, detected_confidence
+    loop every 1 s until heard (15 s, then the step asks without a preset)
+      UI->>API: GET /api/videos/{id}
+    end
+    UI->>API: POST /api/videos/{id}/transcribe (spoken, caption, hindi_script) = Start
+    API->>DB: held=false, status=pending
+    API->>Q: transcribe_video.delay(id)
     Q->>W: deliver (prefetch 1, acks_late)
     W->>DB: read languages, Settings (whisper_model, gemini key)
     W->>DB: DELETE captions; W->>V: delete vectors (idempotent re-run)
     W->>W: 0 downloading: load Whisper (unloads translator)
     W->>W: 1 extracting: FFmpeg → <src>.transcode.wav
-    W->>W: 2 transcribing: detect language (30 s) if auto, then decode, then re-decode skipped stretches
-    W->>W: 2b translating: Gemini → fallback M2M100 (unloads Whisper)
+    W->>W: 2 transcribing: detect language (30 s) if auto; Hindi in Roman → load the Hinglish model; decode, then re-decode skipped stretches
+    W->>W: 2b translating: Hinglish → IndicXlit Devanagari first; Gemini → fallback M2M100 (unloads Whisper)
     W->>W: 3 phrases: rephrase and time to the word timestamps
     W->>DB: INSERT captions, videos.speech
     W->>V: 4 embedding: upsert "{video}:{caption}" vectors
@@ -169,8 +176,9 @@ sequenceDiagram
     end
 ```
 
-Stage names are fixed strings, written to `videos.stage`: `downloading`,
-`extracting`, `transcribing`, `translating`, `embedding`. The UI labels for
+Stage names are fixed strings, written to `videos.stage`: `detecting` (a
+held upload, v1.0.9), `downloading`, `extracting`, `transcribing`,
+`translating`, `embedding`. The UI labels for
 them are in `frontend/src/lib/stages.ts`.
 
 Rules the code enforces:
@@ -188,6 +196,26 @@ Rules the code enforces:
   it.
 - **Settings are read per job, not per process**, so a model change in
   Settings applies to the next job.
+- **Held uploads** (v1.0.9) are the language step's: uploaded on pick with
+  `hold`, listened to by `detect_spoken_language` (the job's own model and
+  window), and started by `POST …/transcribe`. They are left out of the
+  list, the stats and startup recovery; the page deletes one on Back or
+  close (a `keepalive` DELETE), and `sweep_held` deletes any never started
+  after an hour, on the user's next upload. A failed detection clears the
+  stage, and the step then asks without a preset.
+- **How Hindi is written** (v1.0.9, `languages.hindi_script_for`): a choice
+  of `roman` or `devanagari` is kept; `auto` presets Roman for Hindi heard
+  at 70% or more and otherwise Devanagari, and the result is stored; NULL
+  (older videos, clients that don't send it) is Devanagari. Roman, unless
+  the captions are English, loads the Hinglish speech model
+  (`services/hinglish.py`, Oriserve's Apex fine-tune of large-v3-turbo),
+  decodes under Whisper's English token as its card says, and records the
+  captions as Hindi. A translation of Hinglish into anything but English is
+  made from Devanagari: IndicXlit transliterates word by word (all-capital
+  words like SRT kept), then Gemini or M2M100 translates as from Hindi.
+  English captions are always Whisper's own `translate` pass, which read far
+  better than M2M100 from either script (PROGRESS.md, v1.0.9). The job also
+  stores what it heard, so the editor's Redo offers the script choice.
 - **Nothing Whisper heard is skipped** (v1.0.8). Each window is decoded
   without the previous one's text (`condition_on_previous_text=False`), no
   word's timing is believed past 3 s (`WORD_MAX_SECONDS`: alignment hands
@@ -324,6 +352,10 @@ logged and never surfaced to the user.
    first, and `translation._load` calls `transcription.unload_model()` first.
    The two models are **never** resident together.
 
+6. **Hinglish** (`hinglish_profile`): the Apex model on every tier (as light
+   as turbo: 2.5 GB VRAM, 1.8 GB RAM at int8), `float16` on CUDA, `int8` on
+   the CPU, whatever the Settings choice.
+
 Model weights go through `services/model_store.py`:
 - they download into the `models` volume with progress measured from bytes
   on disk;
@@ -331,6 +363,24 @@ Model weights go through `services/model_store.py`:
   show progress;
 - certificate failures become `ModelDownloadError` with the `certs/`
   instructions.
+
+The two Hinglish models (`services/hinglish.py`, v1.0.9) download the same
+way, on first use only, from their original Hugging Face repos **pinned to a
+commit**, and are **checked against the sha256** Hugging Face publishes for
+the weights (a mismatch deletes the download and fails the job with a
+sentence saying so). They are then converted to CTranslate2 on the machine,
+into `vcm-converted/` on the models volume, and the original download is
+deleted:
+- Apex: `Oriserve/Whisper-Hindi2Hinglish-Apex` @ `f3214eed…`, 1.62 GB,
+  converted by CTranslate2's Transformers converter (float16) with
+  large-v3-turbo's alignment heads written in (the repo ships none, and
+  word timestamps need them);
+- IndicXlit: `ai4bharat/IndicXlit` @ `e7049fe7…`, the 138 MB Roman→Indic
+  checkpoint, converted **without fairseq** from its raw tensors
+  (`convert_xlit`; 352 of 353 words identical to fairseq's output), 23 MB,
+  run on the CPU at float32.
+The API reads `vcm-converted/` (the volume is shared) to say what choosing
+Hinglish will download.
 
 ## 6. Translation engines and fallback
 
@@ -357,6 +407,12 @@ flowchart TD
   refuses codes missing from its vocabulary (`UnsupportedLanguage`). Every
   caption language is in its list (`M2M100_LANGUAGES`, held to
   `languages.LANGUAGES` by a test).
+- **Hinglish is translated from Devanagari** (v1.0.9). M2M100 given Roman
+  Hinglish copies it through (English, Spanish) or invents something
+  (Marathi), so the job transliterates it with IndicXlit first and
+  translates as from Hindi. The Devanagari has IndicXlit's word-by-word
+  errors ("To" → टो), which the translations carry; Gemini gets the same
+  text until it is measured on Roman.
 - **Sentences, not fragments** (v1.0.7). `sentence_groups` joins captions
   until one ends a sentence (`. ! ? … । ॥` and closing quotes), up to 4
   captions or 400 characters; the joined sentence is translated once and
