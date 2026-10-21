@@ -72,6 +72,52 @@ SAME = "same"
 # measured. Detection is now simply believed.
 
 
+# How Hindi captions are written (v1.0.9). Roman ("Hinglish": Hindi in Latin
+# letters, English words in English spelling) is how most people type Hindi
+# and comes from its own speech model (services/hinglish.py); Devanagari is
+# what Whisper itself writes.
+ROMAN = "roman"
+DEVANAGARI = "devanagari"
+HINDI_SCRIPTS: dict[str, tuple[str, str]] = {
+    ROMAN: ("Hinglish (Roman)", "Hinglish"),
+    DEVANAGARI: ("हिन्दी (Devanagari)", "हिन्दी"),
+}
+# Decide from detection, the same rule the language step presets with.
+SCRIPT_AUTO = "auto"
+
+# Hinglish is the default only when Hindi is heard this surely. Below it, or
+# when Marathi is heard (Marathi and Hindi share a script and much of their
+# sound, and detection trades them), nothing is preset: the person chooses.
+HINGLISH_MIN_CONFIDENCE = 0.70
+
+
+def is_hindi_script(value: str) -> bool:
+    return value in HINDI_SCRIPTS or value == SCRIPT_AUTO
+
+
+def default_hindi_script(detected: str | None, confidence: float | None) -> str | None:
+    """The script to preset for what was heard: Hinglish for sure Hindi, otherwise none (ask)."""
+    if detected == "hi" and confidence is not None and confidence >= HINGLISH_MIN_CONFIDENCE:
+        return ROMAN
+    return None
+
+
+def hindi_script_for(chosen: str | None, spoken: str, confidence: float | None) -> str:
+    """
+    The script a job writes Hindi in.
+
+    A choice is kept. "auto" (started before detection answered) applies the
+    preset rule, and anything it wouldn't preset stays Devanagari, as Hindi
+    always was. NULL, a video from before v1.0.9 or a client that doesn't
+    send one, is Devanagari.
+    """
+    if chosen in HINDI_SCRIPTS:
+        return chosen
+    if chosen == SCRIPT_AUTO:
+        return default_hindi_script(spoken, confidence) or DEVANAGARI
+    return DEVANAGARI
+
+
 def is_spoken_language(value: str) -> bool:
     return value == AUTO or value in LANGUAGES
 

@@ -33,6 +33,15 @@ class VideoRead(BaseModel):
     # defaults every time the page loads.
     spoken_language: str = "auto"
     caption_language: str = "same"
+    #: How Hindi is written: "roman", "devanagari" or "auto"; null for a video
+    #: from before v1.0.9 (Devanagari).
+    hindi_script: str | None = None
+    #: What the language step heard from the first 30 s (an upload held for
+    #: it); null until detection has answered, and on older videos.
+    detected_language: str | None = None
+    detected_confidence: float | None = None
+    #: Uploaded but not started yet.
+    held: bool = False
 
     # Meaningful only while status is "processing".
     progress: int
@@ -84,6 +93,15 @@ class TranscribeRequest(BaseModel):
 
     spoken_language: str | None = None
     caption_language: str | None = None
+    #: "roman" (Hinglish), "devanagari" or "auto" (decided from detection).
+    hindi_script: str | None = None
+
+    @field_validator("hindi_script")
+    @classmethod
+    def known_script(cls, value: str | None) -> str | None:
+        if value is not None and not languages.is_hindi_script(value):
+            raise ValueError(f"Unsupported Hindi script: {value}")
+        return value
 
     @field_validator("spoken_language")
     @classmethod
@@ -108,6 +126,17 @@ class LanguageOption(BaseModel):
     native: str | None = None
 
 
+class HindiScriptOption(BaseModel):
+    code: str
+    #: "Hinglish (Roman)" / "हिन्दी (Devanagari)".
+    label: str
+    #: The short name ("Hinglish", "हिन्दी").
+    short: str
+    #: What choosing it downloads the first time, or null if nothing (or
+    #: already downloaded).
+    download_bytes: int | None = None
+
+
 class LanguageOptions(BaseModel):
     """
     Served rather than hardcoded in the client, for the same reason the font
@@ -117,6 +146,10 @@ class LanguageOptions(BaseModel):
 
     spoken: list[LanguageOption]
     caption: list[LanguageOption]
+    #: How Hindi captions can be written, for the language step and the Redo.
+    hindi_scripts: list[HindiScriptOption] = []
+    #: Hindi at or above this detection confidence presets Hinglish.
+    hinglish_min_confidence: float = 0.7
     #: Whether the non-English targets can be delivered. Always true since local
     #: translation (M2M100) ships with the app; kept so clients need not change.
     translation_available: bool

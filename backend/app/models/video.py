@@ -1,7 +1,9 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    JSON, BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, false, func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -71,6 +73,19 @@ class Video(Base):
     # target the captions get translated into.
     caption_language: Mapped[str] = mapped_column(
         String(16), nullable=False, default="same", server_default="same"
+    )
+    # How Hindi is written (v1.0.9): "roman" (Hinglish, on the Apex model),
+    # "devanagari", or "auto" (decided from detection: Hinglish for Hindi
+    # heard at 70% or more). NULL on videos made before it, which stay in
+    # Devanagari until a Redo picks.
+    hindi_script: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # What the language step heard from the first 30 s, before the job ran.
+    detected_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    detected_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Uploaded while the language step is still open: not transcribed, not
+    # listed, and deleted if it is never started.
+    held: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
     )
 
     status: Mapped[VideoStatus] = mapped_column(
