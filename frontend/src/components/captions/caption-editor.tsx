@@ -17,6 +17,7 @@ import {
   useVideoCaptions,
 } from "@/hooks/use-captions";
 import type { Playback } from "@/hooks/use-playback";
+import { Select } from "@/components/ui/select";
 import { LanguagePicker } from "@/components/videos/language-picker";
 import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
@@ -57,8 +58,17 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
    * now reaches the same answer on both files that motivated the control.
    */
   const [captionLanguage, setCaptionLanguage] = useState(video.caption_language);
+  // How Hindi is written, offered when Hindi was heard and the captions are
+  // Hindi (v1.0.9). A video from before it was Devanagari.
+  const [hindiScript, setHindiScript] = useState(
+    video.hindi_script === "roman" ? "roman" : "devanagari"
+  );
+  const hindiHeard = video.detected_language === "hi" || video.spoken_language === "hi";
+  const offerScript = hindiHeard && (captionLanguage === "same" || captionLanguage === "hi");
+  const currentScript = video.hindi_script === "roman" ? "roman" : "devanagari";
 
-  const languageChanged = captionLanguage !== video.caption_language;
+  const languageChanged =
+    captionLanguage !== video.caption_language || (offerScript && hindiScript !== currentScript);
 
   /**
    * The caption just added, so it can be focused once the refetch brings it in.
@@ -143,6 +153,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
         // explicitly clears any hint a video picked up from the older UI.
         spoken_language: "auto",
         caption_language: captionLanguage,
+        ...(offerScript ? { hindi_script: hindiScript } : {}),
       },
       {
         onSuccess: () => {
@@ -313,6 +324,27 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
               className="w-56"
             />
           </div>
+
+          {offerScript && languageOptions.hindi_scripts.length > 0 && (
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <label htmlFor="redo-hindi-script" className="text-muted-foreground">
+                Hindi in
+              </label>
+              <Select
+                id="redo-hindi-script"
+                size="sm"
+                value={hindiScript}
+                onChange={(event) => setHindiScript(event.target.value)}
+                className="w-48"
+              >
+                {languageOptions.hindi_scripts.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           {languageChanged && (
             <span className="text-[10px] text-muted-foreground">

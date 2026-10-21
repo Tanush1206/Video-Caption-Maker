@@ -1,19 +1,21 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Stepper } from "@/components/flow/stepper";
 import { LanguageStep } from "@/components/videos/language-step";
 import { statsKeys } from "@/hooks/use-stats";
 import { useSystem } from "@/hooks/use-system";
-import { useLanguageOptions, videoKeys } from "@/hooks/use-videos";
+import { useLanguageOptions, useRetranscribe, videoKeys } from "@/hooks/use-videos";
+import { api } from "@/lib/api";
+import { DETECTION_WAIT_MS, scriptQuestion, startRequest, type ScriptChoice } from "@/lib/hindi-script";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { uploadVideo, type UploadHandle } from "@/lib/upload";
 import { cn } from "@/lib/utils";
-import { ACCEPTED_EXTENSIONS, ACCEPTED_VIDEO_TYPES } from "@/types/video";
+import { ACCEPTED_EXTENSIONS, ACCEPTED_VIDEO_TYPES, type Video } from "@/types/video";
 
 function isAcceptedFile(file: File): boolean {
   if (ACCEPTED_VIDEO_TYPES.includes(file.type)) return true;
@@ -26,11 +28,11 @@ function isAcceptedFile(file: File): boolean {
 /**
  * Steps 1 and 2 of Upload → Language → Export.
  *
- * The file is picked first but not sent until a language is chosen: the
- * language travels with the upload, so the one transcription that follows
- * produces the captions that were asked for instead of a default to redo.
- * Step 3 lives on the video's own page, which this navigates to as soon as
- * the upload lands.
+ * The file uploads as soon as it is picked, held (v1.0.9): the server listens
+ * to the first 30 s while the caption language is chosen, so the step can
+ * ask how Hindi is written before anything is transcribed. Start sends the
+ * choice (POST …/transcribe) and goes to the video's own page, where step 3
+ * lives. Back, or leaving the page, deletes the upload and its files.
  */
 export function VideoUpload() {
   const router = useRouter();
@@ -38,11 +40,83 @@ export function VideoUpload() {
   const { data: languageOptions } = useLanguageOptions();
   const { data: system } = useSystem();
 
+  const retranscribe = useRetranscribe();
+
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("same");
   const [upload, setUpload] = useState<{ percent: number; handle: UploadHandle } | null>(null);
+  const [uploaded, setUploaded] = useState<Video | null>(null);
+  const [uploadedAt, setUploadedAt] = useState<number | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+  const [script, setScript] = useState<ScriptChoice | null>(null);
+  // Start pressed before the upload finished: start as soon as it lands.
+  const [startWhenUploaded, setStartWhenUploaded] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The held video, polled until detection answers.
+  const { data: held } = useQuery({
+    queryKey: videoKeys.detail(uploaded?.id ?? 0),
+    queryFn: () => api.get<Video>(`/api/videos/${uploaded?.id}`),
+    enabled: uploaded !== null,
+    initialData: uploaded ?? undefined,
+    refetchInterval: (query) => (query.state.data?.detected_language ? false : 1000),
+  });
+  const detected = held?.detected_language ?? null;
+  const confidence = held?.detected_confidence ?? null;
+
+  // Detection that hasn't answered in time asks without a preset.
+  useEffect(() => {
+    if (uploadedAt === null || detected !== null) return;
+    const wait = setTimeout(
+      () => setTimedOut(true),
+      Math.max(0, uploadedAt + DETECTION_WAIT_MS - Date.now())
+    );
+    return () => clearTimeout(wait);
+  }, [uploadedAt, detected]);
+
+  const question = scriptQuestion({
+    detected,
+    confidence,
+    timedOut,
+    captionLanguage: language,
+    minConfidence: languageOptions?.hinglish_min_confidence ?? 0.7,
+  });
+
+  // The preset follows what was heard, until someone picks.
+  const picked = useRef(false);
+  useEffect(() => {
+    if (!picked.current) setScript(question.preset);
+  }, [question.preset]);
+
+  // Leaving with an upload that was never started deletes it, files and all.
+  // `keepalive` lets the request finish after the tab has gone.
+  const abandoned = useRef<number | null>(null);
+  abandoned.current = uploaded && !starting ? uploaded.id : null;
+  useEffect(() => {
+    const leave = () => {
+      if (abandoned.current === null) return;
+      void api.deleteOnExit(`/api/videos/${abandoned.current}`).catch(() => undefined);
+      abandoned.current = null;
+    };
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.removeEventListener("pagehide", leave);
+      // Navigating elsewhere in the app unmounts this without a pagehide.
+      leave();
+    };
+  }, []);
+
+  function reset() {
+    picked.current = false;
+    setScript(null);
+    setUploaded(null);
+    setUploadedAt(null);
+    setTimedOut(false);
+    setStartWhenUploaded(false);
+    setStarting(false);
+  }
 
   // dragenter/dragleave fire for every child element, so a boolean flag
   // flickers as the pointer moves across the zone. Counting entries and exits
@@ -58,34 +132,76 @@ export function VideoUpload() {
       return;
     }
     setFile(picked);
+    reset();
+
+    const handle = uploadVideo(
+      picked,
+      (percent) => setUpload((current) => (current ? { ...current, percent } : current)),
+      undefined,
+      true
+    );
+    setUpload({ percent: 0, handle });
+    handle.promise
+      .then((video) => {
+        setUploaded(video);
+        setUploadedAt(Date.now());
+      })
+      .catch((err: Error) => {
+        setUpload(null);
+        setFile(null);
+        setStartWhenUploaded(false);
+        if (err.message !== "Upload cancelled") setError(err.message);
+      });
   }, []);
 
-  function start() {
-    if (!file) return;
+  function back() {
+    upload?.handle.cancel();
+    if (uploaded) void api.delete(`/api/videos/${uploaded.id}`).catch(() => undefined);
+    abandoned.current = null;
+    reset();
+    setUpload(null);
+    setFile(null);
+  }
+
+  function chooseScript(choice: ScriptChoice) {
+    picked.current = true;
+    setScript(choice);
+  }
+
+  const start = useCallback(() => {
     setError(null);
     // Asked here, on a click, because browsers only show the permission
     // prompt in response to one. The job outlasts most people's patience.
     askToNotify();
-
-    const handle = uploadVideo(
-      file,
-      (percent) => setUpload((current) => (current ? { ...current, percent } : current)),
-      language
+    if (!uploaded) {
+      setStartWhenUploaded(true);
+      return;
+    }
+    setStarting(true);
+    retranscribe.mutate(
+      { id: uploaded.id, ...startRequest(question.show ? script : null, language) },
+      {
+        onSuccess: (video) => {
+          watchTranscription(video.id);
+          void queryClient.invalidateQueries({ queryKey: videoKeys.all });
+          void queryClient.invalidateQueries({ queryKey: statsKeys.all });
+          router.push(`/editor/${video.id}`);
+        },
+        onError: (err) => {
+          setStarting(false);
+          setError(err.message);
+        },
+      }
     );
-    setUpload({ percent: 0, handle });
+  }, [uploaded, question.show, script, language, retranscribe, queryClient, router]);
 
-    handle.promise
-      .then((video) => {
-        watchTranscription(video.id);
-        void queryClient.invalidateQueries({ queryKey: videoKeys.all });
-        void queryClient.invalidateQueries({ queryKey: statsKeys.all });
-        router.push(`/editor/${video.id}`);
-      })
-      .catch((err: Error) => {
-        setUpload(null);
-        if (err.message !== "Upload cancelled") setError(err.message);
-      });
-  }
+  // Start was pressed while uploading: it goes once the upload has landed.
+  useEffect(() => {
+    if (startWhenUploaded && uploaded && !starting) {
+      setStartWhenUploaded(false);
+      start();
+    }
+  }, [startWhenUploaded, uploaded, starting, start]);
 
   const step = file ? 2 : 1;
 
@@ -209,10 +325,20 @@ export function VideoUpload() {
             onLanguage={setLanguage}
             options={languageOptions}
             system={system}
-            upload={upload}
-            onBack={() => setFile(null)}
+            upload={uploaded ? null : upload}
+            detection={{
+              detected,
+              confidence,
+              listening: uploaded !== null && detected === null && !timedOut,
+            }}
+            question={question}
+            script={script}
+            onScript={chooseScript}
+            waitingToStart={startWhenUploaded}
+            starting={starting}
+            onBack={back}
             onStart={start}
-            onCancel={() => upload?.handle.cancel()}
+            onCancel={back}
           />
         )}
       </div>

@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { matchesLanguage } from "@/components/videos/language-picker";
 import { formatFileSize } from "@/lib/format";
+import type { ScriptChoice, ScriptQuestion } from "@/lib/hindi-script";
 import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
 import type { LanguageOptions } from "@/types/video";
 
 /**
- * Step 2 of Upload → Language → Export, after a file is picked and before it
- * is sent: the caption language travels with the upload.
+ * Step 2 of Upload → Language → Export, while the picked file uploads.
  *
- * The spoken language is shown, not asked: an upload is always transcribed
- * with detection, and the editor is where a wrong guess gets corrected.
+ * The spoken language is heard, not asked: the server listens to the first
+ * 30 s of the upload. When that is Hindi the step asks how the captions are
+ * written (`lib/hindi-script.ts` decides when, and what is preset); anything
+ * else wrong is corrected in the editor with a Redo.
  */
 export function LanguageStep({
   file,
@@ -25,6 +27,12 @@ export function LanguageStep({
   options,
   system,
   upload,
+  detection,
+  question,
+  script,
+  onScript,
+  waitingToStart,
+  starting,
   onBack,
   onStart,
   onCancel,
@@ -34,7 +42,15 @@ export function LanguageStep({
   onLanguage: (code: string) => void;
   options: LanguageOptions | undefined;
   system: SystemInfo | undefined;
+  /** The upload while it is still sending; null once it has landed. */
   upload: { percent: number } | null;
+  detection: { detected: string | null; confidence: number | null; listening: boolean };
+  question: ScriptQuestion;
+  script: ScriptChoice | null;
+  onScript: (choice: ScriptChoice) => void;
+  /** Start was pressed and goes when the upload lands. */
+  waitingToStart: boolean;
+  starting: boolean;
   onBack: () => void;
   onStart: () => void;
   onCancel: () => void;
@@ -48,6 +64,22 @@ export function LanguageStep({
   const translating = language !== "same";
   const viaGemini = translating && system?.translation_engine === "gemini";
   const model = system?.whisper?.model;
+  const busy = starting || waitingToStart;
+  const heard = detection.detected
+    ? (options?.spoken.find((o) => o.code === detection.detected)?.label ?? detection.detected)
+    : null;
+  const needsScript = question.show && question.required && script === null;
+  const scriptLabel = (code: ScriptChoice) =>
+    code === "mr"
+      ? { label: "मराठी (Marathi)", short: "मराठी", download: null }
+      : (() => {
+          const option = options?.hindi_scripts.find((o) => o.code === code);
+          return {
+            label: option?.label ?? code,
+            short: option?.short ?? code,
+            download: option?.download_bytes ?? null,
+          };
+        })();
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] animate-fade-in flex-col gap-4">
@@ -56,18 +88,116 @@ export function LanguageStep({
           <AudioLines className="size-[18px] text-primary" aria-hidden="true" />
           <h3 className="text-lg font-semibold tracking-tight">Spoken audio</h3>
         </div>
-        <div className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-surface-2 p-3">
+        <div
+          className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-surface-2 p-3"
+          role="status"
+          aria-live="polite"
+        >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-            <Sparkles className="size-[18px]" aria-hidden="true" />
+            {detection.listening || (!heard && upload) ? (
+              <Loader2 className="size-[18px] animate-spin" aria-hidden="true" />
+            ) : (
+              <Sparkles className="size-[18px]" aria-hidden="true" />
+            )}
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold">Auto-detect</p>
+            <p className="text-sm font-semibold">
+              {heard
+                ? `${heard} · heard at ${Math.round((detection.confidence ?? 0) * 100)}%`
+                : upload
+                  ? "Uploading, then listening…"
+                  : detection.listening
+                    ? "Listening to the first 30 seconds…"
+                    : "Auto-detect"}
+            </p>
             <p className="text-xs text-muted-foreground">
-              The language is detected from the audio. If it guesses wrong, set it in the editor and
-              transcribe again.
+              {heard
+                ? "Detected from the audio. If it's wrong, set it in the editor and transcribe again."
+                : detection.listening || upload
+                  ? "You can choose the caption language meanwhile."
+                  : "The language is detected when transcribing starts."}
             </p>
           </div>
         </div>
+
+        {question.show && (
+          <fieldset className="mt-4">
+            <legend className="text-sm font-semibold" id="hindi-script-heading">
+              {question.heading}
+            </legend>
+            {question.required && (
+              <p className="mt-1 text-xs text-muted-foreground" id="hindi-script-hint">
+                {detection.detected === "mr"
+                  ? "Marathi was heard, which detection often mixes up with Hindi. Choose one to start."
+                  : "Hindi was heard, but not surely. Choose how to write it to start."}
+              </p>
+            )}
+            <div
+              role="radiogroup"
+              aria-labelledby="hindi-script-heading"
+              className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {question.options.map((code) => {
+                const selected = script === code;
+                const { label, download } = scriptLabel(code);
+                return (
+                  <label
+                    key={code}
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 transition-colors",
+                      "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
+                      selected
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border bg-surface-2 hover:bg-surface-3",
+                      busy && "pointer-events-none opacity-60"
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="hindi_script"
+                      value={code}
+                      checked={selected}
+                      onChange={() => onScript(code)}
+                      disabled={busy}
+                      className="sr-only"
+                    />
+                    <span className="min-w-0">
+                      <span
+                        className="block font-semibold leading-tight"
+                        lang={code === "roman" ? "hi-Latn" : "hi"}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        className={cn(
+                          "mt-1 block text-[13px] font-medium",
+                          selected ? "text-primary" : "text-muted-foreground"
+                        )}
+                      >
+                        {code === "roman"
+                          ? download
+                            ? `Downloads ${formatFileSize(download)} the first time`
+                            : "Hindi in English letters"
+                          : code === "devanagari"
+                            ? "Hindi in its own script"
+                            : "Captions in Marathi"}
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "flex size-6 shrink-0 items-center justify-center rounded-full",
+                        selected ? "bg-primary text-primary-foreground" : "border border-border bg-card"
+                      )}
+                    >
+                      {selected && <Check className="size-4" />}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
       </section>
 
       <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
@@ -92,7 +222,7 @@ export function LanguageStep({
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search caption languages"
             placeholder={`Search ${choices.length - 1} languages — বাংলা, Español, Tamil…`}
-            disabled={!options || !!upload}
+            disabled={!options || busy}
             className={cn(inputClasses, "pl-9")}
           />
         </div>
@@ -115,7 +245,7 @@ export function LanguageStep({
                   selected
                     ? "border-primary/60 bg-primary/10"
                     : "border-border bg-surface-2 hover:bg-surface-3",
-                  (!options || upload) && "pointer-events-none opacity-60"
+                  (!options || busy) && "pointer-events-none opacity-60"
                 )}
               >
                 <input
@@ -124,7 +254,7 @@ export function LanguageStep({
                   value={option.code}
                   checked={selected}
                   onChange={() => onLanguage(option.code)}
-                  disabled={!options || !!upload}
+                  disabled={!options || busy}
                   className="sr-only"
                 />
                 <span className="min-w-0">
@@ -198,18 +328,34 @@ export function LanguageStep({
           <span className="shrink-0 font-mono tabular-nums">· {formatFileSize(file.size)}</span>
         </p>
 
-        {!upload ? (
+        <div className="flex w-full flex-col items-stretch gap-1 sm:w-auto sm:items-end">
           <div className="flex w-full items-center gap-3 sm:w-auto">
-            <Button variant="secondary" onClick={onBack} aria-label="Choose a different video">
+            <Button
+              variant="secondary"
+              onClick={onBack}
+              disabled={starting}
+              aria-label="Choose a different video"
+            >
               <ArrowLeft />
               Back
             </Button>
-            <Button onClick={onStart} className="flex-1 sm:flex-none">
-              Start generating captions
-              <ArrowRight />
+            <Button
+              onClick={onStart}
+              disabled={busy || needsScript}
+              aria-describedby={needsScript ? "hindi-script-hint" : undefined}
+              className="flex-1 sm:flex-none"
+            >
+              {busy && <Loader2 className="animate-spin" />}
+              {waitingToStart ? "Starting when uploaded…" : "Start generating captions"}
+              {!busy && <ArrowRight />}
             </Button>
           </div>
-        ) : (
+          {needsScript && (
+            <p className="text-xs text-muted-foreground">Choose how to write the captions first.</p>
+          )}
+        </div>
+
+        {upload && (
           <div className="w-full">
             <div className="flex items-center justify-between text-body-sm text-muted-foreground">
               <span className="flex items-center gap-2">
