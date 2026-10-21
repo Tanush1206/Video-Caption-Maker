@@ -20,6 +20,16 @@ export interface Video {
    */
   spoken_language: string;
   caption_language: string;
+  /**
+   * How Hindi is written: "roman" (Hinglish), "devanagari" or "auto" (decided
+   * from detection); null on videos from before v1.0.9 (Devanagari).
+   */
+  hindi_script: string | null;
+  /** What was heard from the first 30 s, once detection has answered. */
+  detected_language: string | null;
+  detected_confidence: number | null;
+  /** Uploaded while the language step is open; not started yet. */
+  held: boolean;
   /** 0-100, meaningful only while status is "processing". */
   progress: number;
   /**
@@ -60,9 +70,23 @@ export interface LanguageOption {
   native: string | null;
 }
 
+export interface HindiScriptOption {
+  /** "roman" or "devanagari". */
+  code: string;
+  /** "Hinglish (Roman)" / "हिन्दी (Devanagari)". */
+  label: string;
+  /** "Hinglish" / "हिन्दी". */
+  short: string;
+  /** What choosing it downloads the first time; null if nothing. */
+  download_bytes: number | null;
+}
+
 export interface LanguageOptions {
   spoken: LanguageOption[];
   caption: LanguageOption[];
+  hindi_scripts: HindiScriptOption[];
+  /** Hindi detected at or above this presets Hinglish. */
+  hinglish_min_confidence: number;
   /**
    * Always true: English comes from Whisper itself and the others from the
    * local M2M100 translator, so no key is needed for any of them.

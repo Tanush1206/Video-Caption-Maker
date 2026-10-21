@@ -38,7 +38,8 @@ function send(
   file: File,
   token: string | null,
   onProgress: (percent: number) => void,
-  captionLanguage?: string
+  captionLanguage?: string,
+  hold = false
 ): { xhr: XMLHttpRequest; promise: Promise<Video> } {
   const xhr = new XMLHttpRequest();
 
@@ -76,6 +77,9 @@ function send(
     // Before the file, so the server has the choice in hand when the bytes
     // arrive; the one transcription that follows produces those captions.
     if (captionLanguage) form.append("caption_language", captionLanguage);
+    // Held: uploaded and listened to, but not transcribed until the language
+    // step's Start (POST …/transcribe).
+    if (hold) form.append("hold", "true");
     form.append("file", file);
     xhr.send(form);
   });
@@ -86,12 +90,13 @@ function send(
 export function uploadVideo(
   file: File,
   onProgress: (percent: number) => void,
-  captionLanguage?: string
+  captionLanguage?: string,
+  hold = false
 ): UploadHandle {
   let active: XMLHttpRequest | null = null;
 
   const run = async (): Promise<Video> => {
-    const first = send(file, useAuthStore.getState().accessToken, onProgress, captionLanguage);
+    const first = send(file, useAuthStore.getState().accessToken, onProgress, captionLanguage, hold);
     active = first.xhr;
 
     try {
@@ -105,7 +110,7 @@ export function uploadVideo(
       if (!token) throw error;
 
       onProgress(0);
-      const retry = send(file, token, onProgress, captionLanguage);
+      const retry = send(file, token, onProgress, captionLanguage, hold);
       active = retry.xhr;
       return await retry.promise;
     }

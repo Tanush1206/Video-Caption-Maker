@@ -135,4 +135,9 @@ export const api = {
   // as confirmation, and a query string is the wrong place for one — it lands
   // in browser history and server access logs.
   delete: <T>(path: string, body?: unknown) => request<T>(path, { method: "DELETE", body }),
+  /**
+   * A DELETE that outlives the page: `keepalive` lets the browser finish it
+   * after the tab is closed, which is when a held upload has to go.
+   */
+  deleteOnExit: (path: string) => request<void>(path, { method: "DELETE", keepalive: true }),
 };
