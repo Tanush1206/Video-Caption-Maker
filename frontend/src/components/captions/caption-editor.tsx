@@ -63,8 +63,14 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
   const [hindiScript, setHindiScript] = useState(
     video.hindi_script === "roman" ? "roman" : "devanagari"
   );
-  const hindiHeard = video.detected_language === "hi" || video.spoken_language === "hi";
-  const offerScript = hindiHeard && (captionLanguage === "same" || captionLanguage === "hi");
+  // Offered unless the video is known not to be Hindi: one made before v1.0.9
+  // has nothing recorded until its next job, and without the choice its Redo
+  // stayed in Devanagari (v1.0.10).
+  const maybeHindi =
+    video.detected_language === null ||
+    video.detected_language === "hi" ||
+    video.spoken_language === "hi";
+  const offerScript = maybeHindi && (captionLanguage === "same" || captionLanguage === "hi");
   const currentScript = video.hindi_script === "roman" ? "roman" : "devanagari";
 
   const languageChanged =

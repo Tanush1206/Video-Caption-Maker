@@ -577,6 +577,43 @@ const CHECKS = {
     }
   },
 
+  // The editor's Redo offers "Hindi in" for a video with no language
+  // recorded (made before v1.0.9) and one heard as Hindi, not for one heard
+  // as English; choosing Hinglish sends it. The Redo request is answered by
+  // the check: nothing is transcribed. Needs a completed video
+  // (VCM_CHECK_VIDEO or the newest). Read-only (v1.0.10).
+  async "redo-script"(browser, base) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const id = await editorVideo(page, base);
+    const select = () => page.getByLabel("Hindi in");
+    for (const [heard, offered] of [[null, true], ["hi", true], ["en", false]]) {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      let sent = null;
+      await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+        const body = await (await route.fetch()).json();
+        await route.fulfill({ json: { ...body, status: "completed", stage: null, caption_language: "hi", spoken_language: "auto", hindi_script: null, detected_language: heard } });
+      });
+      await page.route(new RegExp(`/api/videos/${id}/transcribe$`), async (route) => {
+        sent = route.request().postDataJSON();
+        const body = await (await page.request.get(`${base}/api/videos/${id}`)).json();
+        await route.fulfill({ json: { ...body, status: "pending" } });
+      });
+      await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: /Redo/ }).waitFor();
+      const shown = (await select().count()) > 0;
+      ok(`redo-script: heard ${heard ?? "nothing recorded"} ${offered ? "offers" : "doesn't offer"} "Hindi in"`, shown === offered);
+      if (offered && shown) {
+        ok(`redo-script: ${heard ?? "nothing recorded"} defaults to Devanagari`, (await select().inputValue()) === "devanagari");
+        await select().selectOption("roman");
+        await page.getByRole("button", { name: /Redo/ }).click();
+        await page.waitForURL(/\/dashboard/);
+        ok(`redo-script: ${heard ?? "nothing recorded"} sends Hinglish`, sent?.hindi_script === "roman", JSON.stringify(sent));
+      }
+    }
+    await context.close();
+  },
+
   // Every style-panel slider, by drag, click and arrow keys: the value moves
   // with the pointer (never snapping back), the label shows the value, the
   // preview changes, and the saved style matches after a reload.
