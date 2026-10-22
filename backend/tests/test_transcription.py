@@ -9,6 +9,9 @@ and ownership. The model itself is exercised by the end-to-end check with a
 real video.
 """
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import select
 
@@ -936,3 +939,130 @@ def test_a_zero_length_word_at_the_end_of_a_segment_is_kept():
 
     words = [SimpleNamespace(start=43.68, end=43.8, word=" रहा"), SimpleNamespace(start=43.8, end=43.8, word=" है")]
     assert [w for _, _, w in _speech(SimpleNamespace(words=words), 43.68, 43.8)] == ["रहा", "है"]
+
+
+# ── Speech with no caption (v1.0.10) ────────────────────────────────────
+#
+# On the Hinglish tutorial large-v3 left 25.5-27.6 s and 77.5-80.0 s with no
+# caption while someone spoke: a 2.1 s stretch too short for the 4 s
+# re-decode rule, and a recovered segment thrown away because the onset
+# snap had moved its start 0.23 s before the stretch it was found in.
+
+
+def _seg(start, end, words):
+    """A segment whose words are evenly spread over start-end (seconds)."""
+    from app.services.transcription import Segment
+
+    step = (end - start) / len(words)
+    speech = [(int((start + i * step) * 1000), int((start + (i + 1) * step) * 1000), w) for i, w in enumerate(words)]
+    return Segment(start_ms=int(start * 1000), end_ms=int(end * 1000), text=" ".join(words), confidence=-0.2, speech=speech)
+
+
+def _levels(seconds, voiced=()):
+    """A 250 ms envelope: quiet, loud at speaking level inside each (from, to)."""
+    from app.services.transcription import ONSET_WINDOW_SECONDS
+
+    out = [-60.0] * int(seconds / ONSET_WINDOW_SECONDS)
+    for a, b in voiced:
+        for i in range(int(a / ONSET_WINDOW_SECONDS), int(b / ONSET_WINDOW_SECONDS)):
+            out[i] = -20.0
+    return out
+
+
+@pytest.fixture
+def stretches(monkeypatch):
+    """_fill_skipped with re-decoding faked: records the stretches asked for, answers from a table."""
+    from app.services import transcription
+
+    asked, answers = [], {}
+
+    def decode_stretch(model, audio_path, start, end, *rest):
+        asked.append((round(start, 2), round(end, 2)))
+        return answers.get((round(start, 2), round(end, 2)), [])
+
+    monkeypatch.setattr(transcription, "_decode_stretch", decode_stretch)
+    monkeypatch.setattr(transcription, "_duration", lambda path: 30.0)
+    return SimpleNamespace(asked=asked, answers=answers)
+
+
+def test_a_short_stretch_of_speech_is_decoded_again(stretches):
+    from app.services import transcription
+
+    segments = [_seg(20.0, 25.5, ["a", "b", "c"]), _seg(27.6, 29.0, ["d", "e"])]
+    levels = _levels(30, voiced=[(20, 29)])
+    transcription._fill_skipped(None, Path("a.wav"), segments, "hi", "transcribe", [], levels, within=(20.0, 29.0))
+    assert (25.5, 27.6) in stretches.asked
+
+
+def test_a_short_silent_gap_is_not(stretches):
+    from app.services import transcription
+
+    segments = [_seg(20.0, 25.5, ["a", "b", "c"]), _seg(27.6, 29.0, ["d", "e"])]
+    levels = _levels(30, voiced=[(20, 25.5), (27.6, 29)])
+    transcription._fill_skipped(None, Path("a.wav"), segments, "hi", "transcribe", [], levels, within=(20.0, 29.0))
+    assert stretches.asked == []
+
+
+def test_gaps_are_measured_between_the_words(stretches):
+    """A start the onset snap moved past its first word is no gap: decoding it said "Hamko bas" twice."""
+    from app.services import transcription
+
+    first = _seg(42.4, 43.7, ["kar", "rahe."])
+    second = _seg(43.8, 45.6, ["Hamko", "bas", "SRT", "file"])
+    second.start_ms = 44_500  # snapped; its words still start at 43.8
+    levels = _levels(46, voiced=[(42.4, 45.6)])
+    transcription._fill_skipped(None, Path("a.wav"), [first, second], "hi", "transcribe", [], levels, within=(42.4, 45.6))
+    assert stretches.asked == []
+
+
+def test_a_word_heard_on_both_sides_of_a_join_is_said_once(stretches):
+    """The recovered "…सबसे पहले हम" met "हम यहीं देखेंगे"; the late-timed copy goes."""
+    from app.services import transcription
+
+    segments = [_seg(20.0, 25.5, ["दिखाना", "है"]), _seg(27.6, 29.0, ["हम", "यहीं", "देखेंगे"])]
+    stretches.answers[(25.5, 27.6)] = [_seg(25.5, 27.6, ["कोई", "text", "सबसे", "पहले", "हम"])]
+    levels = _levels(30, voiced=[(20, 29)])
+    out = transcription._fill_skipped(None, Path("a.wav"), segments, "hi", "transcribe", [], levels, within=(20.0, 29.0))
+    words = [w for s in out for w in s.text.split()]
+    assert words == ["दिखाना", "है", "कोई", "text", "सबसे", "पहले", "हम", "यहीं", "देखेंगे"]
+
+
+def test_the_same_words_in_another_script_count_as_said(stretches):
+    """ "set करने के लिए" recovered, then "सेट करने के लिए हमें" from the segment after."""
+    from app.services import transcription
+
+    segments = [_seg(50.0, 56.2, ["पर", "क्लिक"]), _seg(57.7, 59.0, ["सेट", "करने", "के", "लिए", "हमें"])]
+    stretches.answers[(56.2, 57.7)] = [_seg(56.2, 57.6, ["अपने", "caption", "set", "करने", "के", "लिए"])]
+    levels = _levels(60, voiced=[(50, 59)])
+    out = transcription._fill_skipped(None, Path("a.wav"), segments, "hi", "transcribe", [], levels, within=(50.0, 59.0))
+    assert [s.text for s in out] == ["पर क्लिक", "अपने caption set करने के लिए", "हमें"]
+
+
+def test_speech_that_gives_nothing_is_left_empty_and_logged(stretches, caplog):
+    """Never invented: what Whisper won't say again stays uncaptioned."""
+    import logging
+
+    from app.services import transcription
+
+    segments = [_seg(20.0, 25.5, ["a"]), _seg(27.6, 29.0, ["b"])]
+    levels = _levels(30, voiced=[(20, 29)])
+    with caplog.at_level(logging.INFO, logger="app.services.transcription"):
+        out = transcription._fill_skipped(None, Path("a.wav"), segments, "hi", "transcribe", [], levels, within=(20.0, 29.0))
+    assert [s.text for s in out] == ["a", "b"]
+    assert "left uncaptioned" in caplog.text
+
+
+def test_a_recovered_segment_the_snap_moved_back_is_kept(tmp_path, monkeypatch):
+    """Found at 77.48 s with its start snapped to 77.25 s: it was thrown away, words and all."""
+    import subprocess
+
+    from app.services import transcription
+
+    audio = tmp_path / "a.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=duration=90", "-ar", "16000", str(audio)], check=True)
+    found = _seg(77.48, 79.86, ["हम", "लोग", "डाउनलोड"])
+    found.start_ms = 77_250
+    monkeypatch.setattr(transcription, "_decode", lambda *a, **k: ([found], None))
+
+    kept = transcription._decode_stretch(None, audio, 77.48, 87.74, "hi", "transcribe", [], [])
+    assert [s.text for s in kept] == ["हम लोग डाउनलोड"]

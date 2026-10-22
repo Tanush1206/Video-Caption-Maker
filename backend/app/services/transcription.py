@@ -746,6 +746,78 @@ SKIPPED_GAP_SECONDS = 4.0
 # nothing new.
 SKIPPED_DEPTH = 3
 
+# A shorter stretch is decoded again too when it is mostly speech (v1.0.10).
+# Whisper can file a stretch under a segment that holds only its first few
+# words: on the Hinglish tutorial large-v3 gave 8.3-27.6 s as "जाया आपकी
+# ओडियो इंदी में क्यों ना हो", and once the last word was capped the 2.1 s
+# after it ("manually koi text likhna nahi padta hai") had no caption, too
+# short for the 4 s rule. Decoded alone it came back word for word. Voiced
+# means the speech band within VOICED_DB of the clip's speaking level (the
+# 80th percentile of its louder half), counted in ONSET_WINDOW_SECONDS
+# windows whose middle is inside the stretch.
+UNCAPTIONED_SPEECH_SECONDS = 0.7
+VOICED_DB = 18.0
+
+
+def _speaking_level(levels: list[float]) -> float:
+    louder = sorted(levels)[len(levels) // 2:]
+    return louder[int(len(louder) * 0.8)] if louder else SILENT_DB
+
+
+def _voiced_seconds(start: float, end: float, levels: list[float], speaking: float) -> float:
+    """How much of `start`-`end` is at speaking level, in whole envelope windows."""
+    first = int(start / ONSET_WINDOW_SECONDS + 0.5)
+    last = int(end / ONSET_WINDOW_SECONDS - 0.5)
+    windows = levels[max(0, first): max(0, last + 1)]
+    return sum(1 for level in windows if level >= speaking - VOICED_DB) * ONSET_WINDOW_SECONDS
+
+
+def _said(segment: Segment) -> tuple[float, float]:
+    """When a segment's words were said, in seconds: what its captions are timed to."""
+    timed = [(s, e) for s, e, w in segment.speech if w]
+    if not timed:
+        return segment.start_ms / 1000, segment.end_ms / 1000
+    return timed[0][0] / 1000, timed[-1][1] / 1000
+
+
+def _bare(word: str) -> str:
+    return word.strip(".,;:!?…।॥\"'“”‘’()[]—–-").lower()
+
+
+def _repeated(tail: list[str], head: list[str]) -> int:
+    """
+    How many words at the end of `tail` the start of `head` says again.
+
+    A stretch decoded alone can hear the edge of its neighbour, whose words
+    were timed a little late or early: the 2.1 s recovered at 25.5 s ended
+    "…सबसे पहले हम" and the next segment began "हम यहीं". One word in four
+    may differ, for the same word spelled in another script ("set", "सेट").
+    """
+    for size in range(min(len(tail), len(head), 6), 0, -1):
+        pairs = list(zip(tail[-size:], head[:size]))
+        if sum(_bare(a) != _bare(b) for a, b in pairs) <= size // 4:
+            return size
+    return 0
+
+
+def _without(segment: Segment, count: int, from_start: bool) -> Segment | None:
+    """The segment with `count` words dropped from one end, or None if nothing is left."""
+    words = segment.text.split()
+    if count >= len(words):
+        return None
+    timed = [item for item in segment.speech if item[2]]
+    keep = words[count:] if from_start else words[:-count]
+    # Its timings lose the same words when they line up one to one.
+    if len(timed) == len(words):
+        timed = timed[count:] if from_start else timed[:-count]
+    return Segment(
+        start_ms=timed[0][0] if from_start and timed else segment.start_ms,
+        end_ms=timed[-1][1] if not from_start and timed else segment.end_ms,
+        text=" ".join(keep),
+        confidence=segment.confidence,
+        speech=timed or segment.speech,
+    )
+
 
 def _fill_skipped(
     model, audio_path, segments, language, task, spans, levels,
@@ -753,17 +825,46 @@ def _fill_skipped(
 ) -> list[Segment]:
     """`segments` with every long uncaptioned stretch decoded on its own and merged in."""
     lo, hi = within if within is not None else (0.0, _duration(audio_path))
+    speaking = _speaking_level(levels)
+    segments = list(segments)
     filled: list[Segment] = []
-    bounds = [lo] + [s.end_ms / 1000 for s in segments]
-    starts = [s.start_ms / 1000 for s in segments] + [hi]
+    # Between the words, not the segments' own bounds: a start the onset
+    # snap moved past the first word left a "gap" that was that word, and
+    # decoding it again said it twice ("Hamko bas. Hamko bas SRT file").
+    bounds = [lo] + [_said(s)[1] for s in segments]
+    starts = [_said(s)[0] for s in segments] + [hi]
     for index, (gap_start, gap_end) in enumerate(zip(bounds, starts)):
-        if gap_end - gap_start >= SKIPPED_GAP_SECONDS:
+        voiced = _voiced_seconds(gap_start, gap_end, levels, speaking) if levels else 0.0
+        if gap_end - gap_start >= SKIPPED_GAP_SECONDS or voiced > UNCAPTIONED_SPEECH_SECONDS:
             found = _decode_stretch(model, audio_path, gap_start, gap_end, language, task, spans, levels)
+            if not found and voiced > UNCAPTIONED_SPEECH_SECONDS:
+                # Never invented: what Whisper won't say stays empty.
+                logger.info(
+                    "%.1f s of speech at %.1f-%.1fs gave nothing usable; left uncaptioned",
+                    voiced, gap_start, gap_end,
+                )
             if found and depth + 1 < SKIPPED_DEPTH:
                 found = _fill_skipped(
                     model, audio_path, found, language, task, spans, levels,
                     within=(gap_start, gap_end), depth=depth + 1,
                 )
+            # Said once: what the recovered speech repeats of the segment
+            # before goes from it, and what the segment after repeats of it
+            # goes from that one, whose copy is the one timed late.
+            if found and filled:
+                repeat = _repeated(filled[-1].text.split(), found[0].text.split())
+                if repeat:
+                    trimmed = _without(found[0], repeat, from_start=True)
+                    found = ([trimmed] if trimmed else []) + found[1:]
+            if found and index < len(segments):
+                repeat = _repeated(found[-1].text.split(), segments[index].text.split())
+                if repeat:
+                    trimmed = _without(segments[index], repeat, from_start=True)
+                    if trimmed is None:
+                        segments[index] = found[-1]
+                        found = found[:-1]
+                    else:
+                        segments[index] = trimmed
             filled.extend(found)
         if index < len(segments):
             filled.append(segments[index])
@@ -793,7 +894,10 @@ def _decode_stretch(model, audio_path, start, end, language, task, spans, levels
         return []
     finally:
         clip.unlink(missing_ok=True)
-    found = [f for f in found if start <= f.start_ms / 1000 and f.end_ms / 1000 <= end + 0.5]
+    # A margin at both ends: the onset snap may nudge a start up to
+    # ONSET_LOOKBACK_SECONDS earlier, and without one, the first segment found
+    # at 77.48 s, snapped to 77.25 s, was thrown away with its words.
+    found = [f for f in found if start - 0.5 <= f.start_ms / 1000 and f.end_ms / 1000 <= end + 0.5]
     if found:
         logger.info("Recovered %d segment(s) between %.1fs and %.1fs", len(found), start, end)
     return found
