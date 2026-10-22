@@ -12,9 +12,9 @@ Hindi in Roman script ("Hinglish"), chosen before anything is transcribed,
 and captions that start when their words do. **One migration**, run on
 start: videos gain how Hindi is written, what was heard, and a "held" flag;
 every existing video keeps its captions exactly as they are.
-Expected update from 1.0.8: about 8 MB (backend app code; frontend app
-layers ~7 MB); no dependency layer changes. The Hinglish models (1.5 GB and
-138 MB) download only when first used. Measured after release.
+Update from 1.0.8: **7.4 MB**, measured on the Windows GPU install
+(backend 0.2 MB, frontend 7.2 MB); no dependency layer changes. The
+Hinglish models (1.5 GB and 138 MB) download only when first used.
 
 ### Added
 - **Hinglish captions.** Hindi can now be captioned in Latin letters, with

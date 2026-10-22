@@ -747,7 +747,7 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.0.9 (in progress: caption timing, then Hinglish recognition)
+## v1.0.9 (released 2026-10-21, tag on 1a5cf30)
 Started 2026-10-19, after v1.0.8 was released and the install updated.
 Order (Tanush, 2026-10-19): Problem 1, then Problem 2, then transcription
 settings (Phase 2). The UI redesign is v1.1.0, when Tanush sends it.
@@ -985,6 +985,36 @@ Done (2026-10-21), all committed:
   progress.
 - Open: Gemini is given IndicXlit's Devanagari too; measuring it on Roman
   Hinglish needs a working key (it answered 503 today).
+
+### Release check (2026-10-22)
+- Tag v1.0.9 on 1a5cf30; CI green on it; `release.yml` green; 8 assets,
+  all 7 match SHA256SUMS; the 1.0.9 images fetch anonymously (200).
+- Backup per DATABASE.md §7 before the update (23 s downtime):
+  `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.0.9` (vcm.dump 30 KB,
+  vcm-media.tgz 284 MB, .env copy, rowcounts: 1 video, 121 captions, 5
+  exports, 1 style, caption-text md5). Kept until Tanush confirms.
+- `vcm update` (Windows GPU) in 118 s: VCM_VERSION 1.0.9, alembic
+  `b6e0f4a9c2d1` (head); rows and caption-text md5 unchanged; video 84 has
+  no script (Devanagari until a Redo) and isn't held. Download **7.4 MB**:
+  backend CUDA 4/15 layers, 0.2 MB; frontend 4/10 layers, 7.2 MB.
+- Guard (POST, so the rules past "safe methods" apply): own origin passes
+  at localhost and 127.0.0.1; another port, another origin, cross-site and a
+  rebinding Host 403. `flow.js` PASS at both addresses.
+- First use on the install: the language step said "Downloads 1.5 GB the
+  first time"; Hindi heard at 98% 12.7 s after picking `hinglish.mp4`;
+  Apex downloaded in 2 min 18 s, converted in 4 s, transcribed 228 s in
+  10 s ("To videos mein captions auto / generate karne ka aisa tarika …").
+  Spanish: IndicXlit downloaded (shown as "Downloading the Hindi
+  transliterator (first use only)") in 15 s, converted in 4 s; captions in
+  Spanish. A second upload's detection waited behind the first job's
+  download, as designed (Spanish captions, so nothing was asked).
+- E2E on the install: same, en, mr with SRT, VTT, MP4 ALL PASSED.
+- Test videos 89-93 deleted (91, 93 by flow.js; 89, 90, 92 through the
+  API); the install holds only video 84 again.
+- Secrets: none in history or the 1.0.9 images (no .env, key, dump, extra
+  cert, or model file). History does hold `docs/learning-guide.md`, added
+  and untracked on 2026-08-06 (79da389, 4dc2628): not a secret, predates
+  the rule; rewriting published history would be Tanush's call.
 
 ### Then: transcription settings (Phase 2)
 Keep only what measurably helps, with a before/after table per setting and
