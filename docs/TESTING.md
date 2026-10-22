@@ -140,6 +140,7 @@ node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 
 node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script script-fonts
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 caption-timing   # read-only; VCM_CHECK_SECONDS (default 20) of playback
+VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 redo-script      # read-only
 VCM_SAFE_VIDEOS=<16:9 id>,<9:16 id>,<1:1 id> node checks.js http://localhost:3000 caption-safe-area layout-parity   # the same; layout-parity needs the dev stack
 node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes data: test installs only
 ```
@@ -160,6 +161,7 @@ what the 9:16 run is for.
 | `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
 | `checks.js editor-languages` | the editor's caption-language picker doesn't offer every served language with its own and English name, or its search (English name, own name, accents optional), Enter, Escape or outside click don't work. Read-only |
 | `checks.js language-step` | the language step lacks a card per served language, or its search by English name, own name or code doesn't filter the cards, or a found language can't be chosen. Read-only: the upload a picked file starts (v1.0.9) is answered by the check itself |
+| `checks.js redo-script` | the editor's Redo doesn't offer "Hindi in" for a video with no language recorded (made before v1.0.9) or one heard as Hindi, offers it for one heard as English, doesn't default to Devanagari, or doesn't send Hinglish when chosen. The Redo request is answered by the check. Needs a completed video; read-only (v1.0.10) |
 | `checks.js hindi-script` | at 375 or 1440 px, with the API's answers mocked: Hindi heard at 94% doesn't preset Hinglish or say what was heard; Marathi doesn't ask with nothing preset, offer three answers and hold Start until one is picked; no answer in 15 s doesn't ask without holding Start; English captions ask; Back doesn't delete the upload; Start doesn't send exactly the choice (`spoken_language`, `caption_language`, `hindi_script`); axe isn't 0 with the choice open, in light and dark. Read-only (v1.0.9) |
 | `checks.js script-fonts` | an Indic caption isn't drawn in its bundled Noto face (Chromium's own report of the fonts used), or the Latin words in it are. Read-only |
 | `checks.js style-sliders` | any style slider at 375 or 1440 px doesn't follow a drag, moves while dragged, ignores a click or an arrow key, shows a different number, doesn't update the preview within 0.5 s, or doesn't survive a reload |
@@ -200,6 +202,32 @@ captions, speech with no caption on screen, a caption more than 0.5 s past
 its last word, or one outside 0.8-7 s. Measured for v1.0.8 on a 228-second
 Hinglish tutorial: both pass for Hindi, Marathi, English and Spanish; on the
 v1.0.7 code both fail. Delete the videos afterwards (AGENTS.md rule 20).
+
+### Speech with no caption: `backend/scripts/coverage_check.py` (v1.0.10)
+
+```bash
+docker compose exec -T worker python scripts/coverage_check.py <id> [<id> ...]
+```
+
+Fails when a stretch of speech goes more than 0.7 s with no caption on
+screen. Speech comes from the audio, not from the speech model: the speech
+band in 20 ms windows within 18 dB of the clip's speaking level, dips under
+150 ms bridged (so a loud room or music counts too: listen before calling
+it a bug). Measured for v1.0.10 on the Hinglish tutorial (228 s), through
+the app's pipeline:
+
+| Model | v1.0.9 | v1.0.10 |
+|---|---|---|
+| large-v3, GPU (the installed video 84) | 2: 25.52-27.60 s, 77.50-80.00 s | 0 |
+| large-v3-turbo, GPU | 2: 56.24-57.74 s, 77.86-78.88 s | 0 |
+| large-v3-turbo, CPU | 2: 66.44-67.30 s, 67.52-69.00 s | 0 |
+| Apex (Hinglish), GPU and CPU | 0 | 0 |
+
+Caption starts stayed within their v1.0.9 figures; no word pair is
+repeated; WER (loose) moved 56.4 → 55.3% (large-v3), 53.8 → 51.9% and
+52.7 → 50.0% (turbo GPU, CPU), Apex unchanged. The re-decoding costs time
+on the CPU (turbo 115 → 147 s for the 228 s clip). On the dev stack, two
+uploads (Hinglish and Devanagari) pass this and `timing_check.py`.
 
 ### Caption starts against the speech (v1.0.9)
 

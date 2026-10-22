@@ -223,6 +223,17 @@ Rules the code enforces:
   more with no caption is cut out and decoded again on its own, repeatedly
   inside what that finds, three levels deep (`_fill_skipped`). Invented text
   over silence is dropped by the same silence check as the rest.
+  Since v1.0.10, on every model:
+  - a shorter stretch is decoded again too when more than 0.7 s of it is
+    speech (the speech band within 18 dB of the clip's speaking level);
+  - stretches are measured between the words, not the segments' bounds (a
+    snapped start isn't a gap);
+  - what a stretch decoded alone finds may start up to 0.5 s before it (the
+    onset snap nudges starts back by up to 0.25 s);
+  - a word it repeats from either neighbour is said once (one word in four
+    may be spelled differently, "set"/"सेट"), the copy timed late dropped;
+  - speech that still decodes to nothing is left empty and logged, never
+    invented.
 - **Captions are phrases timed to the speech** (v1.0.8,
   `services/phrasing.py`), the last step before saving, in every language:
   - each segment carries its words' timings (`Segment.speech`), kept through

@@ -6,6 +6,25 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.10] - 2026-10-22
+
+Captions for every stretch of speech. No migration. Expected update from
+1.0.9: about 7 MB (backend app code; frontend app layers ~7 MB); no
+dependency layer changes. Measured after release.
+
+### Fixed
+- **Speech with no caption.** A stretch of 1–2.5 s where someone was
+  speaking could be left without a caption (two on the Hindi tutorial with
+  the large speech model, at 25 s and 77 s). Short stretches of speech are
+  now listened to again on their own; one that was found but thrown away
+  over a timing rounding is kept; and words heard on both sides of a join
+  are said once. Speech that still can't be made out is left empty rather
+  than guessed. Captions made before keep their gaps until a Redo.
+- **Redo offered no Hinglish for older videos.** A video captioned before
+  v1.0.9 had no language recorded, so the editor's Redo didn't offer
+  "Hindi in" and stayed in Devanagari. It's offered now unless the video is
+  known not to be Hindi.
+
 ## [1.0.9] - 2026-10-21
 
 Hindi in Roman script ("Hinglish"), chosen before anything is transcribed,

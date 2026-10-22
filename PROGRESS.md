@@ -747,6 +747,61 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## v1.0.10 (in progress: speech with no caption)
+Brief (Tanush, 2026-10-22): stretches of 1-2 s where someone speaks and no
+caption appears, seen on video 84 after a Redo. Find every one (over 0.7 s)
+on video 84 and `hinglish.mp4`, find why, fix with the smallest change on
+every model and both scripts, never invent text, tests that fail before and
+pass after, release as v1.0.10.
+
+### Findings
+- Video 84 is **not** in Hinglish: its Redo ran on large-v3 in Devanagari
+  (`hindi_script` NULL, captions "यह एक्सुलिम हमारी SRT…"). The editor offered
+  "Hindi in" only for videos already heard as Hindi, and a video from
+  before v1.0.9 had nothing recorded until its next job. Fixed: offered
+  unless the video is known not to be Hindi.
+- Uncaptioned speech over 0.7 s (audio: speech band within 18 dB of the
+  speaking level), `hinglish.mp4` = video 84's audio:
+  - large-v3: 25.52-27.60 s "manually koi text likhna nahi padta hai. To
+    sabse pehle hum" and 77.50-80.00 s "Islie ham log download ke actions par
+    click karenge." (both on video 84; its two other caption gaps, at 145 s
+    and 200 s, aren't speech);
+  - turbo GPU: 56.24-57.74 s, 77.86-78.88 s; turbo CPU: 66.44-67.30 s,
+    67.52-69.00 s;
+  - Apex GPU and CPU: none.
+- Why (none of VAD, the no-speech/log-probability/compression filters, or
+  phrasing: VAD is off on every path, the segments had logprob -0.09 and
+  no_speech 0.16, and phrasing never saw the words):
+  1. 25.5-27.6 s: large-v3 put 8.3-27.6 s in one segment holding only its
+     first words; after the word-length cap the 2.1 s left was under the 4 s
+     re-decode rule. Decoded alone it gives "कोई text इतना नहीं पड़ता है तो
+     सबसे पहले हम".
+  2. 77.5-80.0 s: re-decoding ran and found "हम लोग डाउनलोड के एक्शन पर
+     क्लिक करेंगे", but the onset snap had moved its start to 77.25 s, before
+     the 77.48 s stretch, and `_decode_stretch`'s filter threw it away.
+  The re-decoding (`_fill_skipped`) runs on the Apex path as on the others.
+- First fix (rule and margin) left two side effects, both fixed: gaps
+  measured from snapped segment starts made a false "gap" of the next
+  caption's own words (Apex said "Hamko bas" twice; 3 late caption starts),
+  and recovered stretches repeated their neighbours' edge words.
+
+### Done
+- [x] `services/transcription.py`: short voiced stretches re-decoded;
+      0.5 s margin at a stretch's start; gaps between words; edge repeats
+      said once; nothing usable is logged and left empty.
+- [x] Measured (TESTING.md, "Speech with no caption"): 0 uncaptioned
+      stretches on large-v3, turbo GPU/CPU and Apex GPU/CPU; caption starts
+      as in v1.0.9; no repeated word pairs; WER equal or better.
+- [x] Tests: 7 in `test_transcription.py` (5 fail on v1.0.9; the 2 that
+      pass guard against re-decoding silence or snapped starts);
+      `checks.js redo-script` (fails on v1.0.9's editor);
+      `backend/scripts/coverage_check.py` for real videos.
+- [x] Dev stack: Hinglish and Devanagari uploads of `hinglish.mp4` pass
+      `coverage_check.py` and `timing_check.py`; deleted (7588, 7589).
+      Video 84 on the install was only read.
+- [x] Backend 519 passed, 1 skipped; ruff, frontend lint, type-check and
+      tests clean.
+
 ## v1.0.9 (released 2026-10-21, tag on 1a5cf30)
 Started 2026-10-19, after v1.0.8 was released and the install updated.
 Order (Tanush, 2026-10-19): Problem 1, then Problem 2, then transcription
