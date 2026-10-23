@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { Segmented } from "@/components/ui/segmented";
 import type { Playback } from "@/hooks/use-playback";
 import { PLAYBACK_RATES } from "@/hooks/use-playback";
 import { formatTimecode } from "@/lib/format";
@@ -28,7 +29,7 @@ function PlaybackClock({ playback }: { playback: Playback }) {
 
   return (
     <span
-      className="font-mono text-mono-data font-semibold tabular-nums text-foreground"
+      className="font-mono text-sm tabular-nums text-foreground"
       ref={output}
     >
       00:00.000
@@ -36,8 +37,9 @@ function PlaybackClock({ playback }: { playback: Playback }) {
   );
 }
 
+// Plain icons: the screen's one filled button is Export.
 const buttonClass =
-  "flex size-8 items-center justify-center rounded-sm border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground";
+  "flex size-11 items-center justify-center rounded-full text-foreground transition-colors duration-200 ease-out hover:bg-surface-3 sm:size-9";
 
 interface PlayerControlsProps {
   playback: Playback;
@@ -53,13 +55,13 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
   const silent = playback.isMuted || playback.volume === 0;
 
   return (
-    <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2 sm:grid-cols-[1fr_auto_1fr]">
+    <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 sm:grid-cols-[1fr_auto_1fr]">
       {/* Three explicit columns rather than a flex row: the transport stays
           optically centred no matter how wide the timecode or the speed
           buttons get, which a flex row with ml-auto cannot guarantee. */}
       <div className="flex min-w-0 items-baseline gap-1.5">
         <PlaybackClock playback={playback} />
-        <span className="font-mono text-mono-data-sm tabular-nums text-muted-foreground">
+        <span className="font-mono text-sm tabular-nums text-muted-foreground">
           / {formatTimecode(playback.durationMs)}
         </span>
       </div>
@@ -79,12 +81,12 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
           type="button"
           onClick={playback.toggle}
           aria-label={playback.isPlaying ? "Pause" : "Play"}
-          className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          className="flex size-11 items-center justify-center rounded-full text-foreground transition-colors duration-200 ease-out hover:bg-surface-3"
         >
           {playback.isPlaying ? (
-            <Pause className="size-5 fill-current" />
+            <Pause className="size-6 fill-current" />
           ) : (
-            <Play className="size-5 translate-x-px fill-current" />
+            <Play className="size-6 translate-x-px fill-current" />
           )}
         </button>
 
@@ -108,7 +110,7 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
         {hasAudioTrack === false ? (
           <span
             title="FFmpeg found no audio stream in this file"
-            className="flex items-center gap-1.5 text-body-sm text-muted-foreground"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground"
           >
             <VolumeX className="size-4" />
             <span className="hidden sm:inline">No audio</span>
@@ -120,11 +122,7 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
               onClick={playback.toggleMute}
               aria-label={playback.isMuted ? "Unmute" : "Mute"}
               aria-pressed={playback.isMuted}
-              className={cn(
-                buttonClass,
-                silent &&
-                  "bg-destructive/15 text-destructive hover:bg-destructive/25 hover:text-destructive"
-              )}
+              className={cn(buttonClass, silent && "text-destructive")}
             >
               {silent ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
             </button>
@@ -136,7 +134,7 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
               value={playback.isMuted ? 0 : playback.volume}
               onChange={(event) => playback.changeVolume(Number(event.target.value))}
               aria-label="Volume"
-              className="hidden w-16 accent-primary sm:block"
+              className="hidden w-16 accent-[hsl(var(--accent))] sm:block"
             />
           </div>
         )}
@@ -147,32 +145,20 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
       {playback.intrinsic && (
         <span
           title="Source resolution — the file is served exactly as uploaded"
-          className="hidden font-mono text-mono-data-sm tabular-nums text-muted-foreground lg:inline"
+          className="hidden text-sm tabular-nums text-muted-foreground xl:inline"
         >
           {playback.intrinsic.width}&times;{playback.intrinsic.height}
         </span>
       )}
 
-        {/* A segmented control, not four loose buttons: these are one setting
-            with four positions, and a bordered group says so. */}
-        <div className="flex rounded-sm border border-border bg-card p-0.5">
-          {PLAYBACK_RATES.map((rate) => (
-            <button
-              key={rate}
-              type="button"
-              onClick={() => playback.changeRate(rate)}
-              aria-pressed={playback.playbackRate === rate}
-              className={cn(
-                "rounded-[2px] px-1.5 py-0.5 font-mono text-mono-data-sm tabular-nums transition-colors",
-                playback.playbackRate === rate
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {rate}&times;
-            </button>
-          ))}
-        </div>
+        {/* One setting with four positions: a segmented control. */}
+        <Segmented
+          label="Playback speed"
+          segments={PLAYBACK_RATES.map((rate) => ({ value: rate, label: `${rate}×` }))}
+          value={playback.playbackRate}
+          onChange={playback.changeRate}
+          segmentClassName="px-2 tabular-nums"
+        />
       </div>
     </div>
   );

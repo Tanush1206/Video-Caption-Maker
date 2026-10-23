@@ -27,9 +27,9 @@ const MIN_DURATION_MS = 100;
  * draw time — and then go stale the moment the user flipped between light and
  * dark, because nothing re-runs the draw. A mid grey reads correctly on both.
  */
-const WAVE_COLOR = "rgba(148, 163, 184, 0.55)";
-const RULER_COLOR = "rgba(148, 163, 184, 0.35)";
-const RULER_TEXT = "rgba(148, 163, 184, 0.9)";
+const WAVE_COLOR = "rgba(142, 142, 147, 0.5)";
+const RULER_COLOR = "rgba(142, 142, 147, 0.35)";
+const RULER_TEXT = "rgba(142, 142, 147, 1)";
 
 /** Candidate gaps between ruler ticks, in milliseconds. */
 const TICK_STEPS = [
@@ -296,36 +296,34 @@ export function Timeline({
   );
 
   return (
-    <section className="rounded-lg border border-border bg-card p-3">
+    <section>
       <header className="mb-2 flex items-center justify-between">
-        <h2 className="label-caps">
-          Timeline
-        </h2>
-        <div className="flex items-center gap-2">
+        <h2 className="label-caps">Timeline</h2>
+        <div className="flex items-center gap-1">
           {isLoadingWaveform && (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
+            <span className="mr-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
               Reading audio…
             </span>
           )}
-          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-            {(windowMs / 1000).toFixed(1)}s across
+          <span className="mr-1 text-xs tabular-nums text-muted-foreground">
+            {(windowMs / 1000).toFixed(1)} s across
           </span>
           <button
             type="button"
             onClick={() => zoom(-1)}
             aria-label="Zoom out"
-            className="rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-surface-2 hover:text-foreground sm:size-8"
           >
-            <ZoomOut className="h-3.5 w-3.5" />
+            <ZoomOut className="size-4" />
           </button>
           <button
             type="button"
             onClick={() => zoom(1)}
             aria-label="Zoom in"
-            className="rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-surface-2 hover:text-foreground sm:size-8"
           >
-            <ZoomIn className="h-3.5 w-3.5" />
+            <ZoomIn className="size-4" />
           </button>
         </div>
       </header>
@@ -334,7 +332,7 @@ export function Timeline({
         ref={container}
         onPointerDown={handleTrackPointerDown}
         style={{ height: TRACK_HEIGHT }}
-        className="relative w-full cursor-pointer select-none overflow-hidden rounded-md bg-muted/30"
+        className="relative w-full cursor-pointer select-none overflow-hidden rounded-lg bg-surface-2"
       >
         <canvas
           ref={canvas}
@@ -363,15 +361,16 @@ export function Timeline({
                 height: TRACK_HEIGHT - RULER_HEIGHT - 12,
               }}
               className={cn(
-                "absolute overflow-hidden rounded border text-[10px] leading-tight transition-colors",
-                caption.id === activeCaptionId
-                  ? "border-primary bg-primary/25"
-                  : "border-primary/30 bg-primary/10 hover:bg-primary/20",
-                dragging && "border-primary bg-primary/30"
+                // Neutral blocks; the one under the playhead takes the
+                // accent (the selected state).
+                "absolute overflow-hidden rounded-md text-[11px] leading-tight transition-colors duration-150 ease-out",
+                caption.id === activeCaptionId || dragging
+                  ? "bg-primary/20 ring-1 ring-inset ring-accent"
+                  : "bg-surface-3 hover:bg-surface-3/70"
               )}
               title={caption.text}
             >
-              <span className="pointer-events-none block truncate px-2 py-1 text-foreground/80">
+              <span className="pointer-events-none block truncate px-2 py-1 text-foreground">
                 {caption.text}
               </span>
 
@@ -385,7 +384,7 @@ export function Timeline({
                   role="separator"
                   aria-label={`Drag the ${edge} of this caption`}
                   className={cn(
-                    "absolute inset-y-0 w-2 cursor-ew-resize bg-primary/40 hover:bg-primary",
+                    "absolute inset-y-0 w-2 cursor-ew-resize bg-transparent transition-colors duration-150 ease-out hover:bg-accent",
                     edge === "start" ? "left-0" : "right-0"
                   )}
                 />
@@ -397,17 +396,18 @@ export function Timeline({
         {/* Fixed red, deliberately outside the theme. Every video tool draws
             the playhead red, and it has to stay legible over an arbitrary
             waveform in either theme — a token that shifts with the palette
-            could land the same colour as the caption blocks behind it. */}
+            could land the same colour as the caption blocks behind it. Flat:
+            no glow (v1.1.0). */}
         <div
           ref={playhead}
-          className="pointer-events-none absolute top-0 h-full w-0.5 bg-[#ef4444] shadow-[0_0_6px_rgba(239,68,68,0.6)]"
+          className="pointer-events-none absolute top-0 h-full w-0.5 bg-[#FF3B30]"
           style={{ willChange: "transform" }}
         >
-          <div className="absolute -left-[3px] top-0 size-2 rotate-45 rounded-[1px] bg-[#ef4444]" />
+          <div className="absolute -left-[3px] top-0 size-2 rounded-full bg-[#FF3B30]" />
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
         <span>Drag a caption&apos;s edge to retime it · click the track to seek</span>
         {drag && (
           <span className="font-mono tabular-nums text-primary">
@@ -424,7 +424,7 @@ export function Timeline({
         onChange={(event) => setWindowStartMs(Number(event.target.value))}
         aria-label="Scroll the timeline"
         disabled={maxStart <= 0}
-        className="mt-2 w-full accent-primary disabled:opacity-30"
+        className="mt-2 w-full accent-[hsl(var(--accent))] disabled:opacity-30"
       />
     </section>
   );

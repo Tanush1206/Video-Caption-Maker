@@ -7,6 +7,11 @@ import { cn } from "@/lib/utils";
 import { formatTimecode } from "@/lib/format";
 import type { Caption } from "@/types/caption";
 
+
+/** The row's tools: plain grey icons, 44 px on a phone. */
+const ICON_BUTTON =
+  "flex size-11 items-center justify-center rounded-full transition-colors duration-200 ease-out hover:bg-surface-3 sm:size-8";
+
 /** Whisper's avg_logprob; below this the line is usually worth checking. */
 const LOW_CONFIDENCE = -1.0;
 
@@ -112,18 +117,13 @@ export function CaptionRow({
     caption.override_scale !== null;
 
   return (
-    // A card per caption rather than a table row. Each one is an editable
-    // object with its own timing, text and actions, and flush rows made a
-    // wrapped two-line caption hard to tell from the next caption entirely.
+    // A row per caption (v1.1.0): the list separates them with hairlines,
+    // and the one under the playhead sits on the grouped grey.
     <div
       ref={registerRow}
       className={cn(
-        "group rounded-lg border p-3 transition-colors",
-        isActive
-          ? "border-primary/60 bg-primary/10"
-          : lowConfidence
-            ? "border-warning/40 bg-surface-1 hover:bg-surface-2"
-            : "border-border bg-surface-1 hover:border-input hover:bg-surface-2"
+        "group rounded-xl px-3 py-2.5 transition-colors duration-200 ease-out",
+        isActive ? "bg-surface-2" : "hover:bg-surface-2/60"
       )}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -132,11 +132,11 @@ export function CaptionRow({
           onClick={onSeek}
           title="Jump the video here"
           className={cn(
-            "flex items-center gap-2 font-mono text-xs tabular-nums transition-colors hover:text-primary",
-            isActive ? "font-semibold text-primary" : "text-muted-foreground"
+            "flex min-h-8 items-center gap-1.5 rounded-md font-mono text-xs tabular-nums transition-colors duration-200 ease-out hover:text-primary",
+            isActive ? "text-primary" : "text-muted-foreground"
           )}
         >
-          <PlayCircle className={cn("size-4", isActive && "fill-primary/20")} />
+          <PlayCircle className="size-4" />
           {formatTimecode(caption.start_ms)}
           <span aria-hidden="true">→</span>
           <span className="sr-only">to</span>
@@ -144,8 +144,8 @@ export function CaptionRow({
         </button>
 
         {lowConfidence && (
-          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[11px] font-medium text-warning group-hover:hidden">
-            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground group-hover:hidden">
+            <span className="size-2 rounded-full bg-warning" aria-hidden="true" />
             Check this line
           </span>
         )}
@@ -165,22 +165,20 @@ export function CaptionRow({
           title={emphasised ? "Remove emphasis" : "Emphasise this caption"}
           aria-label="Toggle emphasis"
           className={cn(
-            "rounded p-1.5 transition hover:bg-muted",
-            emphasised
-              ? "text-warning"
-              : "text-muted-foreground hover:text-foreground"
+            ICON_BUTTON,
+            emphasised ? "text-primary" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          <Highlighter className="h-3.5 w-3.5" />
+          <Highlighter className="size-4" />
         </button>
         <button
           type="button"
           onClick={onSplit}
           title="Split at midpoint"
           aria-label="Split caption"
-          className="rounded p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          className={cn(ICON_BUTTON, "text-muted-foreground hover:text-foreground")}
         >
-          <Scissors className="h-3.5 w-3.5" />
+          <Scissors className="size-4" />
         </button>
         <button
           type="button"
@@ -188,18 +186,18 @@ export function CaptionRow({
           disabled={isLast}
           title={isLast ? "No caption after this one" : "Merge with next"}
           aria-label="Merge with next caption"
-          className="rounded p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-30"
+          className={cn(ICON_BUTTON, "text-muted-foreground hover:text-foreground disabled:opacity-30")}
         >
-          <CornerRightDown className="h-3.5 w-3.5" />
+          <CornerRightDown className="size-4" />
         </button>
         <button
           type="button"
           onClick={onDelete}
           title="Delete caption"
           aria-label="Delete caption"
-          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          className={cn(ICON_BUTTON, "text-muted-foreground hover:text-destructive")}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="size-4" />
         </button>
         </div>
       </div>
@@ -218,9 +216,9 @@ export function CaptionRow({
         className={cn(
           // Reads as text, not a form field, until it is touched: DESIGN.md's
           // "transparent background and seamless borders".
-          "-mx-1.5 w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-1 text-[15px] leading-relaxed transition-colors",
-          "hover:border-border focus:border-ring focus:bg-background/40 focus:outline-none",
-          dirty ? "border-primary/50" : "border-transparent"
+          "-mx-1.5 w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-1 text-[15px] leading-[22px] transition-colors duration-200 ease-out",
+          "hover:border-border focus:border-ring focus:bg-background focus:outline-none",
+          dirty ? "border-accent/60" : "border-transparent"
         )}
         aria-label={`Caption at ${formatTimecode(caption.start_ms)}`}
       />

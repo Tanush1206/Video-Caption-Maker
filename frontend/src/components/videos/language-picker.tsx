@@ -134,8 +134,8 @@ export function LanguagePicker({
         aria-label={`${label}: ${selected ? (selected.native ?? selected.label) : "none"}`}
         onClick={() => setOpen((was) => !was)}
         className={cn(
-          "flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 text-left text-sm",
-          "transition-colors hover:border-muted-foreground/40 disabled:cursor-not-allowed disabled:opacity-50"
+          "flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 text-left text-[15px] sm:h-8 sm:text-sm",
+          "transition-colors duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-40"
         )}
       >
         <span className="min-w-0 truncate">
@@ -156,7 +156,7 @@ export function LanguagePicker({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-1 w-full min-w-[15rem] overflow-hidden rounded-md border border-border bg-card shadow-lg">
+        <div className="absolute right-0 z-30 mt-1 w-full min-w-[15rem] overflow-hidden rounded-xl border border-border/60 bg-background shadow-overlay dark:bg-surface-3">
           <div className="flex items-center gap-2 border-b border-border px-2">
             <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
             <input
@@ -191,7 +191,7 @@ export function LanguagePicker({
                   onPointerEnter={() => setActive(index)}
                   className={cn(
                     "flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-sm",
-                    index === active ? "bg-muted" : undefined,
+                    index === active ? "bg-surface-2 dark:bg-background/40" : undefined,
                     isSelected && "text-primary"
                   )}
                 >

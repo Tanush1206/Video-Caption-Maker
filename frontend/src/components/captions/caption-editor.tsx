@@ -231,10 +231,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   if (isError) {
     return (
-      <p
-        role="alert"
-        className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-      >
+      <p role="alert" className="text-sm text-destructive">
         Couldn&apos;t load captions: {(error as Error).message}
       </p>
     );
@@ -242,11 +239,9 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   if (captions.length === 0) {
     return (
-      <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-subtle px-6 py-16 text-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <FileText className="size-5" />
-        </span>
-        <p className="mt-4 text-sm font-medium">No captions yet</p>
+      <div className="flex flex-col items-center px-6 py-16 text-center">
+        <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
+        <p className="mt-3 text-[15px] font-semibold">No captions yet</p>
         <p className="mt-1 max-w-xs text-sm text-muted-foreground">
           {video.status === "completed"
             ? "Transcription found no speech in this video. Music under the voice is the usual reason — try again, or write the captions yourself."
@@ -321,51 +316,55 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           auto-detect by more than twice the coverage. "What should the
           captions say" is a translation, and a different operation entirely. */}
       {languageOptions && (
-        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border/70 bg-background/30 px-2.5 py-2">
-          <div className="flex items-center gap-1.5 text-[11px]">
-            <span className="text-muted-foreground" aria-hidden="true">Captions</span>
-            {/* Every language is offered, as on the dashboard's language step:
-                translation runs locally, so none of them needs a key. */}
-            <LanguagePicker
-              label="Caption language"
-              options={languageOptions.caption}
-              value={captionLanguage}
-              onChange={setCaptionLanguage}
-              className="w-56"
-            />
+        <div className="mb-4">
+          <div className="group-inset">
+            <div className="group-row">
+              <span className="shrink-0 text-sm" aria-hidden="true">
+                Captions
+              </span>
+              {/* Every language is offered, as on the dashboard's language step:
+                  translation runs locally, so none of them needs a key. */}
+              <LanguagePicker
+                label="Caption language"
+                options={languageOptions.caption}
+                value={captionLanguage}
+                onChange={setCaptionLanguage}
+                className="w-48"
+              />
+            </div>
+
+            {offerScript && languageOptions.hindi_scripts.length > 0 && (
+              <div className="group-row">
+                <label htmlFor="redo-hindi-script" className="shrink-0 text-sm">
+                  Hindi in
+                </label>
+                <Select
+                  id="redo-hindi-script"
+                  size="sm"
+                  value={hindiScript}
+                  onChange={(event) => setHindiScript(event.target.value)}
+                  className="w-48"
+                >
+                  {languageOptions.hindi_scripts.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </div>
 
-          {offerScript && languageOptions.hindi_scripts.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <label htmlFor="redo-hindi-script" className="text-muted-foreground">
-                Hindi in
-              </label>
-              <Select
-                id="redo-hindi-script"
-                size="sm"
-                value={hindiScript}
-                onChange={(event) => setHindiScript(event.target.value)}
-                className="w-48"
-              >
-                {languageOptions.hindi_scripts.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
-
           {!captionOffered ? (
-            <span className="text-[10px] text-muted-foreground">
+            <p className="mt-1.5 px-4 text-xs text-muted-foreground">
               {languageName(captionLanguage, languageOptions)} captions are no longer offered. Choose a
               language to redo.
-            </span>
+            </p>
           ) : (
             languageChanged && (
-              <span className="text-[10px] text-muted-foreground">
+              <p className="mt-1.5 px-4 text-xs text-muted-foreground">
                 Press Redo to apply — it re-transcribes and replaces every caption.
-              </span>
+              </p>
             )
           )}
         </div>
@@ -388,7 +387,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           two bordered cards reads as a third stray line. */}
       <div
         ref={list}
-        className="relative min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1"
+        className="relative min-h-0 flex-1 space-y-0.5 overflow-y-auto"
       >
         {captions.map((caption, index) => (
           <CaptionRow
@@ -470,13 +469,9 @@ function ToolButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="flex items-center gap-1.5 rounded-md border border-border/70 bg-background/40 px-2 py-1 text-xs font-medium transition-colors hover:border-primary/50 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border/70 disabled:hover:bg-background/40"
+      className="flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm text-primary transition-colors duration-200 ease-out hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-8"
     >
-      {spinning ? (
-        <Loader2 className="size-3 animate-spin" />
-      ) : (
-        <Icon className="size-3" />
-      )}
+      {spinning ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
       {children}
     </button>
   );
