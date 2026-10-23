@@ -277,6 +277,130 @@ def test_a_segment_invented_over_silence_is_dropped():
     assert _silent_fraction(116.0, 121.0, spans) < SILENT_OVERLAP_TO_DROP
 
 
+def test_silence_is_judged_against_how_loud_the_recording_speaks():
+    """Ordinary speech keeps -40 dB; quiet speech moves it down; a silent track stays silence."""
+    from app.services.transcription import SILENCE_FLOOR_DB, SILENCE_NOISE_DB, silence_threshold
+
+    assert silence_threshold([-24.0] * 80 + [-70.0] * 20) == SILENCE_NOISE_DB
+    assert silence_threshold([-60.0] * 80 + [-90.0] * 20) == -75.0
+    assert silence_threshold([-120.0] * 100) == SILENCE_FLOOR_DB
+    assert silence_threshold([]) == SILENCE_NOISE_DB
+
+
+def test_a_quiet_recording_is_not_taken_for_silence(tmp_path):
+    """
+    v1.0.11: 27 of 50 English FLEURS clips, speaking at -56 to -64 dB, came
+    out with no captions: under the fixed -40 dB all of each was "silence",
+    so every segment was dropped as invented. Two seconds of tone at about
+    -55 dB, three of silence, two more: only the three are silence.
+    """
+    import subprocess
+
+    from app.services.transcription import (
+        SILENT_OVERLAP_TO_DROP,
+        _silent_fraction,
+        silence_for,
+        silent_spans,
+        vocal_envelope,
+    )
+
+    path = tmp_path / "quiet.wav"
+    tone = "aevalsrc=0.0018*sin(2*PI*1000*t):d=2:s=16000"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", tone,
+         "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono:d=3",
+         "-f", "lavfi", "-i", tone,
+         "-filter_complex", "[0][1][2]concat=n=3:v=0:a=1", "-ac", "1", str(path)],
+        capture_output=True, timeout=60, check=True,
+    )
+
+    before = silent_spans(path)
+    assert _silent_fraction(0.2, 1.8, before) >= SILENT_OVERLAP_TO_DROP
+
+    spans = silence_for(path, vocal_envelope(path))
+    assert _silent_fraction(0.2, 1.8, spans) == 0.0
+    assert _silent_fraction(5.2, 6.8, spans) == 0.0
+    assert _silent_fraction(2.2, 4.8, spans) == 1.0
+
+
+def test_faint_noise_around_clear_speech_is_still_silence(tmp_path):
+    """
+    A recording whose speech clears -40 dB keeps -40 dB, however quiet it is
+    overall. Speech at about -30 dB, then 3 s of noise at about -43 dB: the
+    noise is silence, so text invented over it is dropped. Lowered with the
+    speaking level, German FLEURS clips kept an invented "Vielen Dank." there.
+    """
+    import subprocess
+
+    from app.services.transcription import _silent_fraction, silence_for, vocal_envelope
+
+    path = tmp_path / "faint-tail.wav"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", "aevalsrc=0.03*sin(2*PI*1000*t):d=3:s=16000",
+         "-f", "lavfi", "-i", "anoisesrc=d=3:c=white:r=16000:a=0.007",
+         "-filter_complex", "[0][1]concat=n=2:v=0:a=1", "-ac", "1", str(path)],
+        capture_output=True, timeout=60, check=True,
+    )
+
+    spans = silence_for(path, vocal_envelope(path))
+    assert _silent_fraction(0.2, 2.8, spans) == 0.0
+    assert _silent_fraction(3.2, 5.8, spans) == 1.0
+
+
+def test_a_silent_recording_still_gives_no_captions(tmp_path, monkeypatch):
+    """
+    The quiet-recording rule never makes a silent track speech: text the
+    model invents over ten seconds of digital silence is still dropped.
+    """
+    import subprocess
+    from types import SimpleNamespace
+
+    from app.services import transcription
+
+    path = tmp_path / "silent.wav"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono:d=10", str(path)],
+        capture_output=True, timeout=60, check=True,
+    )
+
+    class Model:
+        def transcribe(self, path, **options):
+            word = SimpleNamespace(start=2.0, end=4.0, word=" Thank you.")
+            seg = SimpleNamespace(text=" Thank you.", start=2.0, end=4.0, words=[word], avg_logprob=-0.4)
+            return iter([seg]), SimpleNamespace(duration=10.0, language="en")
+
+    monkeypatch.setattr(transcription, "get_model", lambda: Model())
+
+    segments, _ = transcription.transcribe(path, language="en")
+    assert segments == []
+
+
+@pytest.mark.asyncio
+async def test_a_video_with_nothing_to_caption_says_so(client, auth_headers, sample_video_bytes, monkeypatch):
+    """
+    v1.0.11: a job that ends with no captions finishes with "No speech was
+    found in this video." on the video, rather than an empty list and no word.
+    """
+    from app.services import embeddings
+    from app.workers import transcription as job
+
+    monkeypatch.setattr(transcription, "load_model", lambda profile, *a, **k: None)
+    monkeypatch.setattr(transcription, "extract_audio", lambda source, dest, *a: Path(dest).write_bytes(b""))
+    monkeypatch.setattr(transcription, "detect_language", lambda path: ("en", 0.9))
+    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None: ([], language))
+    monkeypatch.setattr(embeddings, "delete_video_vectors", lambda *a: None)
+    monkeypatch.setattr(embeddings, "index_captions", lambda *a: None)
+
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    await job._run(video_id)
+
+    body = (await client.get(f"/api/videos/{video_id}", headers=auth_headers)).json()
+    assert body["status"] == "completed"
+    assert body["notice"] == transcription.NO_SPEECH_NOTICE
+
+
 def test_a_segment_reaching_back_into_silence_is_clamped():
     """
     The "captions start at 0:00 but the audio starts at 1:56" bug.
@@ -505,7 +629,7 @@ def test_nothing_past_the_no_speech_check_retries_without_it(tmp_path, monkeypat
             return iter([seg]), info
 
     monkeypatch.setattr(transcription, "get_model", lambda: Model())
-    monkeypatch.setattr(transcription, "silent_spans", lambda path: [])
+    monkeypatch.setattr(transcription, "silent_spans", lambda path, *_: [])
     monkeypatch.setattr(transcription, "vocal_envelope", lambda path, *_: [])
 
     segments, language = transcription.transcribe(tmp_path / "a.wav", language="hi")
@@ -921,7 +1045,7 @@ def test_word_timings_are_not_clipped_to_the_snapped_start(tmp_path, monkeypatch
             return iter([seg]), SimpleNamespace(duration=10.0, language="hi")
 
     monkeypatch.setattr(transcription, "get_model", lambda: Model())
-    monkeypatch.setattr(transcription, "silent_spans", lambda path: [])
+    monkeypatch.setattr(transcription, "silent_spans", lambda path, *_: [])
     monkeypatch.setattr(transcription, "vocal_envelope", lambda path, *_: [])
     monkeypatch.setattr(transcription, "_snap_to_onset", lambda start, end, levels, floor: 1.5)
 

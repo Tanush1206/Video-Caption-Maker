@@ -51,6 +51,10 @@ LOW_CONFIDENCE_NOTE = (
     "A larger speech model in Settings is more accurate."
 )
 
+# A job that finds nothing to caption (v1.0.11): nothing heard, or all of it
+# over silence. It finishes, and says so, rather than leaving an empty list.
+NO_SPEECH_NOTICE = "No speech was found in this video."
+
 
 @dataclass
 class Segment:
@@ -194,6 +198,57 @@ def has_audio_stream(path: Path) -> bool:
 SILENCE_NOISE_DB = -40
 SILENCE_MIN_SECONDS = 1.5
 
+# ...unless that would make the speech itself silence (v1.0.11). A distant or
+# quiet microphone speaks below -40dB throughout: 27 of 50 English FLEURS
+# clips peak at -44 to -54dB, and all 27 came out with no captions, every
+# word dropped as invented over silence. In each of them all the voiced
+# windows (the speech band within VOICED_DB of the speaking level) sat inside
+# a -40dB silence; in every clip that worked, at most 35%, and 0% on the
+# Hinglish tutorial. Over SPEECH_IN_SILENCE of them, the threshold follows
+# the speaking level down instead, SILENCE_UNDER_SPEAKING_DB under it, never
+# under SILENCE_FLOOR_DB, so a silent or dithered track is still silence.
+# Only then: lowered for every moderately quiet clip, it let the faint noise
+# around German and Russian clips (-42 to -45dB, their speech peaking at
+# -20) stop being silence, and "Vielen Dank." invented over it survived.
+SPEECH_IN_SILENCE = 0.5
+SILENCE_UNDER_SPEAKING_DB = 15
+SILENCE_FLOOR_DB = -80
+
+
+def silence_for(audio_path: Path, levels: list[float]) -> list[tuple[float, float]]:
+    """The silent spans to drop invented text over: at -40dB, or lower when that would swallow the speech."""
+    spans = silent_spans(audio_path)
+    if not spans or _speech_in_silence(levels, spans) <= SPEECH_IN_SILENCE:
+        return spans
+    noise_db = silence_threshold(levels)
+    if noise_db >= SILENCE_NOISE_DB:
+        return spans
+    logger.info("A quiet recording: silence is under %.1f dB rather than %d dB", noise_db, SILENCE_NOISE_DB)
+    return silent_spans(audio_path, noise_db)
+
+
+def _speech_in_silence(levels: list[float], spans: list[tuple[float, float]]) -> float:
+    """The share of the voiced envelope windows whose middle lies inside `spans`."""
+    if not levels:
+        return 0.0
+    speaking = _speaking_level(levels)
+    voiced = [i for i, level in enumerate(levels) if level >= speaking - VOICED_DB]
+    if not voiced:
+        return 0.0
+    inside = sum(
+        1 for i in voiced
+        if any(start <= (i + 0.5) * ONSET_WINDOW_SECONDS < end for start, end in spans)
+    )
+    return inside / len(voiced)
+
+
+def silence_threshold(levels: list[float]) -> float:
+    """The level under which audio counts as silent, in dB, for a file with these speech-band `levels`."""
+    if not levels:
+        return SILENCE_NOISE_DB
+    under_speech = _speaking_level(levels) - SILENCE_UNDER_SPEAKING_DB
+    return max(SILENCE_FLOOR_DB, min(SILENCE_NOISE_DB, under_speech))
+
 # How much of a segment must sit inside silence before it is dropped. Not 100%:
 # a hallucination that begins in silence and runs a moment past the point where
 # real audio starts is still a hallucination, and a genuine line that starts
@@ -201,9 +256,9 @@ SILENCE_MIN_SECONDS = 1.5
 SILENT_OVERLAP_TO_DROP = 0.9
 
 
-def silent_spans(audio_path: Path) -> list[tuple[float, float]]:
+def silent_spans(audio_path: Path, noise_db: float = SILENCE_NOISE_DB) -> list[tuple[float, float]]:
     """
-    Where the audio is actually silent, in seconds.
+    Where the audio is actually silent (under `noise_db`), in seconds.
 
     Read from FFmpeg's `silencedetect`, which measures the waveform rather than
     guessing at it. This is the check that makes running Whisper *without* VAD
@@ -217,7 +272,7 @@ def silent_spans(audio_path: Path) -> list[tuple[float, float]]:
     result = subprocess.run(
         [
             "ffmpeg", "-i", str(audio_path),
-            "-af", f"silencedetect=n={SILENCE_NOISE_DB}dB:d={SILENCE_MIN_SECONDS}",
+            "-af", f"silencedetect=n={noise_db:.1f}dB:d={SILENCE_MIN_SECONDS}",
             "-f", "null", "-",
         ],
         capture_output=True,
@@ -697,14 +752,13 @@ def transcribe(
     low_confidence_note = None
     model = get_model()
 
-    # Measured once, up front, rather than per segment: one pass over the file
-    # against thousands of interval comparisons.
-    spans = silent_spans(audio_path) if not settings.whisper_vad_filter else []
-    # The second measurement of the same audio, asking a different question:
-    # `spans` is "is there any sound at all", this is "when does the voice
-    # arrive". Silence detection cannot see a singer entering over an
-    # instrumental, because the instrumental is not silent.
+    # Two measurements of the same audio, once up front rather than per
+    # segment, asking different questions. `levels` is "when does the voice
+    # arrive": silence detection cannot see a singer entering over an
+    # instrumental, because the instrumental is not silent. `spans` is "is
+    # there any sound at all", lowered for a recording too quiet for -40dB.
     levels = vocal_envelope(audio_path)
+    spans = silence_for(audio_path, levels) if not settings.whisper_vad_filter else []
 
     segments, info = _decode(model, audio_path, language, task, spans, levels, on_progress)
     if segments:
