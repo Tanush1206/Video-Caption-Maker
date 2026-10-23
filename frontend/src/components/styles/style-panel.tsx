@@ -1,9 +1,8 @@
 "use client";
 
-import { Loader2, Move, Paintbrush, RotateCcw, Type } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useId, useState } from "react";
 
-import { RailTabs } from "@/components/layout/editor-panel";
 import { FontPicker } from "@/components/styles/font-picker";
 import { Range } from "@/components/ui/range";
 import {
@@ -58,33 +57,33 @@ const EMPHASIS = [
   { key: "uppercase", label: "AA", className: "tracking-wide" },
 ] as const satisfies readonly { key: keyof CaptionStyle; label: string; className: string }[];
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A group of rows under a small grey heading (System Settings style). */
+function Group({ title, children, note }: { title: string; children: React.ReactNode; note?: React.ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-    </label>
+    <section>
+      <h3 className="label-caps mb-1.5 px-4">{title}</h3>
+      <div className="group-inset">{children}</div>
+      {note && <p className="mt-1.5 px-4 text-xs text-muted-foreground">{note}</p>}
+    </section>
   );
 }
 
-/** One tab's controls: two columns where there is room. */
-function Pane({ hidden, children }: { hidden: boolean; children: React.ReactNode }) {
+/** One row: the label on the left, its control on the right. */
+function Row({ label, children, htmlFor }: { label: string; children: React.ReactNode; htmlFor?: string }) {
   return (
-    // A class, not the `hidden` attribute: `grid` would override the
-    // attribute's display:none.
-    <div className={cn(hidden ? "hidden" : "grid", "items-start gap-x-6 gap-y-4 sm:grid-cols-2")}>
-      {children}
+    <div className="group-row">
+      <label htmlFor={htmlFor} className="shrink-0 text-[15px] sm:text-sm">
+        {label}
+      </label>
+      <div className="flex min-w-0 items-center justify-end">{children}</div>
     </div>
   );
 }
 
-const TABS = [
-  { id: "typography", label: "Typography", icon: Type },
-  { id: "appearance", label: "Appearance", icon: Paintbrush },
-  { id: "position", label: "Position", icon: Move },
-];
+/** The editor's tools that style the captions; the inspector picks one. */
+export type StyleTab = "typography" | "appearance" | "position";
 
-/** A row of on/off pills — bold, italic, underline and the rest. */
+/** A row of on/off toggles — bold, italic, underline and the rest. */
 function Toggles<T extends string>({
   options,
   isOn,
@@ -95,7 +94,7 @@ function Toggles<T extends string>({
   onToggle: (key: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex w-full rounded-md bg-surface-3 p-0.5">
       {options.map(({ key, label, className }) => (
         <button
           key={key}
@@ -103,11 +102,9 @@ function Toggles<T extends string>({
           onClick={() => onToggle(key)}
           aria-pressed={isOn(key)}
           className={cn(
-            "flex-1 rounded-md border px-2 py-1.5 text-xs transition",
+            "min-h-11 flex-1 rounded-[6px] px-2 text-sm text-foreground transition-colors duration-200 ease-out sm:min-h-7",
             className,
-            isOn(key)
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border text-muted-foreground hover:bg-muted"
+            isOn(key) ? "bg-segment font-semibold" : "hover:bg-background/40"
           )}
         >
           {label}
@@ -155,10 +152,24 @@ function Slider({
     setSynced(value);
     setShown(value);
   }
+  const id = useId();
 
+  // The row shows the label and the value apart; the input's own name keeps
+  // them together ("Size — 52px"), as it always read.
   return (
-    <Field label={`${label} — ${shown}${suffix ?? ""}`}>
+    <div className={cn("group-row flex-col items-stretch gap-1.5", disabled && "opacity-40")}>
+      <div className="flex items-center justify-between text-[15px] sm:text-sm">
+        <label htmlFor={id} aria-hidden="true">
+          {label}
+        </label>
+        <span className="tabular-nums text-muted-foreground" aria-hidden="true">
+          {shown}
+          {suffix}
+        </span>
+      </div>
       <Range
+        id={id}
+        aria-label={`${label} — ${shown}${suffix ?? ""}`}
         min={min}
         max={max}
         step={step}
@@ -170,7 +181,7 @@ function Slider({
           onChange(next);
         }}
       />
-    </Field>
+    </div>
   );
 }
 
@@ -186,24 +197,27 @@ function Swatch({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const id = useId();
   return (
-    <Field label={label}>
-      <div className={cn("flex items-center gap-2", disabled && "opacity-40")}>
+    <div className={cn(disabled && "opacity-40")}>
+      <Row label={label} htmlFor={id}>
+        <span className="mr-2.5 text-sm uppercase tabular-nums text-muted-foreground">{value}</span>
         <input
+          id={id}
           type="color"
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
-          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent disabled:cursor-not-allowed"
+          className="h-7 w-9 cursor-pointer rounded-md border border-input bg-transparent p-0.5 disabled:cursor-not-allowed"
         />
-        <span className="font-mono text-xs text-muted-foreground">{value}</span>
-      </div>
-    </Field>
+      </Row>
+    </div>
   );
 }
 
 /**
- * A row of mutually exclusive choices — alignment, line limit, placement.
+ * A row of mutually exclusive choices — alignment, line limit, placement —
+ * as a segmented control under its label.
  *
  * `selected` may match none of them: a dragged caption is at no preset
  * height, and lighting one up would claim otherwise.
@@ -221,11 +235,11 @@ function Choice<T extends string | number>({
   onSelect: (key: T) => void;
 }) {
   const id = useId();
-  const described = options.some((o) => o.description);
+  const chosen = options.find((o) => o.key === selected);
   return (
-    <div>
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
-      <div role="radiogroup" aria-label={label} className="flex gap-1.5">
+    <div className="group-row flex-col items-stretch gap-2">
+      <span className="text-[15px] sm:text-sm">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex rounded-md bg-surface-3 p-0.5">
         {options.map(({ key, label: text, description }) => (
           <button
             key={key}
@@ -235,27 +249,26 @@ function Choice<T extends string | number>({
             aria-describedby={description ? `${id}-${key}` : undefined}
             onClick={() => onSelect(key)}
             className={cn(
-              "flex-1 rounded-md border px-2 py-1.5 text-xs transition",
-              selected === key
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:bg-muted"
+              "min-h-11 flex-1 rounded-[6px] px-2 text-sm text-foreground transition-colors duration-200 ease-out sm:min-h-7",
+              selected === key ? "bg-segment font-medium" : "hover:bg-background/40"
             )}
           >
             {text}
           </button>
         ))}
       </div>
-      {described && (
-        <dl className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-          {options.map(({ key, label: text, description }) =>
-            description ? (
-              <div key={key} id={`${id}-${key}`} className={cn(selected === key && "text-foreground")}>
-                <dt className="inline font-medium">{text}: </dt>
-                <dd className="inline">{description}</dd>
-              </div>
-            ) : null
-          )}
-        </dl>
+      {/* Each option's sentence, for its aria-describedby; the chosen one is
+          the one shown. */}
+      {options.map(({ key, description }) =>
+        description ? (
+          <p
+            key={key}
+            id={`${id}-${key}`}
+            className={cn("text-xs text-muted-foreground", chosen?.key !== key && "sr-only")}
+          >
+            {description}
+          </p>
+        ) : null
       )}
     </div>
   );
@@ -274,16 +287,22 @@ function Choice<T extends string | number>({
  * The video and this panel are siblings, so the one instance lives on the page
  * above both. Same failure the hook was fixed for once already, arriving by a
  * different door.
+ *
+ * `tab` is chosen by the editor's inspector (v1.1.0); all three stay mounted
+ * and are only hidden, so a colour picker mid-edit or a scrolled font list
+ * survives a look at another tab.
  */
 export function StylePanel({
   videoId,
   update,
   isSaving,
+  tab,
   aspect = 16 / 9,
 }: {
   videoId: number;
   update: (patch: Partial<CaptionStyle>) => void;
   isSaving: boolean;
+  tab: StyleTab;
   /** The video's aspect ratio, for the default width of its shape. */
   aspect?: number;
 }) {
@@ -292,15 +311,12 @@ export function StylePanel({
 
   const applyPreset = useApplyPreset(videoId);
   const resetStyle = useResetStyle(videoId);
-  // All three stay mounted and are only hidden, so a colour picker mid-edit
-  // or a scrolled font list survives a look at another tab.
-  const [tab, setTab] = useState("typography");
 
   if (isLoading || !style) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 5 }, (_, i) => (
-          <div key={i} className="h-8 animate-pulse rounded bg-muted" />
+          <div key={i} className="h-11 animate-pulse rounded-xl bg-surface-2" />
         ))}
       </div>
     );
@@ -309,51 +325,46 @@ export function StylePanel({
   const set = (patch: Partial<CaptionStyle>) => update(patch);
 
   return (
-    // No border or fill of its own: this sits inside the studio panel, which
-    // carries the heading.
-    <section>
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="w-full sm:w-auto sm:min-w-[22rem]">
-          <RailTabs tabs={TABS} value={tab} onChange={setTab} />
+    <div className="space-y-6">
+      <section>
+        <div className="mb-1.5 flex items-center justify-between px-4">
+          <h3 className="label-caps">Preset</h3>
+          <div className="flex items-center gap-2">
+            {isSaving && <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label="Saving" />}
+            <button
+              type="button"
+              onClick={() => resetStyle.mutate("")}
+              title="Back to defaults"
+              className="rounded-md px-1.5 py-0.5 text-sm text-primary transition-colors duration-200 ease-out hover:bg-surface-2"
+            >
+              Reset
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-          <button
-            type="button"
-            onClick={() => resetStyle.mutate("")}
-            title="Back to defaults"
-            className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-          >
-            <RotateCcw className="h-3 w-3" />
-            Reset
-          </button>
+        <div className="flex rounded-md bg-surface-3 p-0.5">
+          {(options?.presets ?? []).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => applyPreset.mutate(preset)}
+              className="min-h-11 flex-1 rounded-[6px] px-2 text-sm text-foreground transition-colors duration-200 ease-out hover:bg-segment sm:min-h-7"
+            >
+              {PRESET_LABELS[preset] ?? preset}
+            </button>
+          ))}
         </div>
-      </header>
+      </section>
 
-      <div className="mb-4 flex items-center gap-1.5">
-        <span className="label-caps mr-2 hidden sm:inline">Preset</span>
-        {(options?.presets ?? []).map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            onClick={() => applyPreset.mutate(preset)}
-            className="flex-1 rounded-md border border-border px-2 py-1.5 text-xs transition hover:border-primary hover:bg-primary/10"
-          >
-            {PRESET_LABELS[preset] ?? preset}
-          </button>
-        ))}
-      </div>
-
-      <div className="border-t border-border pt-4">
-        <Pane hidden={tab !== "typography"}>
-          <Field label="Font">
+      <div className={cn(tab === "typography" ? "space-y-6" : "hidden")}>
+        <Group title="Text">
+          <div className="group-row flex-col items-stretch gap-2">
+            <span className="text-[15px] sm:text-sm">Font</span>
             <FontPicker
               builtins={options?.fonts ?? []}
               value={style.font_key}
               onChange={(font_key) => set({ font_key })}
             />
-          </Field>
-
+          </div>
           <Slider
             label="Size"
             value={style.font_size}
@@ -362,13 +373,13 @@ export function StylePanel({
             suffix="px"
             onChange={(font_size) => set({ font_size })}
           />
-
-          <Toggles
-            options={EMPHASIS}
-            isOn={(key) => style[key]}
-            onToggle={(key) => set({ [key]: !style[key] } as Partial<CaptionStyle>)}
-          />
-
+          <div className="group-row">
+            <Toggles
+              options={EMPHASIS}
+              isOn={(key) => style[key]}
+              onToggle={(key) => set({ [key]: !style[key] } as Partial<CaptionStyle>)}
+            />
+          </div>
           <Slider
             label="Letter spacing"
             value={style.letter_spacing}
@@ -377,24 +388,22 @@ export function StylePanel({
             suffix="px"
             onChange={(letter_spacing) => set({ letter_spacing })}
           />
-        </Pane>
+        </Group>
+      </div>
 
-        <Pane hidden={tab !== "appearance"}>
-          <Swatch
-            label="Text colour"
-            value={style.text_color}
-            onChange={(text_color) => set({ text_color })}
-          />
+      <div className={cn(tab === "appearance" ? "space-y-6" : "hidden")}>
+        <Group title="Text">
+          <Swatch label="Colour" value={style.text_color} onChange={(text_color) => set({ text_color })} />
+        </Group>
 
-          {/* Every control here stays mounted. They used to appear and vanish
-              with the values they depend on — the outline colour only while
-              there is an outline and no box, and so on — and in a two-column
-              grid that moves every control after them. Dragging Opacity off 0
-              removed the colour swatches above it, the slider jumped a row
-              (or a column) away from the pointer still dragging it, the
-              browser read the pointer's new offset as 0, the swatches came
-              back, and the thumb flickered between the two. Disabled instead,
-              so the layout never changes under a gesture. */}
+        {/* Every control here stays mounted. They used to appear and vanish
+            with the values they depend on — the outline colour only while
+            there is an outline and no box, and so on — and the controls after
+            them moved under a gesture: dragging Opacity off 0 removed the
+            colour swatches above it, the slider jumped away from the pointer
+            still dragging it, and the thumb flickered. Disabled instead, so
+            the layout never changes under a gesture. */}
+        <Group title="Outline and shadow">
           <Slider
             label="Outline"
             value={style.outline_width}
@@ -409,7 +418,6 @@ export function StylePanel({
             disabled={style.outline_width === 0 || style.box_opacity > 0}
             onChange={(outline_color) => set({ outline_color })}
           />
-
           <Slider
             label="Shadow"
             value={style.shadow}
@@ -424,6 +432,20 @@ export function StylePanel({
             disabled={style.shadow === 0 || style.box_opacity > 0}
             onChange={(shadow_color) => set({ shadow_color })}
           />
+        </Group>
+
+        {/* An opaque box replaces both the outline and the shadow in ASS,
+            so saying so beats leaving two controls that do nothing. Always
+            present, for the same reason as the controls above; it is what
+            explains why some of them are greyed out. */}
+        <Group
+          title="Box"
+          note={
+            style.box_opacity > 0
+              ? "A box replaces the outline and shadow — that's how it renders on export."
+              : "Raise Opacity to put a box behind the caption."
+          }
+        >
           <Slider
             label="Opacity"
             value={Math.round(style.box_opacity * 100)}
@@ -447,18 +469,11 @@ export function StylePanel({
             disabled={style.box_opacity === 0}
             onChange={(box_padding) => set({ box_padding })}
           />
-          {/* An opaque box replaces both the outline and the shadow in ASS,
-              so saying so beats leaving two controls that do nothing. Always
-              present, for the same reason as the controls above; it is what
-              explains why some of them are greyed out. */}
-          <p className="text-[11px] text-muted-foreground sm:col-span-2">
-            {style.box_opacity > 0
-              ? "A box replaces the outline and shadow — that's how it renders on export."
-              : "Raise Opacity to put a box behind the caption."}
-          </p>
-        </Pane>
+        </Group>
+      </div>
 
-        <Pane hidden={tab !== "position"}>
+      <div className={cn(tab === "position" ? "space-y-6" : "hidden")}>
+        <Group title="Position">
           {/* Centred, at a height inside the safe area. Each caption is then
               slid inside it on its own, so a long one at the bottom still
               clears the edge. */}
@@ -488,6 +503,19 @@ export function StylePanel({
             suffix="%"
             onChange={(percent) => set({ box_width: percent / 100 })}
           />
+        </Group>
+
+        <Group
+          title="Lines"
+          note={
+            <>
+              A caption that needs more lines is drawn smaller, down to 70% of the size, then gets more
+              lines; one that would still be taller than the frame keeps shrinking until it fits.
+              Shift+Enter in a caption&rsquo;s text starts a new line there. Drag the caption to move it, or
+              the edges of its box to change the width.
+            </>
+          }
+        >
           {/* How a caption is split into lines. Switching to Stacked starts it
               at four lines; leaving it brings a limit above three back to the
               default, since Balanced and Auto offer one to three. */}
@@ -520,19 +548,13 @@ export function StylePanel({
               onSelect={(words_per_line) => set({ words_per_line })}
             />
           )}
-          <p className="text-[11px] text-muted-foreground sm:col-span-2">
-            A caption that needs more lines is drawn smaller, down to 70% of the size, then gets more
-            lines; one that would still be taller than the frame keeps shrinking until it fits.
-            Shift+Enter in a caption&rsquo;s text starts a new line there. Drag the caption to move it, or
-            the edges of its box to change the width.
-          </p>
-        </Pane>
+        </Group>
       </div>
 
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Sizes are for a {style.reference_height}p frame and scale with the video,
-        so one style looks the same on a 360p clip and a 4K one.
+      <p className="px-4 text-xs text-muted-foreground">
+        Sizes are for a {style.reference_height}p frame and scale with the video, so one style looks the
+        same on a 360p clip and a 4K one.
       </p>
-    </section>
+    </div>
   );
 }

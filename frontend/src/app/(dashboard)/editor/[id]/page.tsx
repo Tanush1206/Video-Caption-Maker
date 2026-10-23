@@ -2,17 +2,7 @@
 
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  ArrowLeft,
-  Clapperboard,
-  Film,
-  Palette,
-  Search,
-  Share,
-  SlidersHorizontal,
-  Subtitles,
-} from "lucide-react";
+import { AlertCircle, ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +16,7 @@ import { VideoStatus } from "@/components/flow/video-status";
 import { PlayerControls } from "@/components/player/player-controls";
 import { Timeline } from "@/components/player/timeline";
 import { VideoPlayer } from "@/components/player/video-player";
-import { EditorPanel } from "@/components/layout/editor-panel";
+import { Inspector, type InspectorTab } from "@/components/layout/editor-panel";
 import { useLanguagePair } from "@/components/videos/video-card";
 import { StylePanel } from "@/components/styles/style-panel";
 import {
@@ -42,24 +32,21 @@ import { useVideo } from "@/hooks/use-videos";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/**
- * The editor is a workspace, not a page of prose, so it takes the screen.
- *
- * The rest of the app is capped at `max-w-7xl` (1280px), which is right for
- * reading and wrong here: it left ~320px dead on either side of a 1920 screen
- * while the video and the caption list fought over the middle. 1800px still
- * caps it on an ultrawide, where a truly full-bleed video would be silly.
- */
-const SHELL = "mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6"; // = WIDE_CONTAINER + padding
+/** The loading and error states' frame. */
+const SHELL = "mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-8";
 
 /**
- * How tall the transcript column may be: the viewport, less the app header,
- * the editor bar and a margin. Subtracted from 100vh rather than h-full
- * because it is a grid item beside a column whose height follows the video
- * and the style studio; a sticky element inside an over-tall parent has
- * nothing to stick within. The panel scrolls its body under a pinned head.
+ * The workspace takes the screen below the two bars (52 + 52 px) from lg up:
+ * the stage and the inspector side by side, the timeline across the bottom.
  */
-const COLUMN_HEIGHT = "lg:h-[calc(100vh-9rem)]";
+const WORKSPACE_HEIGHT = "lg:h-[calc(100vh-104px)]";
+
+/**
+ * How much of the viewport's height is not the video, from lg up: the bars,
+ * the stage's padding, the controls and hint, and the timeline. The video's
+ * width follows from what is left, so a portrait clip fits too.
+ */
+const NOT_VIDEO_PX = 104 + 48 + 92 + 196;
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const videoId = Number(params.id);
@@ -117,6 +104,7 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
   const wasTranscribing = useRef(false);
 
   const [exporting, setExporting] = useState(false);
+  const [tool, setTool] = useState<InspectorTab>("captions");
 
   useEffect(() => {
     if (status === "pending" || status === "processing") {
@@ -161,16 +149,15 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
     );
   }
 
+  const aspect = playback.intrinsic ? playback.intrinsic.width / playback.intrinsic.height : 16 / 9;
+
   return (
     <>
-      <EditorBar
-        video={video}
-        onExport={() => setExporting(true)}
-      />
+      <EditorBar video={video} onExport={() => setExporting(true)} />
 
-      <main className={cn(SHELL, "pb-24 md:pb-6")}>
-        {/* Where the video is on its way to captions, while it is not there
-            yet; once it is, the notes that came with them. */}
+      {/* Where the video is on its way to captions, while it is not there
+          yet; once it is, the notes that came with them. */}
+      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-8 [&:has(>*)]:pt-6">
         <VideoStatus
           video={video}
           captionCount={captions.length}
@@ -178,51 +165,42 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
             document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" })
           }
         />
+      </div>
 
-        {/*
-          Two columns from lg: the frame, its controls, the timeline and the
-          style studio on the left; the transcript on the right, pinned to the
-          viewport and scrolling inside itself to follow the playhead. Below
-          lg everything stacks, video first: it is the most important thing
-          here, and on a phone and to a screen reader that is the order that
-          ships.
-        */}
-        <div
-          id="workspace"
-          className={cn(
-            // minmax(0,1fr) at the base too: an implicit track sizes to its
-            // widest child's max-content, and the player's control row is wider
-            // than a phone, so the whole page scrolled sideways.
-            "grid scroll-mt-32 grid-cols-[minmax(0,1fr)] items-start gap-6",
-            "lg:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_460px]"
-          )}
+      {/*
+        From lg: the stage (the video, centred on a neutral ground, with its
+        controls) and the inspector side by side, the timeline across the
+        bottom. Below lg everything stacks, video first, and the inspector
+        is a bottom sheet; the page pads for its closed height.
+      */}
+      <main
+        id="workspace"
+        className={cn(
+          "grid scroll-mt-32 grid-cols-[minmax(0,1fr)] pb-36 lg:pb-0",
+          "lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)_auto]",
+          WORKSPACE_HEIGHT
+        )}
+      >
+        <section
+          aria-label="Video"
+          className="flex min-h-0 min-w-0 flex-col items-center justify-center gap-3 bg-surface-2 px-4 py-6 sm:px-8 lg:col-start-1 lg:row-start-1"
         >
-          <div className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-1">
-            <div className="overflow-hidden rounded-lg border border-border bg-card">
-              <VideoPlayer
-                video={video}
-                playback={playback}
-                activeCaption={activeCaption}
-                style={style}
-                font={font}
-                // The same updater the panel uses, so a drag and a click on the
-                // 3x3 grid are one code path — and the drag inherits its
-                // debounce, which matters when a single gesture produces a value
-                // per frame.
-                onPlace={setStyle}
-              />
-            </div>
-
-            {/* The one instruction the video cannot give you by looking at it.
-                Dragging the caption is the editor's least discoverable feature
-                and its most useful one. */}
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-[11px] text-muted-foreground">
-              <Film className="size-3" />
-              <span>Drag the caption to place it anywhere on the frame.</span>
-              <span aria-hidden="true">·</span>
-              <span>Click the video to play or pause.</span>
-            </p>
-
+          <div
+            className="w-full"
+            style={{ maxWidth: `max(240px, min(100%, calc((100vh - ${NOT_VIDEO_PX}px) * ${aspect})))` }}
+          >
+            <VideoPlayer
+              video={video}
+              playback={playback}
+              activeCaption={activeCaption}
+              style={style}
+              font={font}
+              // The same updater the panel uses, so a drag and a click on the
+              // 3x3 grid are one code path — and the drag inherits its
+              // debounce, which matters when a single gesture produces a value
+              // per frame.
+              onPlace={setStyle}
+            />
             <PlayerControls
               playback={playback}
               // Undecided until the waveform lands; empty peaks mean FFmpeg
@@ -230,80 +208,53 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
               // than a volume problem.
               hasAudioTrack={waveform ? waveform.peaks.length > 0 : null}
             />
-            <Timeline
-              captions={captions}
-              playback={playback}
-              peaks={waveform?.peaks ?? []}
-              isLoadingWaveform={isLoadingWaveform}
-              activeCaptionId={playback.activeCaptionId}
-              onCommit={(id, timing) => updateCaption.mutate({ id, ...timing })}
-            />
-
           </div>
+          {/* The one instruction the video cannot give you by looking at it.
+              Dragging the caption is the editor's least discoverable feature
+              and its most useful one. */}
+          <p className="text-center text-xs text-muted-foreground">
+            Drag the caption to place it anywhere on the frame · Click the video to play or pause
+          </p>
+        </section>
 
-          {/* The fixed height below lg is what lets the list scroll to follow
-              the playhead instead of growing to the length of the transcript. */}
-          <EditorPanel
-            icon={Subtitles}
-            title="Transcript segments"
-            hint="Click a line to jump there. Edits save as you type."
-            action={
-              <span className="rounded-md border border-border bg-surface-1 px-2 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
-                {captions.length} segment{captions.length === 1 ? "" : "s"}
-              </span>
-            }
-            className={cn("h-[34rem] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:sticky lg:top-[7.5rem]", COLUMN_HEIGHT)}
-          >
-            <CaptionEditor video={video} playback={playback} />
-          </EditorPanel>
-
-          {/* Its own grid item, so on a phone it comes after the transcript. */}
-          <div id="caption-style" className="min-w-0 scroll-mt-32 lg:col-start-1 lg:row-start-2">
-            <EditorPanel
-              icon={Palette}
-              title="Caption style studio"
-              hint="Font, size, colour and position. Every change previews on the video."
-              bodyClassName="p-4"
-            >
+        <Inspector
+          tab={tool}
+          onTab={setTool}
+          className="lg:col-start-2 lg:row-span-1 lg:row-start-1 lg:border-l lg:border-border"
+        >
+          {{
+            captions: <CaptionEditor video={video} playback={playback} />,
+            style: (
               <StylePanel
                 videoId={videoId}
                 update={setStyle}
                 isSaving={isSavingStyle}
-                aspect={
-                  playback.intrinsic
-                    ? playback.intrinsic.width / playback.intrinsic.height
-                    : undefined
-                }
+                tab={tool === "captions" ? "typography" : tool}
+                aspect={aspect}
               />
-            </EditorPanel>
-          </div>
-        </div>
-      </main>
+            ),
+          }}
+        </Inspector>
 
-      {/* Phones: the two things the desktop bar and studio hold, at thumb
-          height. Replaces the section tab bar on this screen. */}
-      <div className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-3 border-t border-border bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-lg md:hidden">
-        <Button
-          variant="secondary"
-          size="lg"
-          onClick={() =>
-            document.getElementById("caption-style")?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
+        <section
+          aria-label="Timeline"
+          className="min-w-0 border-t border-border px-4 py-4 sm:px-8 lg:col-span-2 lg:row-start-2"
         >
-          <SlidersHorizontal />
-          Caption style
-        </Button>
-        <Button size="lg" onClick={() => setExporting(true)}>
-          <Share />
-          Export
-        </Button>
-      </div>
+          <Timeline
+            captions={captions}
+            playback={playback}
+            peaks={waveform?.peaks ?? []}
+            isLoadingWaveform={isLoadingWaveform}
+            activeCaptionId={playback.activeCaptionId}
+            onCommit={(id, timing) => updateCaption.mutate({ id, ...timing })}
+          />
+        </section>
+      </main>
 
       <Dialog
         open={exporting}
         onClose={() => setExporting(false)}
-        title="Export video & captions"
-        icon={<Share className="size-5" />}
+        title="Export"
         description={<ExportSubtitle video={video} />}
         bodyClassName="flex flex-col overflow-hidden"
       >
@@ -327,7 +278,7 @@ function ExportSubtitle({ video }: { video: NonNullable<ReturnType<typeof useVid
       {languages && (
         <>
           {" · "}
-          <span className="font-medium text-primary">
+          <span>
             {languages.spoken} → {languages.caption}
           </span>
         </>
@@ -337,9 +288,9 @@ function ExportSubtitle({ video }: { video: NonNullable<ReturnType<typeof useVid
 }
 
 /**
- * The bar under the app header: which video this is, how long, in which
- * languages, and the way out (Export). Sticky with the header, so Export is
- * always one click away.
+ * The bar under the app header: which video this is, in which languages, and
+ * the way out. Export is the screen's one primary action. Sticky with the
+ * header and translucent like it.
  */
 function EditorBar({
   video,
@@ -350,43 +301,43 @@ function EditorBar({
 }) {
   const languages = useLanguagePair(video);
   return (
-    <div className="sticky top-header z-30 border-b border-border bg-background/90 backdrop-blur-lg">
-      <div className="mx-auto flex h-14 w-full max-w-[1800px] items-center gap-3 px-4 sm:px-6">
+    <div className="bar-translucent sticky top-header z-30 border-b border-border">
+      <div className="mx-auto flex h-[52px] w-full max-w-[1800px] items-center gap-2 px-2 sm:px-6">
         <Link
           href="/dashboard"
           aria-label="Back to your videos"
-          className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-surface-2 hover:text-foreground sm:size-8"
         >
-          <ArrowLeft className="size-4" />
+          <ChevronLeft className="size-5" />
         </Link>
-        <Clapperboard className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
-        <h1 className="min-w-0 truncate text-[15px] font-semibold">{video.title}</h1>
-        <span className="hidden shrink-0 font-mono text-[13px] tabular-nums text-muted-foreground sm:inline">
-          {formatDuration(video.duration_ms)}
-        </span>
-        {languages && (
-          <span className="hidden shrink-0 text-[13px] font-medium text-primary md:inline">
-            {languages.spoken} → {languages.caption}
+        <div className="flex min-w-0 flex-1 items-baseline gap-3">
+          <h1 className="min-w-0 truncate text-[15px] font-semibold">{video.title}</h1>
+          <span className="hidden shrink-0 text-sm text-muted-foreground md:inline">
+            {[languages && `${languages.spoken} → ${languages.caption}`, formatDuration(video.duration_ms)]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
-        )}
-        {video.status !== "completed" && (
-          <Badge tone={video.status === "failed" ? "destructive" : "primary"} dot className="shrink-0">
-            {video.status}
-          </Badge>
-        )}
+          {video.status !== "completed" && (
+            <Badge
+              tone={video.status === "failed" ? "destructive" : "primary"}
+              dot
+              className="hidden shrink-0 capitalize sm:inline-flex"
+            >
+              {video.status}
+            </Badge>
+          )}
+        </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           {video.status === "completed" && (
             <Link
               href={`/search/${video.id}`}
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}
+              className={cn(buttonVariants({ variant: "plain", size: "sm" }), "hidden sm:inline-flex")}
             >
-              <Search />
               Search this video
             </Link>
           )}
           <Button size="sm" onClick={onExport}>
-            <Share />
             Export
           </Button>
         </div>

@@ -182,14 +182,14 @@ export function FontPicker({ builtins, value, onChange }: FontPickerProps) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="flex w-full items-center justify-between rounded-md border border-border bg-background px-2 py-1.5 text-left text-sm transition-colors hover:border-muted-foreground/40"
+        className="flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 text-left text-[15px] transition-colors duration-200 ease-out sm:h-9 sm:text-sm"
       >
         <span className="truncate">{selectedLabel}</span>
         <ChevronDown className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")} />
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-border/60 bg-background shadow-overlay dark:bg-surface-3">
           <div className="flex items-center gap-2 border-b border-border px-2">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
             <input
@@ -362,7 +362,7 @@ function Row({
         onClick={onSelect}
         className={cn(
           "flex h-full w-full items-center justify-between gap-2 px-3 text-left transition-colors",
-          selected ? "bg-primary/10 text-primary" : "hover:bg-muted"
+          selected ? "text-primary" : "hover:bg-surface-2"
         )}
       >
         {/* 15px rather than inherited: some display faces are tiny at 13px and
