@@ -332,6 +332,7 @@ Baselines:
 | 1.0.7 → 1.0.8 | CUDA 4/15 layers, 0.2 MB (app code only) | 4/10, 7.2 MB |
 | 1.0.8 → 1.0.9 | CUDA 4/15 layers, 0.2 MB (app code and a migration; models download on first use, not with the update) | 4/10, 7.2 MB |
 | 1.0.9 → 1.0.10 | CUDA 3/15 layers, 0.2 MB (app code only) | 4/10, 7.2 MB |
+| 1.0.10 → 1.0.11 | CUDA 3/15 layers, 0.2 MB (app code only) | 4/10, 7.2 MB |
 
 Full layer digests are in PROGRESS.md.
 

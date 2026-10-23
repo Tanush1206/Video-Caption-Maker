@@ -747,7 +747,7 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.0.11 (prepared 2026-10-23): quiet recordings, nine languages
+## v1.0.11 (released 2026-10-23, tag on 6094524): quiet recordings, nine languages
 Brief (Tanush, 2026-10-22/23): fix quiet recordings (found by the language
 eval) and say "No speech was found in this video." when a job still ends
 empty; remove Tamil, Marathi, Bengali and Malayalam instead of marking them
@@ -806,6 +806,39 @@ PRD, CHANGELOG, ROADMAP and eval docs; tests.
 - Captions under 0.8 s where a 0.5 s pause follows ("है गाइस", 0.60 s, on
   the install's E2E); words heard but uncaptioned in loud German (1.9 s) and
   English in the FLEURS pipeline runs.
+
+### Release check (2026-10-23)
+- Tag v1.0.11 on 6094524; CI and `release.yml` green on it; 8 assets, all 7
+  match SHA256SUMS; 1.0.11-cuda, 1.0.11-cpu, latest-cuda and frontend
+  1.0.11/latest fetch anonymously (200).
+- Backup per DATABASE.md §7 (29 s downtime; busybox:1.37 already present):
+  `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.0.11` (vcm.dump 32 KB,
+  all 7 tables; vcm-media.tgz 284 MB, 28 files as on the volume; .env
+  copy; rowcounts 1 video, 159 captions, 5 exports, 1 style, caption md5).
+  `pre-1.0.10` deleted after the update was verified, as Tanush asked.
+- `vcm update` (Windows GPU) in 35 s: the API reports 1.0.11, alembic
+  `b6e0f4a9c2d1` (head, no migration); rows and caption md5 unchanged; the
+  API serves the nine languages. Download **7.4 MB**: backend CUDA 3/15
+  layers, 0.2 MB; frontend 4/10, 7.2 MB.
+- Guard (POST): own origin passes at localhost and 127.0.0.1 (422, no
+  file); another port, another origin, cross-site and a rebinding Host 403.
+  `flow.js` 7/7 PASS at both addresses, nothing refused.
+- E2E on the install: `hinglish.mp4` same (125 captions), en (126), es
+  (138), SRT, VTT and MP4 each, ALL PASSED; a copy 40 dB quieter (peak
+  -39.9 dB) gave 131 captions ("A quiet recording: silence is under
+  -80.0 dB" in the log), `coverage_check.py` PASS. On the normal copy
+  large-v3 left 204.06-205.06 s uncaptioned (decoded 200.7-204.0 s as "है
+  गाइस किया"), where v1.0.10's E2E had none: run-to-run variation in the
+  decode (the silence rule leaves that file alone), added to the ROADMAP
+  item. The quiet copy had one 0.54 s caption (the other ROADMAP item).
+- Test videos 97-100 deleted (98, 99 by `flow.js`; 97, 100 by
+  `DELETE /api/videos/{id}`); the install holds video 84 only. Check
+  scripts copied into the worker's /tmp for the run, then removed.
+- Secrets: nothing forbidden in the v1.0.11 commits; the images hold only
+  public CA bundles (grpc's roots.pem).
+- ROADMAP: "Captions under 0.8 s before a 0.5 s pause" and "Loud speech
+  left without a caption (1-2 s)", with their numbers (Tanush: later).
+- Dev stack stopped afterwards (`docker compose stop`).
 
 ## Language quality eval (done 2026-10-23), then v1.0.10 install, then v1.0.11
 

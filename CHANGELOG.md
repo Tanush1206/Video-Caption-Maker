@@ -9,9 +9,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.0.11] - 2026-10-23
 
 Quiet recordings get captions, and the languages offered are the ones that
-work. No migration. Expected update from 1.0.10: about 7 MB (backend app
-code; frontend app layers ~7 MB); no dependency layer changes. Measured
-after release.
+work. No migration. Updating from 1.0.10 downloads 7.4 MB (measured on the
+Windows GPU install: backend 3 of 15 layers, 0.2 MB; frontend 4 of 10,
+7.2 MB); no dependency layer changes.
 
 ### Fixed
 - **Quiet recordings got no captions.** A video whose speech stayed under
