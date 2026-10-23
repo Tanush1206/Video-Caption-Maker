@@ -137,10 +137,10 @@ or a dev server. On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first.
 cd scripts/ui-check && npm ci && npx playwright install chromium
 node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
-node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script script-fonts
+node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script unsupported-speech script-fonts
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 caption-timing   # read-only; VCM_CHECK_SECONDS (default 20) of playback
-VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 redo-script      # read-only
+VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 redo-script retired-language   # read-only
 VCM_SAFE_VIDEOS=<16:9 id>,<9:16 id>,<1:1 id> node checks.js http://localhost:3000 caption-safe-area layout-parity   # the same; layout-parity needs the dev stack
 node flow.js   http://localhost:3000 <deleteId> <exportId>             # writes data: test installs only
 ```
@@ -159,10 +159,12 @@ what the 9:16 run is for.
 | `checks.js theme` | Settings lacks Light/Dark/System; System isn't the default, doesn't clear the stored choice, or doesn't follow an OS change live; an explicit choice doesn't stick |
 | `checks.js not-found` | an unknown address isn't a 404 with the app's own page and a working way back |
 | `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
-| `checks.js editor-languages` | the editor's caption-language picker doesn't offer every served language with its own and English name, or its search (English name, own name, accents optional), Enter, Escape or outside click don't work. Read-only |
+| `checks.js editor-languages` | the editor's caption-language picker offers Tamil, Marathi, Bengali or Malayalam (v1.0.11), or doesn't offer every served language with its own and English name, or its search (English name, own name, accents optional), Enter, Escape or outside click don't work. Read-only |
 | `checks.js language-step` | the language step lacks a card per served language, or its search by English name, own name or code doesn't filter the cards, or a found language can't be chosen. Read-only: the upload a picked file starts (v1.0.9) is answered by the check itself |
 | `checks.js redo-script` | the editor's Redo doesn't offer "Hindi in" for a video with no language recorded (made before v1.0.9) or one heard as Hindi, offers it for one heard as English, doesn't default to Devanagari, or doesn't send Hinglish when chosen. The Redo request is answered by the check. Needs a completed video; read-only (v1.0.10) |
-| `checks.js hindi-script` | at 375 or 1440 px, with the API's answers mocked: Hindi heard at 94% doesn't preset Hinglish or say what was heard; Marathi doesn't ask with nothing preset, offer three answers and hold Start until one is picked; no answer in 15 s doesn't ask without holding Start; English captions ask; Back doesn't delete the upload; Start doesn't send exactly the choice (`spoken_language`, `caption_language`, `hindi_script`); axe isn't 0 with the choice open, in light and dark. Read-only (v1.0.9) |
+| `checks.js hindi-script` | at 375 or 1440 px, with the API's answers mocked: Hindi heard at 94% doesn't preset Hinglish or say what was heard; Hindi heard at 60% doesn't ask with nothing preset, offer two answers and hold Start until one is picked; no answer in 15 s doesn't ask without holding Start; English captions ask; Back doesn't delete the upload; Start doesn't send exactly the choice (`spoken_language`, `caption_language`, `hindi_script`); axe isn't 0 with the choice open, in light and dark. Read-only (v1.0.9; Marathi's own answer removed in v1.0.11) |
+| `checks.js unsupported-speech` | at 375 or 1440 px, with detection mocked: Tamil or Marathi heard doesn't say "<Language> speech isn't supported yet, so captions would be inaccurate.", presets a choice, or lets Start go before one; the spoken-language picker offers anything but the served languages; "Try anyway" doesn't send `auto`; a language chosen isn't sent; Hindi chosen doesn't ask how it's written with nothing preset; axe isn't 0 with the notice open, light and dark. Read-only (v1.0.11) |
+| `checks.js retired-language` | a video answered as made in Tamil (v1.0.10) doesn't show its captions, isn't named Tamil, lacks the "isn't supported yet" note, or its Redo doesn't ask for an offered language; no Export. Needs a completed video; read-only (v1.0.11) |
 | `checks.js script-fonts` | an Indic caption isn't drawn in its bundled Noto face (Chromium's own report of the fonts used), or the Latin words in it are. Read-only |
 | `checks.js style-sliders` | any style slider at 375 or 1440 px doesn't follow a drag, moves while dragged, ignores a click or an arrow key, shows a different number, doesn't update the preview within 0.5 s, or doesn't survive a reload |
 | `checks.js caption-drag` | the caption, dragged by mouse or touch at 375 or 1440 px, jumps on grab or release, doesn't follow the pointer, leaves the safe area or changes size past any edge, isn't saved where it was dropped, toggles playback, or moves on reload |
@@ -296,7 +298,7 @@ Measured on v1.0.10 ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md), with
 samples): large-v3 WER 3-7% on Spanish, Portuguese, Italian, Russian,
 French, German and Dutch, 26% on Hindi (Apex 29%), 63-122% on Marathi,
 Bengali, Tamil and Malayalam; English 59%, from a bug (quiet recordings
-taken for silence, fixed in v1.0.11). Translation from English chrF 55-68
+taken for silence), 5.7% with v1.0.11's fix. Translation from English chrF 55-68
 into the European languages, 51 into Hindi, 24-43 into the four Indian
 languages removed in v1.0.11.
 

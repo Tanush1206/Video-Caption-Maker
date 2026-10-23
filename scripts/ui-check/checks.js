@@ -263,6 +263,9 @@ async function mockHeldUpload(page, base, heard) {
   return log;
 }
 
+// Taken out in v1.0.11; no picker may offer them.
+const REMOVED_NAMES = ["தமிழ்", "मराठी", "বাংলা", "മലയാളം", "Tamil", "Marathi", "Bengali", "Malayalam"];
+
 const CHECKS = {
   // While the video plays, the overlay shows the caption under the playhead
   // within one frame: on every presented frame (requestVideoFrameCallback),
@@ -438,19 +441,20 @@ const CHECKS = {
     ok("editor-languages: every served language", texts.length === served.length, `${texts.length} vs ${served.length}`);
     const both = served.filter((o) => o.native && o.native !== o.label).every((o) => texts.some((t) => t.includes(o.native) && t.includes(o.label)));
     ok("editor-languages: native and English names", both);
+    ok("editor-languages: Tamil, Marathi, Bengali, Malayalam not offered (v1.0.11)", !texts.some((t) => REMOVED_NAMES.some((name) => t.includes(name))), texts.join(" / "));
     const search = page.getByRole("combobox", { name: "Search caption languages" });
     ok("editor-languages: search has focus on open", await search.evaluate((e) => e === document.activeElement));
     await search.fill("rus");
     ok("editor-languages: search by English name", (await options.allInnerTexts()).join("|").includes("Русский") && (await options.count()) === 1);
     await search.fill("espanol");
     ok("editor-languages: search ignores accents", (await options.count()) === 1 && (await options.first().innerText()).includes("Español"));
-    await search.fill("বাংলা");
+    await search.fill("हिन्दी");
     ok("editor-languages: search by native name", (await options.count()) === 1);
     await search.fill("zzz");
     ok("editor-languages: says when nothing matches", (await page.getByText("No language matches").count()) === 1);
-    await search.fill("ta");
+    await search.fill("deu");
     await page.keyboard.press("Enter");
-    ok("editor-languages: Enter chooses and closes", (await trigger.getAttribute("aria-expanded")) === "false" && (await trigger.getAttribute("aria-label")).includes("தமிழ்"));
+    ok("editor-languages: Enter chooses and closes", (await trigger.getAttribute("aria-expanded")) === "false" && (await trigger.getAttribute("aria-label")).includes("Deutsch"));
     ok("editor-languages: focus returns to the picker", await trigger.evaluate((e) => e === document.activeElement));
     ok("editor-languages: Redo hint appears", await page.getByText("Press Redo to apply").isVisible());
     await page.keyboard.press("Enter");
@@ -478,20 +482,22 @@ const CHECKS = {
       await group.waitFor();
       const cards = group.getByRole("radio");
       ok(`${at}: a card per served language`, (await cards.count()) === served.length, `${await cards.count()} vs ${served.length}`);
+      const all = await group.locator("label").allInnerTexts();
+      ok(`${at}: Tamil, Marathi, Bengali, Malayalam not offered (v1.0.11)`, !all.some((t) => REMOVED_NAMES.some((name) => t.includes(name))), all.join(" / "));
       const search = page.getByRole("searchbox", { name: "Search caption languages" });
-      await search.fill("bengali");
+      await search.fill("german");
       const shown = await group.locator("label").allInnerTexts();
-      ok(`${at}: search by English name`, shown.length === 2 && shown[1].includes("বাংলা"), shown.join(" / "));
+      ok(`${at}: search by English name`, shown.length === 2 && shown[1].includes("Deutsch"), shown.join(" / "));
       await search.fill("Русский");
       ok(`${at}: search by native name`, (await cards.count()) === 2);
-      await search.fill("ml");
-      ok(`${at}: search by code`, (await group.locator("label").allInnerTexts()).some((t) => t.includes("മലയാളം")));
+      await search.fill("nl");
+      ok(`${at}: search by code`, (await group.locator("label").allInnerTexts()).some((t) => t.includes("Nederlands")));
       await search.fill("klingon");
       ok(`${at}: only "Same as spoken" when nothing matches`, (await cards.count()) === 1);
       ok(`${at}: says nothing matches`, await page.getByRole("status").filter({ hasText: "No caption language matches" }).isVisible());
-      await search.fill("tamil");
+      await search.fill("italian");
       await group.locator("label").nth(1).click();
-      ok(`${at}: a found language can be chosen`, await group.getByRole("radio", { checked: true }).evaluate((e) => e.value === "ta"));
+      ok(`${at}: a found language can be chosen`, await group.getByRole("radio", { checked: true }).evaluate((e) => e.value === "it"));
       await search.fill("");
       ok(`${at}: clearing the search shows them all`, (await cards.count()) === served.length);
       await page.close();
@@ -500,9 +506,9 @@ const CHECKS = {
 
   // The language step's Hindi script choice (v1.0.9), with the API mocked so
   // each detection outcome is certain: Hindi heard surely presets Hinglish;
-  // Marathi asks with nothing preset and Start waits; no answer in 15 s asks
-  // without holding Start; English captions don't ask; Back deletes the
-  // upload. Checks what Start sends each time. Read-only.
+  // Hindi heard unsurely asks with nothing preset and Start waits; no answer
+  // in 15 s asks without holding Start; English captions don't ask; Back
+  // deletes the upload. Checks what Start sends each time. Read-only.
   async "hindi-script"(browser, base) {
     const pick = async (page) => {
       await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
@@ -516,7 +522,7 @@ const CHECKS = {
       const context = await browser.newContext({ colorScheme: theme, viewport: { width: 1440, height: 900 } });
       await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
       const page = await context.newPage();
-      await mockHeldUpload(page, base, ["mr", 0.81]);
+      await mockHeldUpload(page, base, ["hi", 0.6]);
       await pick(page);
       await group(page).waitFor();
       await page.waitForTimeout(1000);
@@ -539,11 +545,11 @@ const CHECKS = {
       await page.context().close();
 
       page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
-      log = await mockHeldUpload(page, base, ["mr", 0.81]);
+      log = await mockHeldUpload(page, base, ["hi", 0.6]);
       await pick(page);
       await group(page).waitFor();
-      ok(`${at}: Marathi asks with nothing preset`, (await group(page).getByRole("radio", { checked: true }).count()) === 0);
-      ok(`${at}: Marathi is one of the answers`, (await group(page).getByRole("radio").count()) === 3);
+      ok(`${at}: Hindi heard unsurely asks with nothing preset`, (await group(page).getByRole("radio", { checked: true }).count()) === 0);
+      ok(`${at}: two answers`, (await group(page).getByRole("radio").count()) === 2);
       ok(`${at}: Start waits for an answer`, await start(page).isDisabled());
       await group(page).locator("label").nth(1).click();
       ok(`${at}: an answer enables Start`, await start(page).isEnabled());
@@ -575,6 +581,122 @@ const CHECKS = {
       ok(`${at}: Back deletes the upload`, log.deleted);
       await page.context().close();
     }
+  },
+
+  // Speech heard in a language not offered (v1.0.11), with the API mocked:
+  // the step says so ("Tamil speech isn't supported yet…"), presets nothing
+  // and holds Start; "Try anyway" sends auto; a spoken language chosen
+  // instead is sent, and Hindi chosen asks how it's written with nothing
+  // preset. The picker offers the served spoken languages only. axe 0 with
+  // the notice open, light and dark. Read-only.
+  async "unsupported-speech"(browser, base) {
+    const pick = async (page) => {
+      await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
+      await page.locator('input[type="file"]').first().setInputFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not really a video") });
+    };
+    const start = (page) => page.getByRole("button", { name: /Start generating captions/ });
+    const anyway = (page) => page.getByRole("button", { name: "Try anyway (low quality)" });
+    const picker = (page) => page.getByRole("button", { name: /^Spoken language:/ });
+    const served = (await (await (await browser.newPage()).request.get(`${base}/api/videos/languages`)).json()).spoken;
+
+    const { AxeBuilder } = require("@axe-core/playwright");
+    for (const theme of ["light", "dark"]) {
+      const context = await browser.newContext({ colorScheme: theme, viewport: { width: 1440, height: 900 } });
+      await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+      const page = await context.newPage();
+      await mockHeldUpload(page, base, ["ta", 0.93]);
+      await pick(page);
+      await anyway(page).waitFor();
+      await page.waitForTimeout(1000);
+      const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+      ok(`unsupported-speech: axe 0 with the notice open (${theme})`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+      await context.close();
+    }
+
+    for (const width of [1440, 375]) {
+      const at = `unsupported-speech@${width}`;
+      let page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      let log = await mockHeldUpload(page, base, ["ta", 0.93]);
+      await pick(page);
+      await anyway(page).waitFor();
+      ok(`${at}: says Tamil isn't supported`, await page.getByText("Tamil speech isn't supported yet, so captions would be inaccurate.").isVisible());
+      ok(`${at}: nothing chosen`, (await anyway(page).getAttribute("aria-pressed")) === "false" && (await picker(page).getAttribute("aria-label")) === "Spoken language: none");
+      ok(`${at}: Start waits for a choice`, await start(page).isDisabled());
+      await picker(page).click();
+      const offered = await page.getByRole("listbox", { name: "Spoken language" }).getByRole("option").allInnerTexts();
+      ok(`${at}: the served spoken languages only`, offered.length === served.length - 1 && !offered.some((t) => REMOVED_NAMES.some((name) => t.includes(name))), offered.join(" / "));
+      await page.keyboard.press("Escape");
+      await anyway(page).click();
+      ok(`${at}: Try anyway chosen`, (await anyway(page).getAttribute("aria-pressed")) === "true");
+      ok(`${at}: Try anyway enables Start`, await start(page).isEnabled());
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: Try anyway sends auto`, JSON.stringify(log.started) === JSON.stringify({ spoken_language: "auto", caption_language: "same", hindi_script: "auto" }), JSON.stringify(log.started));
+      await page.context().close();
+
+      page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      log = await mockHeldUpload(page, base, ["ta", 0.93]);
+      await pick(page);
+      await anyway(page).waitFor();
+      await picker(page).click();
+      await page.getByRole("combobox", { name: "Search spoken languages" }).fill("english");
+      await page.keyboard.press("Enter");
+      ok(`${at}: a spoken language chosen enables Start`, await start(page).isEnabled());
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: Start sends the chosen language`, JSON.stringify(log.started) === JSON.stringify({ spoken_language: "en", caption_language: "same" }), JSON.stringify(log.started));
+      await page.context().close();
+
+      page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      log = await mockHeldUpload(page, base, ["mr", 0.81]);
+      await pick(page);
+      await anyway(page).waitFor();
+      ok(`${at}: says Marathi isn't supported`, await page.getByText("Marathi speech isn't supported yet, so captions would be inaccurate.").isVisible());
+      await picker(page).click();
+      await page.getByRole("combobox", { name: "Search spoken languages" }).fill("hindi");
+      await page.keyboard.press("Enter");
+      const scripts = page.getByRole("radiogroup", { name: /captions in/i });
+      await scripts.waitFor();
+      ok(`${at}: Hindi chosen asks how it's written, nothing preset`, (await scripts.getByRole("radio", { checked: true }).count()) === 0);
+      ok(`${at}: and Start waits for it`, await start(page).isDisabled());
+      await scripts.locator("label").nth(1).click();
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: Start sends Hindi in Devanagari`, JSON.stringify(log.started) === JSON.stringify({ spoken_language: "hi", caption_language: "same", hindi_script: "devanagari" }), JSON.stringify(log.started));
+      await page.context().close();
+    }
+  },
+
+  // A video made in a language no longer offered (v1.0.11) still opens: its
+  // captions, its language named, a note that the speech isn't supported,
+  // and the Redo asks for an offered language instead of failing. Export is
+  // there. The video is answered as Tamil by the check. Read-only.
+  async "retired-language"(browser, base) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const id = await editorVideo(page, base);
+    await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+      const body = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...body, status: "completed", stage: null, spoken_language: "auto", caption_language: "ta", detected_language: "ta", notice: null } });
+    });
+    await page.route(new RegExp(`/api/videos/${id}/captions$`), (route) =>
+      route.fulfill({
+        json: {
+          total: 1,
+          items: [{
+            id: 1, video_id: id, sequence: 0, start_ms: 0, end_ms: 1000, text: "நாம் சூப் செய்வோம்",
+            confidence: -0.2, override_color: null, override_bold: null, override_scale: null,
+          }],
+        },
+      })
+    );
+    await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+    ok("retired-language: the captions show", (await page.locator("textarea").first().inputValue()) === "நாம் சூப் செய்வோம்");
+    ok("retired-language: named Tamil", (await page.getByText(/→ Tamil/).count()) > 0);
+    ok("retired-language: says the speech isn't supported", await page.getByText("Tamil speech isn't supported yet, so these captions are likely inaccurate.").isVisible());
+    ok("retired-language: Redo asks for an offered language", await page.getByText("Tamil captions are no longer offered").isVisible() && (await page.getByRole("button", { name: "Redo" }).isDisabled()));
+    ok("retired-language: Export is there", (await page.getByRole("button", { name: /Export/ }).count()) + (await page.getByRole("link", { name: /Export/ }).count()) > 0);
+    await context.close();
   },
 
   // The editor's Redo offers "Hindi in" for a video with no language
