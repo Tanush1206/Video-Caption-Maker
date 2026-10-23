@@ -267,6 +267,39 @@ late. What is left out of the rule is Whisper's own word timestamps, up to
 about 0.15 s late and 0.25 s early (0.55 s on one long Spanish word); the
 pipeline adds 0-20 ms to them.
 
+### Language quality: `scripts/language_eval.py`
+
+How well each language is heard and translated, on Google's FLEURS test
+split (CC BY 4.0, pinned commit). Measures only. Runs on the host (standard
+library and ffmpeg) and drives the dev stack's worker and API; the data goes
+to `test-assets/fleurs/` (gitignored, never commit it), about 0.8 GB for
+thirteen languages.
+
+```bash
+python scripts/language_eval.py fetch                      # 70 utterances a language
+python scripts/language_eval.py asr                        # WER/CER: large-v3 + Apex (GPU), turbo + small (CPU)
+python scripts/language_eval.py pipeline --base http://localhost:3001   # ~3 min a language through the app
+python scripts/language_eval.py mt                         # chrF, en and hi into every language
+python scripts/language_eval.py report > report.md
+python scripts/language_eval.py clean                      # deletes the data and the worker's copies
+```
+
+`--langs en,hi` limits a step and `--models large-v3-cuda` the asr runs.
+`asr` saves after each language and skips what is already measured
+(`--redo` to measure again), so it can be stopped and resumed. Nothing else
+should use the CPU during the CPU runs: their speed is in the report.
+`pipeline` uploads one video a language, runs `coverage_check.py` and
+`timing_check.py` on it and deletes it, printing each id. The CPU runs took
+about 40 min for nine languages, the GPU ones a few minutes.
+
+Measured on v1.0.10 ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md), with
+samples): large-v3 WER 3-7% on Spanish, Portuguese, Italian, Russian,
+French, German and Dutch, 26% on Hindi (Apex 29%), 63-122% on Marathi,
+Bengali, Tamil and Malayalam; English 59%, from a bug (quiet recordings
+taken for silence, fixed in v1.0.11). Translation from English chrF 55-68
+into the European languages, 51 into Hindi, 24-43 into the four Indian
+languages removed in v1.0.11.
+
 ### Update download size: `scripts/update_layers.py`
 
 Proves that `vcm update` downloads only the image layers that changed.
