@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertCircle, ChevronLeft, ChevronRight, LayoutGrid, List, Search, SearchX } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, LayoutGrid, List, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { StatsStrip } from "@/components/dashboard/stats-strip";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VideoCard } from "@/components/videos/video-card";
 import { VideoRow } from "@/components/videos/video-row";
@@ -40,11 +42,11 @@ const FIRST_STEPS = [
  */
 function FirstRun() {
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-8 md:grid-cols-3">
       {FIRST_STEPS.map((step) => (
-        <div key={step.title} className="rounded-lg border border-border bg-card p-5">
-          <p className="text-lg font-semibold tracking-tight">{step.title}</p>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
+        <div key={step.title}>
+          <p className="text-[15px] font-semibold">{step.title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
         </div>
       ))}
     </div>
@@ -83,51 +85,35 @@ export function VideoLibrary() {
   }
 
   const filters = (
-    <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-0.5" role="group" aria-label="Filter by status">
-      {FILTERS.map((filter) => (
-        <button
-          key={filter.label}
-          type="button"
-          onClick={() => changeFilter(filter.value)}
-          aria-pressed={status === filter.value}
-          className={cn(
-            "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-            status === filter.value
-              ? "bg-surface-3 text-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-          )}
-        >
-          {filter.label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      label="Filter by status"
+      segments={FILTERS.map((filter) => ({ value: filter.value, label: filter.label }))}
+      value={status}
+      onChange={changeFilter}
+      className="w-full sm:w-auto"
+    />
   );
 
   if (isError) {
     return (
-      <div
-        role="alert"
-        className="flex gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-body-md text-destructive"
-      >
-        <AlertCircle className="mt-px size-4 shrink-0" />
+      <p role="alert" className="flex gap-2 text-[15px] text-destructive">
+        <AlertCircle className="mt-0.5 size-[18px] shrink-0" />
         <span>Couldn&apos;t load your videos. {(error as Error).message}</span>
-      </div>
+      </p>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         {filters}
         {/* Shaped like the cards, so the layout doesn't jump when they land. */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="overflow-hidden rounded-lg border border-border bg-card">
-              <Skeleton className="aspect-video w-full rounded-none" />
-              <div className="space-y-2 p-3.5">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-3 w-1/3" />
-              </div>
+            <div key={i} className="space-y-2.5">
+              <Skeleton className="aspect-video w-full rounded-xl" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
             </div>
           ))}
         </div>
@@ -154,20 +140,19 @@ export function VideoLibrary() {
   const scaleMs = items.reduce((longest, video) => Math.max(longest, video.duration_ms ?? 0), 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-base font-semibold tracking-tight">Recent projects</h2>
-          <span className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
-            {total} video{total === 1 ? "" : "s"}
-          </span>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold">Videos</h2>
+          {/* The library's figures, as one grey line. */}
+          <StatsStrip />
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
           {filters}
-          <label className="relative order-last flex w-full items-center sm:order-none sm:w-56">
+          <label className="relative flex w-full min-w-0 flex-1 items-center sm:w-56 sm:flex-none">
             <Search
-              className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground"
+              className="pointer-events-none absolute left-3 size-4 text-muted-foreground"
               aria-hidden="true"
             />
             <span className="sr-only">Filter projects by name</span>
@@ -175,39 +160,21 @@ export function VideoLibrary() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter projects…"
-              className="h-8 w-full rounded-md border border-border bg-card pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+              placeholder="Filter by name"
+              className="h-11 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-[15px] placeholder:text-muted-foreground focus-visible:border-ring sm:h-8 sm:text-sm"
             />
           </label>
-          <div
-            className="flex items-center rounded-lg border border-border bg-card p-0.5"
-            role="group"
-            aria-label="Layout"
-          >
-            {(
-              [
-                { value: "grid", label: "Grid view", icon: LayoutGrid },
-                { value: "list", label: "List view", icon: List },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setView(option.value)}
-                aria-pressed={view === option.value}
-                aria-label={option.label}
-                title={option.label}
-                className={cn(
-                  "flex size-7 items-center justify-center rounded-md transition-colors",
-                  view === option.value
-                    ? "bg-surface-3 text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <option.icon className="size-4" />
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Layout"
+            iconOnly
+            segments={[
+              { value: "grid" as const, label: "Grid view", icon: LayoutGrid },
+              { value: "list" as const, label: "List view", icon: List },
+            ]}
+            value={view}
+            onChange={setView}
+            segmentClassName="px-2.5"
+          />
         </div>
       </div>
 
@@ -216,29 +183,19 @@ export function VideoLibrary() {
         // videos match this filter" is a dead end with a way out, and showing
         // the first when someone filtered would read as data loss.
         needle ? (
-          <div className="py-14 text-center">
-            <p className="text-body-md font-medium">No project on this page has that name</p>
-            <Button variant="secondary" size="sm" className="mt-4" onClick={() => setQuery("")}>
+          <div className="py-16 text-center">
+            <p className="text-[15px] font-semibold">No video on this page has that name</p>
+            <Button variant="plain" size="sm" className="mt-2" onClick={() => setQuery("")}>
               Clear the filter
             </Button>
           </div>
         ) : status === null ? (
           <FirstRun />
         ) : (
-          <div className="py-14 text-center">
-            <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <SearchX className="size-5" />
-            </span>
-            <p className="mt-4 text-body-md font-medium">Nothing matches this filter</p>
-            <p className="mt-1 text-body-sm text-muted-foreground">
-              No videos are in this state right now.
-            </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="mt-4"
-              onClick={() => changeFilter(null)}
-            >
+          <div className="py-16 text-center">
+            <p className="text-[15px] font-semibold">Nothing matches this filter</p>
+            <p className="mt-1 text-sm text-muted-foreground">No videos are in this state right now.</p>
+            <Button variant="plain" size="sm" className="mt-2" onClick={() => changeFilter(null)}>
               Show all videos
             </Button>
           </div>
@@ -253,21 +210,23 @@ export function VideoLibrary() {
           )}
         >
           {view === "grid" ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {items.map((video) => (
                 <VideoCard key={video.id} video={video} />
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-card px-2">
+            <div>
               {scaleMs > 0 && (
-                <p className="border-b border-border px-2 py-2 text-right text-body-sm text-muted-foreground">
+                <p className="pb-2 text-right text-sm text-muted-foreground">
                   Bar scale <span className="font-mono tabular-nums">{formatDuration(scaleMs)}</span>
                 </p>
               )}
-              {items.map((video) => (
-                <VideoRow key={video.id} video={video} scaleMs={scaleMs} />
-              ))}
+              <div className="divide-y divide-border border-y border-border">
+                {items.map((video) => (
+                  <VideoRow key={video.id} video={video} scaleMs={scaleMs} />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -276,7 +235,7 @@ export function VideoLibrary() {
       {pageCount > 1 && (
         <div className="flex items-center justify-center gap-2 pt-2">
           <Button
-            variant="secondary"
+            variant="ghost"
             size="icon-sm"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
@@ -284,11 +243,11 @@ export function VideoLibrary() {
           >
             <ChevronLeft />
           </Button>
-          <span className="px-2 text-body-sm tabular-nums text-muted-foreground">
+          <span className="px-2 text-sm tabular-nums text-muted-foreground">
             Page {page + 1} of {pageCount}
           </span>
           <Button
-            variant="secondary"
+            variant="ghost"
             size="icon-sm"
             onClick={() => setPage((p) => p + 1)}
             disabled={page + 1 >= pageCount}
