@@ -28,8 +28,10 @@ import {
 import { useDownloadOriginal } from "@/hooks/use-stream";
 import { useLanguageOptions } from "@/hooks/use-videos";
 import { formatFileSize, formatRelativeTime } from "@/lib/format";
+import { languageName } from "@/lib/languages";
 import { cn } from "@/lib/utils";
 import type { ExportFormat, VideoExport } from "@/types/export";
+import type { LanguageOptions } from "@/types/video";
 import { useState } from "react";
 
 /**
@@ -65,10 +67,9 @@ const ICONS: Record<string, typeof FileText> = { mp4: Clapperboard, srt: FileTex
  * another language the old SRT is still in the list, and unlabelled it was
  * downloaded as the new one.
  */
-function LanguageLine({ item, names }: { item: VideoExport; names: Map<string, string> }) {
+function LanguageLine({ item, options }: { item: VideoExport; options: LanguageOptions | undefined }) {
   if (!item.caption_language) return null;
-  const name =
-    item.caption_language === "same" ? "Spoken language" : (names.get(item.caption_language) ?? item.caption_language);
+  const name = item.caption_language === "same" ? "Spoken language" : languageName(item.caption_language, options);
   return (
     <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
       <span>{name}</span>
@@ -130,7 +131,6 @@ export function ExportPanel({
   const download = useDownloadExport();
   const downloadOriginal = useDownloadOriginal(videoId);
   const { data: languages } = useLanguageOptions();
-  const languageNames = new Map((languages?.caption ?? []).map((option) => [option.code, option.label]));
 
   /**
    * The height to burn at. Null means "whatever the server recommends", which
@@ -394,7 +394,7 @@ export function ExportPanel({
                     {item.format}
                     {item.height ? <span className="normal-case"> · {item.height}p</span> : null}
                   </p>
-                  <LanguageLine item={item} names={languageNames} />
+                  <LanguageLine item={item} options={languages} />
                   <StatusLine item={item} />
                 </div>
                 <button

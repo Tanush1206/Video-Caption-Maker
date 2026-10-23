@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   AlertCircle,
+  AlertTriangle,
   Check,
   Clock,
   Download,
@@ -17,7 +18,8 @@ import { Stepper } from "@/components/flow/stepper";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
-import { useRetranscribe } from "@/hooks/use-videos";
+import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
+import { isOfferedSpeech, languageName, unsupportedSpeech } from "@/lib/languages";
 import { stageLabel, useEta } from "@/lib/stages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { cn } from "@/lib/utils";
@@ -275,24 +277,37 @@ function Failed({ video }: { video: Video }) {
 }
 
 /**
- * What a finished video still has to say: a non-fatal notice from the job
- * (e.g. a translation fallback), or that no speech was found at all.
+ * What a finished video still has to say: that its speech is in a language
+ * not offered (v1.0.11: tried anyway, started before the language step heard
+ * it, or made before), a non-fatal notice from the job (e.g. a translation
+ * fallback), or that no speech was found at all.
  */
 function CompletedNotes({ video, captionCount }: { video: Video; captionCount: number }) {
-  if (!video.notice && captionCount > 0) return null;
+  const { data: options } = useLanguageOptions();
+  const heard = video.detected_language;
+  const unsupported = heard !== null && options !== undefined && !isOfferedSpeech(heard, options) ? heard : null;
+  if (unsupported === null && !video.notice && captionCount > 0) return null;
   return (
     <div className="mb-5 flex flex-col gap-2">
-      {video.notice && (
+      {unsupported !== null && captionCount > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-[13px]">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+          {unsupportedSpeech(languageName(unsupported, options), true)}
+        </p>
+      )}
+      {video.notice && captionCount > 0 && (
         <p className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           {video.notice}
         </p>
       )}
       {captionCount === 0 && (
+        // The job says "No speech was found in this video." since v1.0.11,
+        // after anything else it had to say; older videos say nothing.
         <p className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-          No speech was found in this video, so there is nothing to export. If that&apos;s wrong,
-          try a larger speech model in Settings and process it again.
+          {video.notice ?? "No speech was found in this video."} There is nothing to export. If
+          that&apos;s wrong, try a larger speech model in Settings and process it again.
         </p>
       )}
     </div>

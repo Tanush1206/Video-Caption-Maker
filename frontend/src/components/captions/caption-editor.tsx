@@ -20,6 +20,7 @@ import type { Playback } from "@/hooks/use-playback";
 import { Select } from "@/components/ui/select";
 import { LanguagePicker } from "@/components/videos/language-picker";
 import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
+import { languageName } from "@/lib/languages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import type { Video } from "@/types/video";
 
@@ -75,6 +76,9 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   const languageChanged =
     captionLanguage !== video.caption_language || (offerScript && hindiScript !== currentScript);
+  // Captions made in a language no longer offered (v1.0.11) are kept, but a
+  // Redo needs one that is.
+  const captionOffered = languageOptions?.caption.some((option) => option.code === captionLanguage) ?? true;
 
   /**
    * The caption just added, so it can be focused once the refetch brings it in.
@@ -292,7 +296,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           )}
           <ToolButton
             onClick={redo}
-            disabled={retranscribe.isPending || video.status === "processing"}
+            disabled={retranscribe.isPending || video.status === "processing" || !captionOffered}
             icon={RefreshCw}
             spinning={retranscribe.isPending}
             title="Transcribe this video again, replacing every caption"
@@ -352,10 +356,17 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
             </div>
           )}
 
-          {languageChanged && (
+          {!captionOffered ? (
             <span className="text-[10px] text-muted-foreground">
-              Press Redo to apply — it re-transcribes and replaces every caption.
+              {languageName(captionLanguage, languageOptions)} captions are no longer offered. Choose a
+              language to redo.
             </span>
+          ) : (
+            languageChanged && (
+              <span className="text-[10px] text-muted-foreground">
+                Press Redo to apply — it re-transcribes and replaces every caption.
+              </span>
+            )
           )}
         </div>
       )}

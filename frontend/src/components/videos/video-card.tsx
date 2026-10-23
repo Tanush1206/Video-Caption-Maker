@@ -8,6 +8,7 @@ import { AuthedImage } from "@/components/videos/authed-image";
 import { Button } from "@/components/ui/button";
 import { useDeleteVideo, useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
 import { formatDuration } from "@/lib/format";
+import { languageName } from "@/lib/languages";
 import { stageLabel } from "@/lib/stages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { cn } from "@/lib/utils";
@@ -20,15 +21,15 @@ const STATUS: Record<VideoStatus, { label: string; className: string }> = {
   failed: { label: "Failed", className: "border-rose-500/40 bg-rose-950/80 text-rose-200" },
 };
 
-/** "Auto-detect → Hindi", from the labels the API serves for each code. */
+/**
+ * "Auto-detect → Hindi", from the labels the API serves for each code; a
+ * video made in a language no longer offered (v1.0.11) still reads "Tamil".
+ */
 export function useLanguagePair(video: Video): { spoken: string; caption: string } | null {
   const { data } = useLanguageOptions();
   if (!data) return null;
-  const spoken = data.spoken.find((o) => o.code === video.spoken_language)?.label ?? video.spoken_language;
-  const caption =
-    video.caption_language === "same"
-      ? "Same language"
-      : (data.caption.find((o) => o.code === video.caption_language)?.label ?? video.caption_language);
+  const spoken = languageName(video.spoken_language, data);
+  const caption = video.caption_language === "same" ? "Same language" : languageName(video.caption_language, data);
   return { spoken, caption };
 }
 
