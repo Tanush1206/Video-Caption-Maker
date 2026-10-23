@@ -13,11 +13,11 @@ import { cn } from "@/lib/utils";
  * the Tailwind config, which the editor layout subtracts in `calc()`.
  */
 
-/** One container. Every full-width page uses this and nothing else. */
-export const CONTAINER = "mx-auto w-full max-w-6xl px-4 sm:px-6";
+/** One container. Side margins 16 px on a phone, 32 px from sm up. */
+export const CONTAINER = "mx-auto w-full max-w-6xl px-4 sm:px-8";
 
 /** The editor's frame: wider, because it is a workspace rather than a page. */
-export const WIDE_CONTAINER = "mx-auto w-full max-w-[1800px] px-4 sm:px-6";
+export const WIDE_CONTAINER = "mx-auto w-full max-w-[1800px] px-4 sm:px-8";
 
 export function PageHeader({
   sticky = false,
@@ -39,46 +39,17 @@ export function PageHeader({
     <header
       className={cn(
         "z-40 w-full",
-        sticky && [
-          "sticky top-0 border-b border-border",
-          // Translucent with a blur, so content scrolling underneath stays
-          // faintly visible instead of vanishing behind an opaque bar. The
-          // supports check keeps a solid fallback where blur is unavailable,
-          // rather than leaving the header see-through and unreadable.
-          "bg-background/85",
-          "supports-[backdrop-filter]:bg-background/70",
-          "supports-[backdrop-filter]:backdrop-blur-lg",
-        ],
+        // Translucent with a blur (.bar-translucent: 72%, blur 20 px,
+        // saturate 180%), so content scrolling underneath stays faintly
+        // visible; solid where blur is unavailable. A hairline below.
+        sticky && "bar-translucent sticky top-0 border-b border-border",
         className
       )}
     >
-      <div className={cn(wide ? WIDE_CONTAINER : CONTAINER, "flex h-header items-center gap-4")}>{children}</div>
+      <div className={cn(wide ? WIDE_CONTAINER : CONTAINER, "relative flex h-header items-center gap-4")}>
+        {children}
+      </div>
       {below}
     </header>
-  );
-}
-
-/**
- * The quiet version of the landing page's backdrop.
- *
- * Same two tokens and the same technique as the hero and the auth screens, at
- * a fraction of the intensity. That difference is deliberate rather than a
- * compromise: a landing page is asking for attention and a tool is being used
- * for hours, so matching the hero's wash here would be the wrong kind of
- * consistency. What carries across is the palette, not the volume.
- *
- * The parent needs `relative isolate` — and must *not* be `overflow-hidden`,
- * which would break the sticky header. The clipping happens on this element
- * instead.
- */
-export function TopGlow() {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-96 overflow-hidden"
-    >
-      <div className="absolute -top-40 left-1/2 h-80 w-[52rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
-      <div className="absolute -top-24 right-0 h-56 w-72 rounded-full bg-accent/10 blur-3xl" />
-    </div>
   );
 }

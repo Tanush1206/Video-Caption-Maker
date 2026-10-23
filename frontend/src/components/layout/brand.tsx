@@ -21,14 +21,16 @@ export function Brand({
   return (
     <Link
       href={href}
-      className={cn("group flex shrink-0 items-center gap-2.5", className)}
+      className={cn("group flex shrink-0 items-center gap-2 rounded-md", className)}
       aria-label="VideoCaptionMaker home"
     >
-      <span className="relative flex size-7 items-center justify-center rounded-md bg-primary shadow-sm shadow-primary/30 transition-transform duration-200 ease-out group-hover:scale-105">
+      {/* The glyph alone, in the text colour: the accent is kept for the
+          screen's one primary action. Shown only without the wordmark. */}
+      <span className={cn("relative flex size-6 items-center justify-center", showText && "hidden")}>
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          className="size-4 text-primary-foreground"
+          className="size-5 text-foreground"
           aria-hidden="true"
         >
           {/* A frame with two caption lines inside it — the whole product in
@@ -59,7 +61,7 @@ export function Brand({
       </span>
 
       {showText && (
-        <span className="truncate text-[15px] font-semibold tracking-tight">VideoCaptionMaker</span>
+        <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">VideoCaptionMaker</span>
       )}
     </Link>
   );

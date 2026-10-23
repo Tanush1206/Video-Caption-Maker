@@ -2,18 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderOpen, Search, Settings } from "lucide-react";
+import { Film, Search, Settings } from "lucide-react";
 
 import { Brand } from "@/components/layout/brand";
-import { EngineChip, HostChip } from "@/components/layout/engine-chip";
 import { PageHeader } from "@/components/layout/page-frame";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { LOCAL_MODE } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard", label: "Projects", icon: FolderOpen },
+  { href: "/dashboard", label: "Videos", icon: Film },
   { href: "/search", label: "Search", icon: Search },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -22,7 +20,7 @@ function useIsActive() {
   const pathname = usePathname();
   // startsWith, so /search/12 still lights up "Search" — but not for
   // /dashboard, which would then match everything under it. The editor is a
-  // project, so it keeps "Projects" lit.
+  // video, so it keeps "Videos" lit.
   return (href: string) =>
     href === "/dashboard"
       ? pathname === href || pathname.startsWith("/editor")
@@ -30,24 +28,22 @@ function useIsActive() {
 }
 
 /**
- * The top bar: wordmark and address on the left, the three sections as one
- * segmented control in the middle, the hardware readout on the right. On a
- * phone the sections move to a tab bar at the bottom (MobileTabBar), where a
- * thumb can reach them.
+ * The top bar: the app's name on the left and the three sections as plain
+ * text tabs, on a translucent bar. Nothing else: the hardware readout and the
+ * theme live in Settings (v1.1.0). On a phone the sections move to a tab bar
+ * at the bottom (MobileTabBar), where a thumb can reach them.
  */
 export function DashboardHeader() {
   const isActive = useIsActive();
 
   return (
     <PageHeader sticky wide>
-      <div className="flex min-w-0 items-center gap-3">
-        <Brand href="/dashboard" />
-        <HostChip className="hidden lg:inline-flex" />
-      </div>
+      <Brand href="/dashboard" />
 
+      {/* Centred in the bar, independent of the name's width. */}
       <nav
         aria-label="Sections"
-        className="mx-auto hidden items-center gap-1 rounded-lg border border-border bg-card p-1 md:flex"
+        className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex"
       >
         {NAV.map((item) => (
           <Link
@@ -55,10 +51,10 @@ export function DashboardHeader() {
             href={item.href}
             aria-current={isActive(item.href) ? "page" : undefined}
             className={cn(
-              "rounded-md px-3.5 py-1 text-[13px] font-medium transition-colors",
+              "rounded-md px-3 py-1.5 text-sm transition-colors duration-200 ease-out",
               isActive(item.href)
-                ? "bg-surface-3 text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                ? "font-semibold text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             {item.label}
@@ -66,12 +62,12 @@ export function DashboardHeader() {
         ))}
       </nav>
 
-      <div className="ml-auto flex min-w-0 items-center gap-1.5 md:ml-0">
-        <EngineChip className="hidden max-w-[22rem] sm:inline-flex" />
-        <ThemeToggle />
-        {/* Nobody to sign out as on a local install. */}
-        {!LOCAL_MODE && <UserMenu />}
-      </div>
+      {/* Nobody to sign out as on a local install. */}
+      {!LOCAL_MODE && (
+        <div className="ml-auto flex items-center">
+          <UserMenu />
+        </div>
+      )}
     </PageHeader>
   );
 }
@@ -80,13 +76,13 @@ export function DashboardHeader() {
 export function MobileTabBar() {
   const isActive = useIsActive();
   const pathname = usePathname();
-  // The editor has its own bottom bar (Caption style / Export).
+  // The editor has its own bottom sheet (the inspector).
   if (pathname.startsWith("/editor")) return null;
 
   return (
     <nav
       aria-label="Sections"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden"
+      className="bar-translucent fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       {NAV.map((item) => (
         <Link
@@ -94,7 +90,7 @@ export function MobileTabBar() {
           href={item.href}
           aria-current={isActive(item.href) ? "page" : undefined}
           className={cn(
-            "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors",
+            "flex min-h-12 flex-col items-center justify-center gap-0.5 py-1.5 text-2xs font-medium transition-colors duration-200 ease-out",
             isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-foreground"
           )}
         >
