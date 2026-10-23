@@ -747,6 +747,81 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## Language quality eval (done 2026-10-23), then v1.0.10 install, then v1.0.11
+
+Resumed 2026-10-23: the CPU runs finished (kept languages only, 38 min),
+the pipeline ran (videos 7590-7599, all deleted by id; the dev stack holds
+only 7426, not ours), and the report is
+[docs/LANGUAGE_QUALITY.md](docs/LANGUAGE_QUALITY.md), summarised in
+TESTING.md ("Language quality") and the PRD's known limitations. Found
+besides the quiet-recording bug, not changed: 8 captions under 0.8 s
+across 6 of 10 pipeline runs (clips with 0.6 s pauses), and words heard
+but uncaptioned in loud German (1.9 s) and English, and 0.84 s of
+Portuguese.
+
+Where it stood when paused the night before:
+
+Stopped for the night at Tanush's request. Nothing is committed yet; the dev
+stack is stopped (`docker compose stop`, containers and volumes kept); the
+installed app was not touched.
+
+### Where the language eval stopped (`scripts/language_eval.py`, untracked)
+Data in `test-assets/fleurs/` (gitignored, never commit); results per run in
+`test-assets/fleurs/results/`, saved after each language.
+- Done: `fetch`; `mt` (en and hi into all 13); `asr` large-v3 GPU, all 13;
+  Apex (Hinglish) GPU, hi; large-v3-turbo CPU: en, hi, nl, and mr, bn, ta
+  (kept as evidence for their removal); small CPU: nl.
+- Stopped: large-v3-turbo CPU on ml, killed mid-run (pid in the worker),
+  nothing saved for it. Tamil, Marathi, Bengali and Malayalam are skipped
+  from here on (removed in v1.0.11).
+- Left, in this order (Tanush, 2026-10-22):
+  1. `python scripts/language_eval.py asr --langs en,hi,es,pt,it,ru,fr,de,nl`
+     (resumable: runs only turbo CPU es, pt, it, ru, fr, de and small CPU
+     en, hi, es, pt, it, ru, fr, de; about 70-90 min). Nothing else on the
+     CPU meanwhile: its timings are part of the report.
+  2. `pipeline --base http://localhost:3001 --langs en,hi,es,pt,it,ru,fr,de,nl`
+     (plus hi/roman; deletes each video it makes, by id), then `report`,
+     results into TESTING.md and the PRD's known limitations, eval commit.
+  3. v1.0.10 release checklist (release workflow and 8 assets already
+     verified green on a1b822a), back up the install to
+     `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.0.10`, `vcm update`,
+     verify, then delete the `pre-1.0.9` backup.
+  4. A Tamil test video uploaded on the current (v1.0.10) code, to check
+     after v1.0.11 that an existing video in a removed language opens and
+     exports; deleted afterwards by id.
+  5. v1.0.11, then `language_eval.py clean` and the release steps.
+
+### Bug found by the eval (fix approved for v1.0.11)
+The fixed -40 dB silence threshold takes quiet recordings for silence: 27 of
+50 English FLEURS clips (peaks -44 to -54 dB, speech at -56 to -64 dB) and 1
+French came back with no captions, every segment dropped as invented over
+silence. English large-v3 WER 59% is this bug, not the model.
+
+### v1.0.11 (written, not yet applied or tested)
+Saved twice: `git stash list` ("v1.0.11 WIP ... based on a1b822a") and
+`test-assets/v1.0.11-wip.patch` (`git apply --check` passes on main).
+Apply only after step 1-2 above: the dev backend is bind-mounted, so the
+change would alter what the eval measures.
+- Quiet audio: silence is under -40 dB, or 15 dB under the file's speaking
+  level if that's lower, never under -80 dB (`silence_threshold`); ordinary
+  recordings (speaking at -19 to -31 dB) are judged as before.
+- A job with no captions finishes with "No speech was found in this video."
+  as its notice.
+- Tamil, Marathi, Bengali, Malayalam removed as caption and spoken languages
+  (`languages.RETIRED` keeps their names); detected speech not offered shows
+  "<Language> speech isn't supported yet, so captions would be inaccurate."
+  with a spoken-language picker or "Try anyway (low quality)", neither
+  preset; "Try anyway" + "Same as spoken" kept (Tanush), with a note on the
+  video page. Existing videos keep their captions and export; their Redo asks
+  for an offered language. Fonts kept.
+- Tests written: `test_languages_offered.py`, quiet/silent/no-speech tests in
+  `test_transcription.py`, `checks.js unsupported-speech` and
+  `retired-language`; none run yet.
+- Still to do: run backend, frontend and ui-check suites; re-run English on
+  the GPU with the fix; docs (README without "Same as spoken works for any
+  language", PRD, CHANGELOG, ROADMAP "re-add with Indian-language
+  fine-tuned speech models (e.g. AI4Bharat)" with the eval numbers, TESTING).
+
 ## v1.0.10 (in progress: speech with no caption)
 Brief (Tanush, 2026-10-22): stretches of 1-2 s where someone speaks and no
 caption appears, seen on video 84 after a Redo. Find every one (over 0.7 s)

@@ -515,8 +515,21 @@ From the README "Known limitations" and PROGRESS.md:
   them there. On a Mac everything
   runs on the CPU, and Apple Silicon runs the amd64 images under emulation,
   which is slow.
+- **Quiet recordings get no captions.** The silence check treats anything
+  under -40 dB as silence, so a recording that speaks below that throughout
+  (a quiet or distant microphone) has every caption dropped as invented,
+  and the job finishes with none and no message. On FLEURS, 27 of 50 English
+  clips and 1 French one ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)).
+  Fixed in v1.0.11.
+- **How well speech is heard depends on the language** (large-v3, FLEURS,
+  [LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)): Spanish, Portuguese, Italian,
+  Russian, French, German and Dutch 3-7% word error; Hindi 26% (Apex 29%),
+  right words often misspelt; Marathi, Bengali and Tamil 63-76%, words
+  spelt as heard; Malayalam unusable, written in other scripts. Those four
+  are removed in v1.0.11.
 - **The small speech model is weak on fast non-English speech, especially
-  Hindi.** `small` is chosen automatically on machines under 12 GB of RAM (or
+  Hindi.** On FLEURS small makes 55% word error on Hindi against large-v3's
+  26%; on the European languages 6-16%, against 3-7%. `small` is chosen automatically on machines under 12 GB of RAM (or
   GPUs under 6 GB). On a low-RAM Hindi test it first produced no captions at
   all. Since `b8c446a` it retries and produces rough captions, with the
   low-confidence notice on 4 of 6 jobs (PROGRESS.md, R4). A larger model in
@@ -529,7 +542,10 @@ From the README "Known limitations" and PROGRESS.md:
   nouns often are not ("onions" became "apples", "soap" or "sugar"); Tamil
   and Malayalam are the weakest added, and Hindi is weaker as a source than
   as a target. Samples per pair are in PROGRESS.md (v1.0.7). Gemini, with a
-  key and quota, is much better.
+  key and quota, is much better. Measured on FLEURS (chrF): from English
+  55-68 into the European languages, 51 into Hindi, 43 Bengali, 38 Marathi,
+  34 Malayalam, 24 Tamil; from Hindi 9-15 points lower
+  ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)).
 - **Text can sit a pixel or two higher or lower inside its line in the
   preview than in the export.** The lines, the size and the box are the
   same (one layout rule); each renderer places the baseline within the line
@@ -549,7 +565,9 @@ From the README "Known limitations" and PROGRESS.md:
   families), libass draws empty boxes in the MP4. SRT/VTT/JSON exports are
   unaffected.
 - **CPU transcription is slow:** roughly real time with the default model
-  (README, Troubleshooting).
+  (README, Troubleshooting). On short read sentences (FLEURS) turbo took
+  0.23-0.81× and small 0.10-0.46× of the audio's length; long videos, with
+  re-decoding, take longer.
 
 ## 11. Definition of done
 
