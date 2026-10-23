@@ -747,6 +747,67 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## v1.1.0 (in progress): minimal, Apple-like redesign
+Brief (Tanush, 2026-10-23): restyle only (hooks, API calls, state, data
+flow and behaviour unchanged) to a minimal, Apple-like look: hierarchy from
+type and spacing, not boxes; one accent (#0071E3 / #0A84FF) for the one
+primary action, selection and progress; system font stack; mono only for
+timecodes; hairline separators; translucent bars; exact tokens in the brief
+(also in DESIGN_SYSTEM.md once written). design/stitch/ is no longer the
+reference. Dev stack on 3001 only.
+
+Process:
+1. Tokens, Dashboard and Editor in light and dark; screenshots at 1440 and
+   375 px; **stop for Tanush's OK** (one checkpoint).
+2. After the OK, one commit per screen: language step, processing, failed,
+   export dialog, search, settings, empty states, notices, 404.
+3. All checks (lint, types, production build, npm test, ui-checks, axe 0,
+   E2E), DESIGN_SYSTEM.md replaced, CHANGELOG v1.1.0, final screenshots,
+   release steps; after the tag: backup, checklist, update, verify.
+
+### Status
+- [x] Phase 1 built (2026-10-23): tokens (globals.css, tailwind.config.ts:
+      colours, type scale on Tailwind's own names, radii, system fonts),
+      primitives (button, dialog, input, select, badge, skeleton, slider,
+      new Menu and Segmented), header, Dashboard, Editor. lint, tsc and
+      npm test clean; ui-checks 316 PASS on the dev stack (3001) with test
+      video 7611 (to delete at the end); the 4 axe failures are on the
+      language step, restyled in phase 2. Screenshots sent; **waiting for
+      Tanush's OK** before phase 2.
+- [ ] Phase 2, one commit per screen: language step, processing, failed,
+      export dialog, search, settings, empty states, notices, 404.
+- [ ] Final: all checks, E2E, DESIGN_SYSTEM.md, CHANGELOG, final
+      screenshots, release steps.
+
+### Decisions (taken under the brief; listed for Tanush)
+- **AA over exact colour where they conflict:** the brief's colours are
+  used exactly for fills, dots, rings and progress; text uses AA twins:
+  accent text #0066CC (light), the filled primary in dark #0071E3 (white
+  on #0A84FF is 3.6:1), red text #D70015 / #FF453A and the filled red
+  #D70015, warning text #C93400. Status is a dot beside ordinary text.
+- **Segmented controls:** labels in the main text colour in every segment
+  (#6E6E73 on the #E8E8ED track is 4.15:1); the selected segment is white
+  (dark #636366).
+- **Kept, restyled, not removed** (restyle only): the stats (now one grey
+  line under "Videos"), the list view, the name filter, the timeline zoom.
+- **Header:** "Videos, Search, Settings" (was "Projects"); the hardware and
+  address chips and the theme toggle left the header (the theme is in
+  Settings; hardware goes to Settings in phase 2). The footer line stays,
+  as quiet sans text.
+- **Card actions** behind "…" (Open, Search this video, Try again / Start
+  now, Settings, Delete…); delete confirms in a dialog, the only filled red
+  button. `flow.js` follows (menu, then the dialog).
+- **Editor:** inspector = one segmented control, Captions · Typography ·
+  Appearance · Position (the style checks' tab names and radio roles
+  kept); one StylePanel shared by the three style tabs; the timeline spans
+  the width under stage and inspector; the play button is a plain icon
+  (Export is the one primary). On a phone the inspector is a bottom sheet,
+  raised by a tab or its grabber. `caption-snap` picks a style tab after
+  its reload (the inspector opens on Captions).
+- **No webfont for the UI:** Geist and JetBrains Mono dropped for the
+  system stack and the system monospace; caption fonts untouched.
+- **Accounts-mode screens** (landing, sign-in), not shipped: tokens only.
+
 ## v1.0.11 (released 2026-10-23, tag on 6094524): quiet recordings, nine languages
 Brief (Tanush, 2026-10-22/23): fix quiet recordings (found by the language
 eval) and say "No speech was found in this video." when a job still ends

@@ -1325,6 +1325,8 @@ const CHECKS = {
     }
     await page.request.patch(`${base}/api/videos/${id}/style`, { data: { pos_x: 0.1, pos_y: 0.1, box_width: 0.3, max_lines: 3 } });
     await page.reload({ waitUntil: "networkidle" });
+    // The inspector opens on Captions (v1.1.0); Reset is on the style tabs.
+    await page.getByRole("radio", { name: "Position" }).click();
     await page.getByRole("button", { name: "Reset" }).click();
     await page.waitForTimeout(900);
     const reset = await styleOf(page, base, id);

@@ -19,12 +19,14 @@ const results = []; const ok = (n, pass, d = "") => results.push(`${pass ? "PASS
   p.on("response", (r) => { if (r.url().includes("/api/") && r.status() === 403) refused.push(`${r.request().method()} ${new URL(r.url()).pathname}`); });
   try {
     await p.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
-    ok("new UI served", await p.getByRole("link", { name: "Projects" }).first().isVisible());
+    ok("new UI served", await p.getByRole("link", { name: "Videos" }).first().isVisible());
     const card = p.locator("article", { has: p.locator(`a[href="/editor/${deleteId}"]`) });
     const title = await card.locator("h3").innerText();
-    await card.getByRole("button", { name: `Delete ${title}` }).click();
+    // v1.1.0: delete is in the card's "…" menu, confirmed in a dialog.
+    await card.getByRole("button", { name: `More actions for ${title}` }).click();
+    await card.getByRole("menuitem", { name: "Delete…" }).click();
     const del = p.waitForResponse((r) => r.request().method() === "DELETE" && r.url().endsWith(`/api/videos/${deleteId}`));
-    await card.getByRole("button", { name: "Delete", exact: true }).click();
+    await p.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
     const d = await del; await p.waitForTimeout(1500);
     ok("delete", d.status() === 204 && (await p.locator(`a[href="/editor/${deleteId}"]`).count()) === 0, `DELETE ${d.status()}`);
 
