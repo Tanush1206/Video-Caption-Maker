@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
-import localFont from "next/font/local";
 import "./globals.css";
 import { AuthBootstrap } from "@/components/layout/auth-bootstrap";
 import { Providers } from "@/components/layout/providers";
@@ -22,28 +20,9 @@ const themeInitScript = `
 })();
 `;
 
-// Exposed as CSS variables rather than class names so Tailwind's fontFamily
-// can reference them, and so a `font-mono` utility anywhere picks the right
-// face without the component knowing which font is loaded.
-// Geist, DESIGN.md's UI face. Next 14's Google list predates it, so the
-// variable file is bundled here (from the `geist` npm package, OFL; licence
-// alongside). Not in public/fonts: that folder is the caption fonts, which
-// the backend image copies for burn-in.
-const sans = localFont({
-  src: "./fonts/Geist-Variable.woff2",
-  variable: "--font-sans",
-  weight: "100 900",
-  display: "swap",
-});
-
-// Timecodes, byte counts and progress percentages sit in columns that must not
-// jitter as their digits change. A proportional face makes 00:11 narrower than
-// 00:00, and the whole row shifts every tenth of a second during playback.
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-});
+// No webfont for the interface (v1.1.0): the system's own face, and the
+// system's monospace for timecodes (tailwind.config.ts fontFamily). The
+// caption faces are separate, in public/fonts, and unchanged.
 
 export const metadata: Metadata = {
   title: "VideoCaptionMaker — AI Captions & Transcript Search",
@@ -61,7 +40,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={`${sans.variable} ${mono.variable} font-sans`}>
+      <body className="font-sans">
         <ThemeProvider>
           <Providers>
             {/* Silently restores the session from the refresh cookie on load. */}

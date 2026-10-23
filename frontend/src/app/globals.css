@@ -197,19 +197,26 @@
 }
 
 /*
- * Design tokens, from design/stitch/local_video_studio_engine/DESIGN.md
- * (v1.0.4): a cold slate base, one indigo accent, emerald only for local
- * engine health. The screens' own palettes disagree with each other in
- * places; DESIGN.md is the one source for colour.
+ * Design tokens (v1.1.0): a minimal, Apple-like system. docs/DESIGN_SYSTEM.md
+ * holds the rules and the reasons; design/stitch/ is no longer the reference.
+ *
+ * Hierarchy comes from type, weight and spacing, not from boxes: the page is
+ * white (black in dark), a grouped area is one tone off it, a hairline
+ * separates rows. One accent, for the one primary action on a screen, the
+ * selected state and progress.
  *
  * Every colour is bare HSL channels so Tailwind can wrap them in
  * `hsl(var(--x) / <alpha>)`. A token holding a full `hsl(...)` string silently
  * breaks every opacity modifier like `bg-primary/10`.
  *
- * Two departures from DESIGN.md, both for WCAG AA (axe stays at zero):
- * white on its #6366F1 is 4.47:1, so filled buttons use #5B5EF0 (dark) and
- * #4F46E5 (light); and #6366F1 as text on the dark card is 3.97:1, so indigo
- * text in dark uses #818CF8 through --primary-text.
+ * The brief's colours are used exactly for fills, dots, rings and progress.
+ * Where one would be text, or carry text, below WCAG AA it has an AA twin
+ * (axe stays at zero):
+ * - accent text in light is #0066CC (#0071E3 is 4.3:1 on the grouped grey);
+ * - the filled primary in dark is #0071E3 (white on #0A84FF is 3.6:1);
+ * - red text is #D70015 / #FF453A, and the filled red (confirm only) #D70015;
+ * - warning text in light is #C93400; status otherwise is a coloured dot
+ *   beside ordinary text, never coloured text alone.
  */
 
 @layer base {
@@ -217,137 +224,137 @@
     /*
      * Which way the browser should paint the parts of the UI we do not draw:
      * scrollbars, the <select> popup, the colour picker, native form control
-     * defaults.
-     *
-     * The theme here is a `.dark` class, which is a CSS fact — and the native
-     * control renderer cannot see CSS classes. Without this it assumes light
-     * and paints a white scrollbar down the side of a navy panel, and it was
-     * also why `accent-color` came out re-derived on the old sliders.
+     * defaults. The theme is a `.dark` class, which the native control
+     * renderer cannot see.
      */
     color-scheme: light;
 
-    /* Tailwind's slate family, as DESIGN.md's text hierarchy is. */
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    --background: 0 0% 100%; /* #FFFFFF page */
+    --foreground: 240 3.3% 11.8%; /* #1D1D1F */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    /* The grouped background: inspector groups, the upload area, wells. */
+    --card: 240 11.1% 96.5%; /* #F5F5F7 */
+    --card-foreground: 240 3.3% 11.8%;
 
-    /* Elevation, low to high. In light these barely separate and the border
-       does the work; in dark they are the whole mechanism. Named by level so
-       a component asks for depth, not for a colour. */
+    /* By level: the page, the grouped tone, and the fill a secondary button
+       or a selected segment sits on. */
     --surface-1: 0 0% 100%;
-    --surface-2: 210 40% 96%;
-    --surface-3: 214 32% 91%;
+    --surface-2: 240 11.1% 96.5%; /* #F5F5F7 */
+    --surface-3: 240 12.2% 92%; /* #E8E8ED */
 
-    --subtle: 210 40% 96%;
-    --muted: 210 40% 96%;
-    /* slate-600, not DESIGN.md's slate-500: 500 drops under 4.5:1 on the
-       tinted panels (surface-2, the drop zone). */
-    --muted-foreground: 215 19% 35%;
+    --subtle: 240 11.1% 96.5%;
+    --muted: 240 11.1% 96.5%;
+    --muted-foreground: 240 2.2% 44.1%; /* #6E6E73, 4.7:1 on #F5F5F7 */
 
-    /* indigo-600: DESIGN.md's hover indigo, the darkest of its two, so white
-       on it and it on white both clear AA. */
-    --primary: 243 75% 59%;
+    --primary: 210 100% 44.5%; /* #0071E3 */
     --primary-foreground: 0 0% 100%;
-    --primary-muted: 226 100% 97%;
-    /* Indigo as text: the fill colour in light, lighter in dark. */
-    --primary-text: 243 75% 59%;
+    --primary-muted: 210 100% 96%;
+    --primary-text: 210 100% 40%; /* #0066CC */
 
-    /* Progress fills are solid in this design; the old second gradient colour
-       is the indigo again, so .bar-fill reads as one colour. */
-    --accent: 243 75% 59%;
+    /* Progress and the playhead. */
+    --accent: 210 100% 44.5%; /* #0071E3 */
 
-    --success: 163 94% 24%; /* #047857: emerald-700, 5.5:1 on white */
-    --warning: 26 90% 37%; /* #b45309: used for small text, 5:1 on white */
-    /* rose-700 (#be123c): 5.1-5.3:1 on its own 10% tint (badges) and 6.3:1 under
-       white text. rose-600 was 3.82:1 on the tint, which failed AA. */
-    --destructive: 345 83% 41%;
+    /* Dots and icons, as given. */
+    --success: 135 58.6% 49.2%; /* #34C759 */
+    --warning: 36 100% 52%; /* #FF9F0A */
+    --destructive: 3 100% 59.4%; /* #FF3B30 */
+    /* Text, and the filled confirm button. */
+    --warning-text: 16 100% 39.4%; /* #C93400 */
+    --destructive-text: 354 100% 42.2%; /* #D70015 */
+    --destructive-fill: 354 100% 42.2%; /* #D70015, white on it 5.4:1 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%;
-    --input: 213 27% 84%;
-    --ring: 239 84% 67%;
+    --border: 240 5.9% 83.3%; /* #D2D2D7, hairline */
+    --input: 240 5.9% 83.3%;
+    --ring: 210 100% 44.5%;
 
-    /* 8px: DESIGN.md's one radius for buttons, inputs, rows, panels. */
-    --radius: 0.5rem;
+    /* Buttons and inputs; thumbnails and the video are 12px (rounded-xl),
+       dialogs 16px (rounded-2xl), segmented controls 8px (rounded-md). */
+    --radius: 10px;
 
-    /* Shared by the auth glass. em-based so the rim scales with the control
-       it is drawn on, clamped so it never vanishes or turns into a frame. */
+    /* Shared by the auth glass (accounts mode). */
     --glass-time: 400ms;
     --glass-ease: cubic-bezier(0.25, 1, 0.5, 1);
     --glass-border: clamp(1px, 0.0625em, 4px);
 
-    /* Layered rather than one blur: a tight shadow for the contact edge and a
-       wide one for ambient falloff. A single shadow looks hard or muddy. */
-    --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
-    --shadow-md:
-      0 1px 3px 0 hsl(222 47% 11% / 0.07), 0 4px 12px -2px hsl(222 47% 11% / 0.06);
-    --shadow-lg:
-      0 2px 4px -1px hsl(222 47% 11% / 0.06), 0 12px 28px -6px hsl(222 47% 11% / 0.12);
+    /* Only floating layers cast a shadow: dialogs, popovers, menus. */
+    --shadow-sm: 0 0 #0000;
+    --shadow-md: 0 0 #0000;
+    --shadow-lg: 0 8px 32px rgb(0 0 0 / 0.12);
+
+    /* Bars and sheets: the page shows through, blurred. */
+    --bar-opacity: 0.72;
+
+    /* The selected segment of a segmented control, on the --surface-3 track. */
+    --segment: 0 0% 100%;
   }
 
   .dark {
     color-scheme: dark;
 
-    /* DESIGN.md's layering: canvas, panel, card, overlay. */
-    --background: 230 25% 5%; /* #090a0f */
-    --foreground: 210 40% 98%; /* #f8fafc */
+    --background: 0 0% 0%; /* #000000 */
+    --foreground: 240 11.1% 96.5%; /* #F5F5F7 */
 
-    --card: 225 22% 11%; /* #151821 */
-    --card-foreground: 210 40% 98%;
+    --card: 240 3.4% 11.4%; /* #1C1C1E raised */
+    --card-foreground: 240 11.1% 96.5%;
 
-    --surface-1: 227 24% 7%; /* #0e1017 */
-    --surface-2: 225 22% 14%; /* #1c202c */
-    --surface-3: 225 21% 18%; /* #252a39 */
+    --surface-1: 0 0% 0%;
+    --surface-2: 240 3.4% 11.4%; /* #1C1C1E */
+    --surface-3: 240 2.2% 17.6%; /* #2C2C2E */
 
-    /* Below the page, for wells and inset areas - the one surface that goes
-       darker rather than lighter. */
-    --subtle: 220 23% 3%; /* #050608 */
+    --subtle: 240 3.4% 11.4%;
+    --muted: 240 3.4% 11.4%;
+    --muted-foreground: 240 2.5% 60.6%; /* #98989D */
 
-    --muted: 225 22% 14%; /* #1c202c */
-    --muted-foreground: 215 20% 65%; /* #94a3b8 */
+    --primary: 210 100% 44.5%; /* #0071E3 fill: white on #0A84FF fails AA */
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 210 60% 14%;
+    --primary-text: 210 100% 52%; /* #0A84FF */
 
-    --primary: 239 83% 65%; /* #5b5ef0 */
-    --primary-foreground: 0 0% 100%; /* #ffffff */
-    --primary-muted: 235 33% 19%;
-    --primary-text: 234 89% 74%; /* #818cf8 */
+    --accent: 210 100% 52%; /* #0A84FF */
 
-    --accent: 239 84% 67%; /* #6366f1 */
+    --success: 135 58.6% 49.2%;
+    --warning: 36 100% 52%;
+    --destructive: 3 100% 59.4%;
+    --warning-text: 36 100% 52%; /* #FF9F0A */
+    --destructive-text: 3 100% 61.4%; /* #FF453A */
+    --destructive-fill: 354 100% 42.2%;
+    --destructive-foreground: 0 0% 100%;
 
-    --success: 160 84% 39%; /* #10b981 */
-    --warning: 38 92% 50%; /* #f59e0b */
-    --destructive: 0 91% 71%; /* #f87171 */
-    --destructive-foreground: 228 17% 6%;
+    --border: 240 1.8% 22.4%; /* #38383A */
+    --input: 240 1.8% 22.4%;
+    --ring: 210 100% 52%; /* #0A84FF */
 
-    --border: 227 21% 17%; /* #222634 */
-    --input: 226 19% 27%; /* #373d51 */
-    --ring: 239 84% 67%; /* #6366f1 */
+    --shadow-lg: 0 8px 32px rgb(0 0 0 / 0.5);
 
-    /* Nearly invisible on these surfaces, which is correct - elevation here is
-       lightness. Kept so overlays and dropdowns still detach from the page. */
-    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 2px 6px -1px hsl(0 0% 0% / 0.4), 0 8px 20px -6px hsl(0 0% 0% / 0.35);
-    --shadow-lg: 0 4px 10px -2px hsl(0 0% 0% / 0.45), 0 18px 40px -10px hsl(0 0% 0% / 0.5);
+    --segment: 240 1.6% 39.4%; /* #636366 */
   }
 
   * {
     @apply border-border;
   }
 
+  /* Body text is 15/22 (DESIGN_SYSTEM.md, Type). */
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-base text-foreground antialiased;
   }
 
+  /* Titles are tightened; body text keeps the face's own spacing. */
   h1, h2, h3 {
-    @apply tracking-tight;
+    letter-spacing: -0.02em;
   }
 
-  /* One focus treatment everywhere, rather than each component inventing its
-     own. :focus-visible only, so a mouse click doesn't leave a ring behind
-     while the keyboard path stays fully visible. */
+  /* One focus treatment everywhere: a 2 px accent ring. :focus-visible only,
+     so a mouse click doesn't leave a ring behind while the keyboard path
+     stays fully visible. */
   :focus-visible {
-    @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Lucide at a 1.5 stroke everywhere (DESIGN_SYSTEM.md, Icons). The CSS
+     property beats the icon's stroke-width attribute. */
+  .lucide {
+    stroke-width: 1.5;
   }
 
   /* Any number that changes in place - timecodes, progress, counters - must
@@ -454,17 +461,40 @@
 }
 
 @layer components {
-  /* Stitch leans on one recurring label style: 11px, uppercase, wide-tracked,
-     bold. It is what makes the panel headers read as instrument labels rather
-     than headings, so it earns a class instead of six utilities per use. */
+  /* The small grey heading above a group (System Settings style): 13/18,
+     secondary, sentence case. The name is older than the look. */
   .label-caps {
-    @apply text-[11px] font-bold uppercase leading-4 tracking-[0.05em] text-muted-foreground;
+    @apply text-[13px] font-normal leading-[18px] text-muted-foreground;
   }
 
-  /* The primary-to-accent sweep, used on progress and relevance bars. Defined
-     once so every bar in the app is the same gradient. */
+  /* Progress and relevance bars: the accent, flat. */
   .bar-fill {
-    @apply bg-gradient-to-r from-primary to-accent;
+    @apply bg-accent;
+  }
+
+  /* A translucent bar or sheet: the page shows through, blurred. Solid where
+     backdrop-filter isn't supported, so text over it stays readable. */
+  .bar-translucent {
+    background-color: hsl(var(--background));
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .bar-translucent {
+      background-color: hsl(var(--background) / var(--bar-opacity));
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+    }
+  }
+
+  /* An inset, rounded group of rows on the grouped tone (System Settings).
+     Rows inside are split by hairlines (.group-row). */
+  .group-inset {
+    @apply overflow-hidden rounded-xl bg-card;
+  }
+  .group-row {
+    @apply flex min-h-11 items-center justify-between gap-4 px-4 py-2.5;
+  }
+  .group-row + .group-row {
+    box-shadow: inset 0 1px 0 hsl(var(--border));
   }
 
   /*

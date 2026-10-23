@@ -16,10 +16,10 @@ const config: Config = {
     "./src/app/**/*.{ts,tsx}",
   ],
   theme: {
-    // Indigo text is lighter than the indigo fill in dark (see globals.css),
-    // so text-primary reads its own token while bg-primary keeps the fill.
+    // Accent, red and orange text read their own AA tokens while the fills,
+    // dots and rings keep the brief's exact colours (see globals.css).
     // A function over the whole palette, not `extend.textColor`: extended
-    // colours are merged in after it and would win back `primary`.
+    // colours are merged in after it and would win back these names.
     textColor: ({ theme }) => ({
       ...theme("colors"),
       primary: {
@@ -27,7 +27,42 @@ const config: Config = {
         foreground: withAlpha("--primary-foreground"),
         muted: withAlpha("--primary-muted"),
       },
+      destructive: {
+        DEFAULT: withAlpha("--destructive-text"),
+        foreground: withAlpha("--destructive-foreground"),
+      },
+      warning: withAlpha("--warning-text"),
     }),
+    // The type scale (DESIGN_SYSTEM.md): caption 12/16, secondary 13/18, body
+    // 15/22, section title 20/25, page title 28/34. Tailwind's own names are
+    // remapped so every screen moves to the scale at once; px, not rem, so a
+    // browser font setting can't break the timeline's labels.
+    fontSize: {
+      "2xs": ["11px", { lineHeight: "14px" }],
+      xs: ["12px", { lineHeight: "16px" }],
+      sm: ["13px", { lineHeight: "18px" }],
+      base: ["15px", { lineHeight: "22px" }],
+      lg: ["17px", { lineHeight: "22px" }],
+      xl: ["20px", { lineHeight: "25px", letterSpacing: "-0.02em" }],
+      "2xl": ["28px", { lineHeight: "34px", letterSpacing: "-0.02em" }],
+      "3xl": ["34px", { lineHeight: "41px", letterSpacing: "-0.02em" }],
+      "4xl": ["40px", { lineHeight: "48px", letterSpacing: "-0.02em" }],
+      "5xl": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em" }],
+      "6xl": ["60px", { lineHeight: "68px", letterSpacing: "-0.02em" }],
+      title: ["28px", { lineHeight: "34px", letterSpacing: "-0.02em", fontWeight: "600" }],
+      section: ["20px", { lineHeight: "25px", letterSpacing: "-0.02em", fontWeight: "600" }],
+      body: ["15px", { lineHeight: "22px" }],
+      secondary: ["13px", { lineHeight: "18px" }],
+      caption: ["12px", { lineHeight: "16px" }],
+      // Older names, kept so screens not yet restyled read on the new scale.
+      h1: ["28px", { lineHeight: "34px", letterSpacing: "-0.02em", fontWeight: "600" }],
+      h2: ["20px", { lineHeight: "25px", letterSpacing: "-0.02em", fontWeight: "600" }],
+      "body-md": ["15px", { lineHeight: "22px" }],
+      "body-sm": ["13px", { lineHeight: "18px" }],
+      "label-caps": ["13px", { lineHeight: "18px" }],
+      "mono-data": ["13px", { lineHeight: "18px", fontWeight: "500" }],
+      "mono-data-sm": ["12px", { lineHeight: "16px" }],
+    },
     container: {
       center: true,
       padding: "2rem",
@@ -63,41 +98,27 @@ const config: Config = {
           foreground: withAlpha("--muted-foreground"),
         },
         accent: withAlpha("--accent"),
+        segment: withAlpha("--segment"),
         success: withAlpha("--success"),
         warning: withAlpha("--warning"),
         destructive: {
           DEFAULT: withAlpha("--destructive"),
           foreground: withAlpha("--destructive-foreground"),
+          fill: withAlpha("--destructive-fill"),
         },
       },
-      // DESIGN.md: 8px on every component, 4px on micro elements (kbd,
-      // status chips), full only for dots and the scrub thumb. `md` stays the
-      // token so components that ask for it follow --radius.
+      // Segmented controls 8px (md), buttons and inputs 10px (lg), thumbnails
+      // and the video 12px (xl), dialogs 16px (2xl).
       borderRadius: {
-        xl: "calc(var(--radius) + 2px)",
+        sm: "6px",
+        md: "8px",
         lg: "var(--radius)",
-        md: "var(--radius)",
-        sm: "calc(var(--radius) / 2)",
+        xl: "12px",
+        "2xl": "16px",
       },
-      // The Stitch type scale. Sizes are fixed px rather than rem: this is a
-      // dense tool where an 11px label must stay 11px, and a user's browser
-      // font setting scaling the timeline labels would break the layout.
-      fontSize: {
-        h1: ["24px", { lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "600" }],
-        h2: ["20px", { lineHeight: "28px", letterSpacing: "-0.01em", fontWeight: "600" }],
-        "body-md": ["14px", { lineHeight: "20px" }],
-        "body-sm": ["12px", { lineHeight: "16px" }],
-        "label-caps": ["11px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "700" }],
-        "mono-data": ["13px", { lineHeight: "16px", fontWeight: "500" }],
-        "mono-data-sm": ["11px", { lineHeight: "14px" }],
-      },
-      // Only the header height is taken from Stitch's spacing scale. Its
-      // other names (standard/compact/gutter) just restate Tailwind's numeric
-      // scale under new words, and its `layout-sidebar` was applied as
-      // horizontal page padding - a 280px gutter, which is a bug not a token.
-      // This one earns a name because layouts subtract it in calc().
+      // The header height, subtracted in calc() by the editor's layout.
       spacing: {
-        header: "56px",
+        header: "52px",
       },
       boxShadow: {
         // Named for intent, not for size, so a component asks for the
@@ -106,9 +127,18 @@ const config: Config = {
         card: "var(--shadow-md)",
         overlay: "var(--shadow-lg)",
       },
+      // The system's own face; monospace only for timestamps and timecodes.
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          '"SF Pro Text"',
+          '"Segoe UI Variable"',
+          '"Segoe UI"',
+          "Inter",
+          "sans-serif",
+        ],
+        mono: ["ui-monospace", '"SF Mono"', '"Cascadia Mono"', "Menlo", "Consolas", "monospace"],
       },
       keyframes: {
         "fade-in": {
@@ -153,8 +183,8 @@ const config: Config = {
         },
       },
       animation: {
-        "fade-in": "fade-in 180ms ease-out",
-        "fade-up": "fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "fade-in": "fade-in 200ms ease-out",
+        "fade-up": "fade-up 220ms ease-out",
         shimmer: "shimmer 1.6s infinite",
         // `both`, so the from-state applies during the delay too. The usual
         // version of this pattern sets `opacity: 0` in a separate rule and
