@@ -20,29 +20,22 @@ export function Stepper({ current, className }: { current: 1 | 2 | 3 | 4; classN
         const active = step === current;
         return (
           <li key={label} className="flex min-w-0 items-center gap-2 sm:gap-3">
-            {index > 0 && (
-              <span
-                aria-hidden="true"
-                className={cn("h-px w-4 shrink-0 sm:w-8", done || active ? "bg-success/60" : "bg-border")}
-              />
-            )}
+            {index > 0 && <span aria-hidden="true" className="h-px w-4 shrink-0 bg-border sm:w-6" />}
             <span
               aria-current={active ? "step" : undefined}
               className={cn(
-                "flex min-w-0 items-center gap-2 text-sm",
-                active ? "font-semibold text-foreground" : "font-medium text-muted-foreground"
+                "flex min-w-0 items-center gap-1.5 text-sm",
+                active ? "font-semibold text-foreground" : "text-muted-foreground"
               )}
             >
-              <span
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold tabular-nums",
-                  done && "bg-success/15 text-success",
-                  active && "bg-primary text-primary-foreground",
-                  !done && !active && "border border-border bg-surface-2 text-muted-foreground"
-                )}
-              >
-                {done ? <Check className="size-3" aria-hidden="true" /> : step}
-              </span>
+              {done ? (
+                <Check className="size-3.5 shrink-0" aria-hidden="true" />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-accent" : "bg-muted-foreground/50")}
+                />
+              )}
               <span className="truncate">
                 {label}
                 {done && <span className="sr-only"> (done)</span>}
