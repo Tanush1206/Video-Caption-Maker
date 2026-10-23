@@ -713,7 +713,7 @@ def test_every_other_language_is_transcribed_then_translated():
     from app.services import languages
 
     # Whisper cannot produce these directly, whatever the source.
-    for target in ("hi", "fr", "de", "nl", "bn", "mr", "ta", "ml", "es", "pt", "it", "ru"):
+    for target in ("hi", "fr", "de", "nl", "es", "pt", "it", "ru"):
         assert languages.whisper_task("en", target) == "transcribe"
         assert languages.needs_translation("en", target) is True
 
@@ -731,15 +731,17 @@ def test_only_the_offered_languages_are_accepted():
     ninety-nine Whisper claims. Anything else must be refused rather than
     passed through to a model that will improvise — including the four left
     out after checking (Telugu: not in M2M100; Kannada, Gujarati, Punjabi:
-    unusable output).
+    unusable output) and the four taken out in v1.0.11 (Tamil, Marathi,
+    Bengali, Malayalam: the weakest on FLEURS).
     """
     from app.services import languages
 
     assert languages.is_spoken_language("auto")
     assert languages.is_caption_language("same")
-    for code in ("te", "kn", "gu", "pa"):
+    for code in ("te", "kn", "gu", "pa", "ta", "mr", "bn", "ml"):
         assert not languages.is_caption_language(code)
-    for code in ("en", "hi", "fr", "de", "nl", "bn", "mr", "ta", "ml", "es", "pt", "it", "ru"):
+        assert not languages.is_spoken_language(code)
+    for code in ("en", "hi", "fr", "de", "nl", "es", "pt", "it", "ru"):
         assert languages.is_spoken_language(code)
         assert languages.is_caption_language(code)
 

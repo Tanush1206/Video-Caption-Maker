@@ -14,34 +14,41 @@ pipeline cannot actually deliver.
 # Kannada, Gujarati and Punjabi came out of it unusable; see PROGRESS.md
 # (v1.0.7) for the samples. Arabic, Urdu and CJK need right-to-left or CJK
 # rendering first (docs/ROADMAP.md).
+#
+# The same list is the spoken languages offered. A language heard that isn't
+# here is transcribed only when someone chooses to try anyway.
 LANGUAGES: dict[str, str] = {
     "en": "English",
     "hi": "Hindi",
     "fr": "French",
     "de": "German",
     "nl": "Dutch",
-    "bn": "Bengali",
-    "mr": "Marathi",
-    "ta": "Tamil",
-    "ml": "Malayalam",
     "es": "Spanish",
     "pt": "Portuguese",
     "it": "Italian",
     "ru": "Russian",
 }
 
+# Offered from v1.0.7 to v1.0.10, removed in v1.0.11: on FLEURS large-v3 heard
+# them at 63-122% word error (Malayalam mostly in other scripts) and M2M100
+# translated into them at chrF 24-43 (docs/TESTING.md, "Language quality").
+# Videos made in them keep their captions and still export; they are named
+# here so what was made in them still reads as Tamil rather than "ta".
+RETIRED: dict[str, str] = {
+    "bn": "Bengali",
+    "mr": "Marathi",
+    "ta": "Tamil",
+    "ml": "Malayalam",
+}
+
 # Each language in its own name and script, which is how someone looking for
-# their language finds it in a list of fifteen.
+# their language finds it in a list of ten.
 NATIVE_NAMES: dict[str, str] = {
     "en": "English",
     "hi": "हिन्दी",
     "fr": "Français",
     "de": "Deutsch",
     "nl": "Nederlands",
-    "bn": "বাংলা",
-    "mr": "मराठी",
-    "ta": "தமிழ்",
-    "ml": "മലയാളം",
     "es": "Español",
     "pt": "Português",
     "it": "Italiano",
@@ -85,9 +92,10 @@ HINDI_SCRIPTS: dict[str, tuple[str, str]] = {
 # Decide from detection, the same rule the language step presets with.
 SCRIPT_AUTO = "auto"
 
-# Hinglish is the default only when Hindi is heard this surely. Below it, or
-# when Marathi is heard (Marathi and Hindi share a script and much of their
-# sound, and detection trades them), nothing is preset: the person chooses.
+# Hinglish is the default only when Hindi is heard this surely. Below it,
+# nothing is preset: the person chooses. Marathi, which detection trades with
+# Hindi, isn't offered since v1.0.11: hearing it asks for another spoken
+# language (Hindi among them) or a try anyway, like any language not offered.
 HINGLISH_MIN_CONFIDENCE = 0.70
 
 
@@ -136,7 +144,7 @@ def label(code: str) -> str:
         return "Auto-detect"
     if code == SAME:
         return "Same as spoken"
-    return LANGUAGES.get(code, code)
+    return LANGUAGES.get(code) or RETIRED.get(code, code)
 
 
 def needs_translation(spoken: str, caption: str) -> bool:
