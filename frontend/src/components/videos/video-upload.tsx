@@ -12,6 +12,7 @@ import { useSystem } from "@/hooks/use-system";
 import { useLanguageOptions, useRetranscribe, videoKeys } from "@/hooks/use-videos";
 import { api } from "@/lib/api";
 import { DETECTION_WAIT_MS, scriptQuestion, startRequest, type ScriptChoice } from "@/lib/hindi-script";
+import { isOfferedSpeech, TRY_ANYWAY } from "@/lib/languages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import { uploadVideo, type UploadHandle } from "@/lib/upload";
 import { cn } from "@/lib/utils";
@@ -30,9 +31,11 @@ function isAcceptedFile(file: File): boolean {
  *
  * The file uploads as soon as it is picked, held (v1.0.9): the server listens
  * to the first 30 s while the caption language is chosen, so the step can
- * ask how Hindi is written before anything is transcribed. Start sends the
- * choice (POST …/transcribe) and goes to the video's own page, where step 3
- * lives. Back, or leaving the page, deletes the upload and its files.
+ * ask how Hindi is written before anything is transcribed, and so speech in
+ * a language not offered is said before captions are made of it (v1.0.11).
+ * Start sends the choice (POST …/transcribe) and goes to the video's own
+ * page, where step 3 lives. Back, or leaving the page, deletes the upload
+ * and its files.
  */
 export function VideoUpload() {
   const router = useRouter();
@@ -50,6 +53,9 @@ export function VideoUpload() {
   const [uploadedAt, setUploadedAt] = useState<number | null>(null);
   const [timedOut, setTimedOut] = useState(false);
   const [script, setScript] = useState<ScriptChoice | null>(null);
+  // For speech heard in a language not offered: one chosen instead, or
+  // TRY_ANYWAY. Nothing until someone chooses.
+  const [spoken, setSpoken] = useState<string | null>(null);
   // Start pressed before the upload finished: start as soon as it lands.
   const [startWhenUploaded, setStartWhenUploaded] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -65,6 +71,9 @@ export function VideoUpload() {
   });
   const detected = held?.detected_language ?? null;
   const confidence = held?.detected_confidence ?? null;
+  const unsupported =
+    detected !== null && languageOptions !== undefined && !isOfferedSpeech(detected, languageOptions);
+  const chosenSpoken = unsupported && spoken !== null && spoken !== TRY_ANYWAY ? spoken : null;
 
   // Detection that hasn't answered in time asks without a preset.
   useEffect(() => {
@@ -77,8 +86,8 @@ export function VideoUpload() {
   }, [uploadedAt, detected]);
 
   const question = scriptQuestion({
-    detected,
-    confidence,
+    detected: chosenSpoken ?? detected,
+    confidence: chosenSpoken ? null : confidence,
     timedOut,
     captionLanguage: language,
     minConfidence: languageOptions?.hinglish_min_confidence ?? 0.7,
@@ -111,6 +120,7 @@ export function VideoUpload() {
   function reset() {
     picked.current = false;
     setScript(null);
+    setSpoken(null);
     setUploaded(null);
     setUploadedAt(null);
     setTimedOut(false);
@@ -168,6 +178,13 @@ export function VideoUpload() {
     setScript(choice);
   }
 
+  function chooseSpoken(choice: string) {
+    // A script picked for what was heard doesn't carry over to another language.
+    picked.current = false;
+    setScript(null);
+    setSpoken(choice);
+  }
+
   const start = useCallback(() => {
     setError(null);
     // Asked here, on a click, because browsers only show the permission
@@ -179,7 +196,7 @@ export function VideoUpload() {
     }
     setStarting(true);
     retranscribe.mutate(
-      { id: uploaded.id, ...startRequest(question.show ? script : null, language) },
+      { id: uploaded.id, ...startRequest(question.show ? script : null, language, chosenSpoken) },
       {
         onSuccess: (video) => {
           watchTranscription(video.id);
@@ -193,7 +210,7 @@ export function VideoUpload() {
         },
       }
     );
-  }, [uploaded, question.show, script, language, retranscribe, queryClient, router]);
+  }, [uploaded, question.show, script, language, chosenSpoken, retranscribe, queryClient, router]);
 
   // Start was pressed while uploading: it goes once the upload has landed.
   useEffect(() => {
@@ -334,6 +351,9 @@ export function VideoUpload() {
             question={question}
             script={script}
             onScript={chooseScript}
+            unsupported={unsupported}
+            spoken={spoken}
+            onSpoken={chooseSpoken}
             waitingToStart={startWhenUploaded}
             starting={starting}
             onBack={back}

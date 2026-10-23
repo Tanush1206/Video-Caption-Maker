@@ -3,13 +3,13 @@
  *
  * The server serves the threshold and the options; this only decides what to
  * show for what was heard. Hindi heard at the threshold or above presets
- * Hinglish. Hindi below it, or Marathi (the two share a script and much of
- * their sound, and detection trades them), asks with nothing preset, and
- * Start waits for an answer. Detection that hasn't answered in time asks
- * too, but doesn't hold Start: the job then decides the same way ("auto").
+ * Hinglish. Hindi below it, or Hindi chosen by hand after another language
+ * was heard (v1.0.11), asks with nothing preset, and Start waits for an
+ * answer. Detection that hasn't answered in time asks too, but doesn't hold
+ * Start: the job then decides the same way ("auto").
  */
 
-export type ScriptChoice = "roman" | "devanagari" | "mr";
+export type ScriptChoice = "roman" | "devanagari";
 
 export interface ScriptQuestion {
   show: boolean;
@@ -32,6 +32,7 @@ export function scriptQuestion({
   captionLanguage,
   minConfidence,
 }: {
+  /** What was heard, or what was chosen instead (with a null confidence). */
   detected: string | null;
   confidence: number | null;
   timedOut: boolean;
@@ -63,27 +64,23 @@ export function scriptQuestion({
       required: !sure,
     };
   }
-  if (detected === "mr") {
-    return {
-      show: true,
-      heading: "Hindi or Marathi? Write the captions in",
-      options: ["roman", "devanagari", "mr"],
-      preset: null,
-      required: true,
-    };
-  }
   return HIDDEN;
 }
 
-/** What Start sends for a choice (or none). */
+/**
+ * What Start sends for a script choice (or none) and the spoken language
+ * chosen by hand on the language step (or none: detect it, as "Try anyway"
+ * does too).
+ */
 export function startRequest(
   choice: ScriptChoice | null,
-  captionLanguage: string
+  captionLanguage: string,
+  spoken: string | null = null
 ): { spoken_language: string; caption_language: string; hindi_script?: string } {
   if (choice === "roman" || choice === "devanagari") {
     return { spoken_language: "hi", caption_language: captionLanguage, hindi_script: choice };
   }
-  if (choice === "mr") return { spoken_language: "mr", caption_language: captionLanguage };
+  if (spoken !== null) return { spoken_language: spoken, caption_language: captionLanguage };
   // Not asked, or not answered: detect again and decide by the same rule.
   return { spoken_language: "auto", caption_language: captionLanguage, hindi_script: "auto" };
 }

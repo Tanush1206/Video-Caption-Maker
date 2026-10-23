@@ -1,13 +1,27 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, AudioLines, Check, Cpu, FileVideo, Loader2, Search, Sparkles, Subtitles, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  AudioLines,
+  Check,
+  Cpu,
+  FileVideo,
+  Loader2,
+  Search,
+  Sparkles,
+  Subtitles,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
-import { matchesLanguage } from "@/components/videos/language-picker";
+import { LanguagePicker, matchesLanguage } from "@/components/videos/language-picker";
 import { formatFileSize } from "@/lib/format";
 import type { ScriptChoice, ScriptQuestion } from "@/lib/hindi-script";
+import { languageName, TRY_ANYWAY, unsupportedSpeech } from "@/lib/languages";
 import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
 import type { LanguageOptions } from "@/types/video";
@@ -17,8 +31,10 @@ import type { LanguageOptions } from "@/types/video";
  *
  * The spoken language is heard, not asked: the server listens to the first
  * 30 s of the upload. When that is Hindi the step asks how the captions are
- * written (`lib/hindi-script.ts` decides when, and what is preset); anything
- * else wrong is corrected in the editor with a Redo.
+ * written (`lib/hindi-script.ts` decides when, and what is preset). When it
+ * is a language not offered (v1.0.11), the step says so and waits for the
+ * spoken language to be chosen, or for "Try anyway"; anything else wrong is
+ * corrected in the editor with a Redo.
  */
 export function LanguageStep({
   file,
@@ -31,6 +47,9 @@ export function LanguageStep({
   question,
   script,
   onScript,
+  unsupported,
+  spoken,
+  onSpoken,
   waitingToStart,
   starting,
   onBack,
@@ -48,6 +67,11 @@ export function LanguageStep({
   question: ScriptQuestion;
   script: ScriptChoice | null;
   onScript: (choice: ScriptChoice) => void;
+  /** What was heard isn't offered: Start waits for `spoken`. */
+  unsupported: boolean;
+  /** A spoken language chosen instead of what was heard, or TRY_ANYWAY. */
+  spoken: string | null;
+  onSpoken: (choice: string) => void;
   /** Start was pressed and goes when the upload lands. */
   waitingToStart: boolean;
   starting: boolean;
@@ -56,7 +80,7 @@ export function LanguageStep({
   onCancel: () => void;
 }) {
   const choices = options?.caption ?? [{ code: "same", label: "Same as spoken", native: null }];
-  // Fourteen cards no longer fit on a screen, so they can be searched: by the
+  // Ten cards don't fit on a small screen, so they can be searched: by the
   // language's own name, its English name or its code. "Same as spoken" is
   // the default and is always shown.
   const [query, setQuery] = useState("");
@@ -65,21 +89,15 @@ export function LanguageStep({
   const viaGemini = translating && system?.translation_engine === "gemini";
   const model = system?.whisper?.model;
   const busy = starting || waitingToStart;
-  const heard = detection.detected
-    ? (options?.spoken.find((o) => o.code === detection.detected)?.label ?? detection.detected)
-    : null;
+  const heard = detection.detected ? languageName(detection.detected, options) : null;
+  const needsSpoken = unsupported && spoken === null;
   const needsScript = question.show && question.required && script === null;
-  const scriptLabel = (code: ScriptChoice) =>
-    code === "mr"
-      ? { label: "मराठी (Marathi)", short: "मराठी", download: null }
-      : (() => {
-          const option = options?.hindi_scripts.find((o) => o.code === code);
-          return {
-            label: option?.label ?? code,
-            short: option?.short ?? code,
-            download: option?.download_bytes ?? null,
-          };
-        })();
+  const chosenSpoken = unsupported && spoken !== null && spoken !== TRY_ANYWAY ? spoken : null;
+  const spokenOptions = (options?.spoken ?? []).filter((option) => option.code !== "auto");
+  const scriptLabel = (code: ScriptChoice) => {
+    const option = options?.hindi_scripts.find((o) => o.code === code);
+    return { label: option?.label ?? code, download: option?.download_bytes ?? null };
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] animate-fade-in flex-col gap-4">
@@ -112,13 +130,51 @@ export function LanguageStep({
             </p>
             <p className="text-xs text-muted-foreground">
               {heard
-                ? "Detected from the audio. If it's wrong, set it in the editor and transcribe again."
+                ? unsupported
+                  ? "Detected from the audio."
+                  : "Detected from the audio. If it's wrong, set it in the editor and transcribe again."
                 : detection.listening || upload
                   ? "You can choose the caption language meanwhile."
                   : "The language is detected when transcribing starts."}
             </p>
           </div>
         </div>
+
+        {unsupported && heard && (
+          <div className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-4">
+            <p className="flex items-start gap-2 text-sm font-semibold">
+              <AlertTriangle className="mt-px size-4 shrink-0 text-warning" aria-hidden="true" />
+              {unsupportedSpeech(heard, false)}
+            </p>
+            <p className="mt-1 pl-6 text-xs text-muted-foreground" id="unsupported-speech-hint">
+              Choose the language that is spoken, or try anyway, to start.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3 pl-6">
+              <LanguagePicker
+                label="Spoken language"
+                options={spokenOptions}
+                value={chosenSpoken ?? ""}
+                onChange={onSpoken}
+                disabled={busy}
+                className="w-56"
+              />
+              <span className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">or</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-pressed={spoken === TRY_ANYWAY}
+                  onClick={() => onSpoken(TRY_ANYWAY)}
+                  disabled={busy}
+                  className={cn(spoken === TRY_ANYWAY && "border-warning/60 bg-warning/15")}
+                >
+                  {spoken === TRY_ANYWAY && <Check />}
+                  Try anyway (low quality)
+                </Button>
+              </span>
+            </div>
+          </div>
+        )}
 
         {question.show && (
           <fieldset className="mt-4">
@@ -127,8 +183,8 @@ export function LanguageStep({
             </legend>
             {question.required && (
               <p className="mt-1 text-xs text-muted-foreground" id="hindi-script-hint">
-                {detection.detected === "mr"
-                  ? "Marathi was heard, which detection often mixes up with Hindi. Choose one to start."
+                {chosenSpoken
+                  ? "Choose how to write Hindi to start."
                   : "Hindi was heard, but not surely. Choose how to write it to start."}
               </p>
             )}
@@ -178,9 +234,7 @@ export function LanguageStep({
                           ? download
                             ? `Downloads ${formatFileSize(download)} the first time`
                             : "Hindi in English letters"
-                          : code === "devanagari"
-                            ? "Hindi in its own script"
-                            : "Captions in Marathi"}
+                          : "Hindi in its own script"}
                       </span>
                     </span>
                     <span
@@ -221,7 +275,7 @@ export function LanguageStep({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search caption languages"
-            placeholder={`Search ${choices.length - 1} languages — বাংলা, Español, Tamil…`}
+            placeholder={`Search ${choices.length - 1} languages — हिन्दी, Español, German…`}
             disabled={!options || busy}
             className={cn(inputClasses, "pl-9")}
           />
@@ -341,8 +395,10 @@ export function LanguageStep({
             </Button>
             <Button
               onClick={onStart}
-              disabled={busy || needsScript}
-              aria-describedby={needsScript ? "hindi-script-hint" : undefined}
+              disabled={busy || needsSpoken || needsScript}
+              aria-describedby={
+                needsSpoken ? "unsupported-speech-hint" : needsScript ? "hindi-script-hint" : undefined
+              }
               className="flex-1 sm:flex-none"
             >
               {busy && <Loader2 className="animate-spin" />}
@@ -350,8 +406,12 @@ export function LanguageStep({
               {!busy && <ArrowRight />}
             </Button>
           </div>
-          {needsScript && (
-            <p className="text-xs text-muted-foreground">Choose how to write the captions first.</p>
+          {needsSpoken ? (
+            <p className="text-xs text-muted-foreground">Choose the spoken language, or try anyway, first.</p>
+          ) : (
+            needsScript && (
+              <p className="text-xs text-muted-foreground">Choose how to write the captions first.</p>
+            )
           )}
         </div>
 
