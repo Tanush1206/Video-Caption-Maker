@@ -82,6 +82,45 @@ The original 10-milestone build plan is historical and lives in
   for the CPU, captions in the right script, and the checks in TESTING.md
   "Adding a caption language". The fonts are still bundled.
 
+### Captions under 0.8 s before a 0.5 s pause
+- **What:** a caption is never shorter than the 0.8 s minimum of the v1.0.8
+  timing rules, also when a pause of about 0.5 s follows it.
+- **Why:** the minimum-length rule and the flicker rule (no gap under 0.5 s
+  between captions) meet there: holding the caption to 0.8 s would leave a
+  gap under 0.5 s, and it is left short instead. Measured: on the install's
+  v1.0.10 E2E the Hindi tutorial in Devanagari had "है गाइस" for 0.60 s at
+  200.48 s, followed by exactly 0.5 s of pause; in the FLEURS pipeline runs
+  (v1.0.10 and v1.0.11, identical), 8 captions across 6 of 10 runs were
+  0.24-0.76 s: Hindi 3 (0.24, 0.50, 0.58 s), Hinglish, Spanish, Russian,
+  French and German 1 each (0.72-0.76 s) ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md),
+  section 2).
+- **Must:** a short caption followed by a pause under 0.8 + 0.5 s is held
+  until the next one (80 ms separation) or merged into a neighbour, and
+  `timing_check.py` passes on the Hindi tutorial and the FLEURS pipeline
+  clips without moving any caption start.
+
+### Loud speech left without a caption (1-2 s)
+- **What:** no stretch of clearly audible speech goes uncaptioned.
+- **Why:** in the FLEURS pipeline runs (v1.0.10 and v1.0.11, identical)
+  loud speech was heard but not captioned: German 36.70-38.56 s (1.86 s,
+  speech at -21 to -26 dB, flagged by `timing_check.py` as words with no
+  caption); English 141.90-142.78 s (0.88 s, words with no caption) and
+  145.38-146.76 s (1.38 s, audio with no caption), both at -2 to -16 dB,
+  plus two audio gaps of 1.10 and 1.18 s at 6.90 and 36.60 s whose level
+  wasn't measured; and Portuguese 3.70-4.54 s (0.84 s, audio with no
+  caption, about -4 dB). Not the quiet-audio bug (the measured ones are
+  far above -40 dB, and v1.0.11's fix left them as they were) and not yet
+  explained. Shorter and rarer than the v1.0.9 gaps v1.0.10 fixed. It
+  varies between runs: the Hindi tutorial passed `coverage_check.py` on
+  v1.0.10, but in the v1.0.11 release E2E large-v3 (GPU) decoded
+  200.7-204.0 s as only "है गाइस किया" and left 204.06-205.06 s (1.00 s,
+  "to yah ek demo video record karta hoon…") without a caption. The silence
+  rule doesn't touch that file, so the decode itself varied.
+- **Must:** find why each stretch has no caption (re-decoding, the
+  repeated-word rule or phrasing), fix it without inventing text, and pass
+  `coverage_check.py` and `timing_check.py` on those clips
+  (`scripts/language_eval.py pipeline --langs de,en,pt`).
+
 ### Forced alignment of word timings
 - **What:** after Whisper, force its own text onto the audio with a CTC
   aligner (a wav2vec2/MMS model) and time captions to those word starts
