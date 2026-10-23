@@ -41,8 +41,10 @@ In practice that means:
 - **A single person on their own computer**: Windows 10/11 with WSL 2, Linux,
   or (untested) macOS, with Docker installed. Local mode has exactly one user
   (`get_or_create_local_user`, `backend/app/services/auth.py`).
-- **People who need captions in English, Hindi, Bengali, Marathi, Tamil, Malayalam, French, German, Dutch, Spanish, Portuguese, Italian or Russian**: the thirteen caption languages in
-  `backend/app/services/languages.py` (v1.0.7; five before).
+- **People who speak, and need captions in, English, Hindi, French, German, Dutch, Spanish, Portuguese, Italian or Russian**: the nine languages in
+  `backend/app/services/languages.py` (v1.0.11; thirteen from v1.0.7, five
+  before). Tamil, Marathi, Bengali and Malayalam were removed in v1.0.11 on
+  the FLEURS measurements ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)).
 - **Non-developers**: the README's install, use and troubleshooting sections
   assume no programming knowledge, and error messages are written as sentences
   (`friendly_error` in `backend/app/workers/transcription.py`).
@@ -86,16 +88,27 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 3. **Language** (step 2, while the file uploads, v1.0.9): the file is sent
    as soon as it is picked, held, and the worker detects the spoken language
    from its first 30 s; the step shows what was heard ("Hindi · heard at
-   98%"). Meanwhile "Same as spoken" (the default) or one of the thirteen
+   98%"). Meanwhile "Same as spoken" (the default) or one of the nine
    caption languages is chosen, shown as cards with each language's own
    name and its English one, and searchable by either or by code.
    **When the captions will be Hindi** (Same as spoken, or Hindi), the step
    also asks **"Hindi captions in: Hinglish (Roman) / हिन्दी (Devanagari)"**:
    - Hindi heard at 70% or more: preset to Hinglish;
-   - Hindi under 70%, or Marathi heard: nothing preset (Marathi adds a
-     "मराठी" answer), and Start waits for a pick;
+   - Hindi under 70%, or Hindi chosen by hand (below): nothing preset, and
+     Start waits for a pick;
    - nothing heard within 15 s (the worker is busy): asked with nothing
      preset, and Start doesn't wait; the job then decides by the same rule.
+   **When the speech is in a language not offered** (v1.0.11: anything but
+   the nine, Tamil, Marathi, Bengali and Malayalam included), the step says
+   "Tamil speech isn't supported yet, so captions would be inaccurate." and
+   offers a spoken-language picker (the nine) or **"Try anyway (low
+   quality)"**. Neither is preset and Start waits for one. A language
+   chosen is sent as `spoken_language` (Hindi then asks how it's written,
+   nothing preset); "Try anyway" sends `auto`, and with "Same as spoken" the
+   captions are in what was heard. The video's page then says "Tamil speech
+   isn't supported yet, so these captions are likely inaccurate.", as it
+   does for any video whose detected speech isn't offered (one started
+   before detection answered, a Redo, one made before v1.0.11).
    Hinglish says what it downloads the first time ("Downloads 1.5 GB the
    first time"). **Start** sends the choice (`POST /api/videos/{id}/transcribe`)
    and the browser goes to `/editor/{id}`; pressed while uploading, it starts
@@ -254,7 +267,8 @@ the speech model for every video until changed back.
     copy in the editor (`lib/caption-layout.ts`); libass is handed the lines
     and never wraps or places on its own;
   - Devanagari, Bengali, Tamil and Malayalam are drawn in bundled Noto faces
-    in both renderers, at the caption font's em, with complex shaping in the
+    (kept after v1.0.11 for the captions made in them, and for "Try
+    anyway") in both renderers, at the caption font's em, with complex shaping in the
     burn;
   - a burned box sits where the editor drew it, in its own colour and opacity.
 - **The caption box** (v1.0.7):
@@ -420,10 +434,16 @@ removed.
 
 | Code | Caption target | Notes |
 |---|---|---|
-| `same` | yes (default) | Captions in whatever language Whisper detected. **Any** language Whisper recognises. |
+| `same` | yes (default) | Captions in whatever language Whisper detected. Speech in a language not offered needs "Try anyway" first (§5, step 3). |
 | `en` | yes | From non-English audio: Whisper `task="translate"` in the same pass |
-| `hi`, `bn`, `mr`, `ta`, `ml`, `fr`, `de`, `nl`, `es`, `pt`, `it`, `ru` | yes | Transcribe, then translate (Gemini or M2M100). Weak locally: the Indian languages (Tamil and Malayalam most), see §10 |
+| `hi`, `fr`, `de`, `nl`, `es`, `pt`, `it`, `ru` | yes | Transcribe, then translate (Gemini or M2M100). Hindi is the weakest locally, see §10 |
 | `auto` | spoken-language value | Default for `spoken_language`; Whisper detects from the first 30 s |
+
+The spoken languages are the same nine (`spoken_language` is `auto` or one
+of them). `bn`, `mr`, `ta` and `ml` (v1.0.7-v1.0.10) are refused for new
+jobs with 422 (`languages.RETIRED` keeps their names); videos made in them
+keep their captions, open and export, and their Redo asks for an offered
+language.
 
 **How Hindi is written** (`hindi_script`, v1.0.9): `roman` (Hinglish, the
 Apex model), `devanagari` (Whisper), or `auto` (Roman for Hindi detected at
@@ -477,10 +497,11 @@ What the code deliberately does not do:
   Gemini fits").
 - **No network exposure.** Only the UI port is published, and only on
   `127.0.0.1` (`docker-compose.prod.yml`).
-- **No caption language that isn't checked end to end.** Thirteen targets
-  (v1.0.7); others only after the checks in TESTING.md "Adding a caption
+- **No caption language that isn't checked end to end.** Nine targets
+  (v1.0.11; thirteen in v1.0.7-v1.0.10); others only after the checks in TESTING.md "Adding a caption
   language", and right-to-left and CJK are planned work
-  ([ROADMAP.md](ROADMAP.md)). "Same as spoken" is the route to the rest.
+  ([ROADMAP.md](ROADMAP.md)). "Same as spoken" with "Try anyway" is the
+  route to the rest, labelled as low quality.
 - **No term highlighting in search.** Semantic matches have no matched words
   (PROGRESS.md, v1.0.4).
 - **No features without data behind them.** The v1.0.4 redesign left out the
@@ -515,18 +536,25 @@ From the README "Known limitations" and PROGRESS.md:
   them there. On a Mac everything
   runs on the CPU, and Apple Silicon runs the amd64 images under emulation,
   which is slow.
-- **Quiet recordings get no captions.** The silence check treats anything
-  under -40 dB as silence, so a recording that speaks below that throughout
-  (a quiet or distant microphone) has every caption dropped as invented,
-  and the job finishes with none and no message. On FLEURS, 27 of 50 English
-  clips and 1 French one ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)).
-  Fixed in v1.0.11.
 - **How well speech is heard depends on the language** (large-v3, FLEURS,
   [LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)): Spanish, Portuguese, Italian,
-  Russian, French, German and Dutch 3-7% word error; Hindi 26% (Apex 29%),
-  right words often misspelt; Marathi, Bengali and Tamil 63-76%, words
-  spelt as heard; Malayalam unusable, written in other scripts. Those four
-  are removed in v1.0.11.
+  Russian, French, German and Dutch 3-7% word error; English 6% (59% before
+  the v1.0.11 quiet-recording fix);
+  Hindi 26% (Apex 29%), right words often misspelt. Marathi, Bengali, Tamil
+  (63-76%) and Malayalam (written in other scripts) were removed in v1.0.11;
+  speech in them, or in any language not offered, is warned about and only
+  transcribed on "Try anyway".
+- **Quiet recordings** (fixed in v1.0.11): up to v1.0.10 a recording that
+  spoke under -40 dB throughout got no captions and no message. When -40 dB
+  would count most of the speech as silence, silence is now judged against
+  the file's own speaking level, and a job that finds nothing says "No
+  speech was found in this video.". A recording mixing loud and very quiet
+  speakers can still lose the quiet ones.
+- **Short captions and a few uncaptioned words.** A caption can be shorter
+  than 0.8 s when a 0.5 s pause follows it (the minimum-length and flicker
+  rules meet: "है गाइस", 0.60 s, on the Hindi tutorial), and in the FLEURS
+  pipeline runs 1-2 s of loud speech in German and English, and 0.84 s in
+  Portuguese, had no caption ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)).
 - **The small speech model is weak on fast non-English speech, especially
   Hindi.** On FLEURS small makes 55% word error on Hindi against large-v3's
   26%; on the European languages 6-16%, against 3-7%. `small` is chosen automatically on machines under 12 GB of RAM (or
@@ -534,17 +562,16 @@ From the README "Known limitations" and PROGRESS.md:
   all. Since `b8c446a` it retries and produces rough captions, with the
   low-confidence notice on 4 of 6 jobs (PROGRESS.md, R4). A larger model in
   Settings is much better if the machine has the memory.
-- **Local translation is literal, and weak for the Indian languages.** M2M100
+- **Local translation is literal, and weakest into Hindi.** M2M100
   translates a sentence at a time, so idioms still read literally, and a
   sentence split back over its captions can break inside a phrase
-  ("…und eine | Tasse Wasser…"). Into Hindi, Bengali, Marathi, Tamil and
-  Malayalam the script, timing and sentence shape are right but everyday
-  nouns often are not ("onions" became "apples", "soap" or "sugar"); Tamil
-  and Malayalam are the weakest added, and Hindi is weaker as a source than
-  as a target. Samples per pair are in PROGRESS.md (v1.0.7). Gemini, with a
+  ("…und eine | Tasse Wasser…"). Into Hindi the script, timing and sentence
+  shape are right but everyday nouns often are not ("onions" became
+  "apples", "soap" or "sugar"), and Hindi is weaker as a source than as a
+  target. Samples per pair are in PROGRESS.md (v1.0.7). Gemini, with a
   key and quota, is much better. Measured on FLEURS (chrF): from English
-  55-68 into the European languages, 51 into Hindi, 43 Bengali, 38 Marathi,
-  34 Malayalam, 24 Tamil; from Hindi 9-15 points lower
+  55-68 into the European languages, 51 into Hindi; from Hindi 9-15 points
+  lower. Into the four Indian languages removed in v1.0.11 it was 24-43
   ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)).
 - **Text can sit a pixel or two higher or lower inside its line in the
   preview than in the export.** The lines, the size and the box are the
@@ -557,7 +584,7 @@ From the README "Known limitations" and PROGRESS.md:
 - **Burned-in captions in Chinese, Japanese or Korean need a font picked by
   hand.**
   It applies when **"Same as spoken"** is used on Chinese, Japanese or Korean
-  audio (none of the thirteen caption targets is CJK). Whisper then produces captions in that script, and the image's
+  audio after "Try anyway" (none of the nine caption targets is CJK). Whisper then produces captions in that script, and the image's
   fallback fonts (`fonts-noto-core`, DejaVu, Liberation) have no CJK glyphs:
   `fc-list :lang=ja`, `:lang=ko` and `:lang=zh-cn` each return 0 families in
   the worker image, while `:lang=hi` returns 2. Without a CJK font chosen in

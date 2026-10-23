@@ -223,6 +223,18 @@ Rules the code enforces:
   more with no caption is cut out and decoded again on its own, repeatedly
   inside what that finds, three levels deep (`_fill_skipped`). Invented text
   over silence is dropped by the same silence check as the rest.
+- **Silence that would swallow the speech is re-measured** (v1.0.11,
+  `silence_for`): FFmpeg's `silencedetect` under -40 dB as before, unless
+  more than half of the file's voiced envelope windows (speech band within
+  18 dB of its speaking level) fall inside that silence; then 15 dB under
+  the speaking level, never under -80 dB (`silence_threshold`). On FLEURS
+  every clip that came back empty had all its speech inside -40 dB silence
+  (a quiet recording, speech at -56 to -64 dB); every clip that worked, at
+  most 35%. Lowering it for every moderately quiet file instead let faint
+  noise around clear speech stop being silence, and invented text over it
+  ("Vielen Dank.") survive. A job that ends with no
+  captions completes with the notice "No speech was found in this video."
+  (`NO_SPEECH_NOTICE`).
   Since v1.0.10, on every model:
   - a shorter stretch is decoded again too when more than 0.7 s of it is
     speech (the speech band within 18 dB of the clip's speaking level);
@@ -310,7 +322,8 @@ logged and never surfaced to the user.
     own. `scripts/ui-check` `layout-parity` compares the two copies through
     `backend/scripts/caption_layout.py`;
   - Devanagari, Bengali, Tamil and Malayalam are drawn in vendored Noto
-    faces (`SCRIPT_FONTS`, `frontend/public/fonts`): the ASS names the face
+    faces (Bengali, Tamil and Malayalam kept after v1.0.11 for the captions
+    made in them and for "Try anyway") (`SCRIPT_FONTS`, `frontend/public/fonts`): the ASS names the face
     per run with `\fs` scaled to the caption font's em; CSS lists the faces
     first, each limited to its script with `unicode-range`. Cyrillic gets
     the same treatment (Noto Sans) only when the caption font's own charset
@@ -416,7 +429,7 @@ flowchart TD
   length**. A misaligned array would put the wrong text on each timing.
 - M2M100 needs the source language. It uses Whisper's detected language and
   refuses codes missing from its vocabulary (`UnsupportedLanguage`). Every
-  caption language is in its list (`M2M100_LANGUAGES`, held to
+  caption language (the nine of v1.0.11) is in its list (`M2M100_LANGUAGES`, held to
   `languages.LANGUAGES` by a test).
 - **Hinglish is translated from Devanagari** (v1.0.9). M2M100 given Roman
   Hinglish copies it through (English, Spanish) or invents something

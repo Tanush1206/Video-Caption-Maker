@@ -514,14 +514,14 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 |---|---|---|---|
 | `code` | string | yes |  |
 | `label` | string | yes | English name, or "Auto-detect" / "Same as spoken" |
-| `native` | string \| null | no | the language's name in itself ("বাংলা"); null for `auto` and `same` (v1.0.7) |
+| `native` | string \| null | no | the language's name in itself ("Español"); null for `auto` and `same` (v1.0.7) |
 
 ### LanguageOptions
 
 | Field | Type | Required | Constraints / default |
 |---|---|---|---|
-| `spoken` | [LanguageOption](#languageoption)[] | yes |  |
-| `caption` | [LanguageOption](#languageoption)[] | yes |  |
+| `spoken` | [LanguageOption](#languageoption)[] | yes | `auto` and the nine offered (v1.0.11); detected speech not in it is "not supported" in the UI |
+| `caption` | [LanguageOption](#languageoption)[] | yes | `same` and the nine offered. `bn`, `mr`, `ta`, `ml` (until v1.0.10) are refused with 422 for new jobs |
 | `hindi_scripts` | [HindiScriptOption](#hindiscriptoption)[] | no | how Hindi captions can be written (v1.0.9) |
 | `hinglish_min_confidence` | number | no | default `0.7`; Hindi detected at or above it presets Hinglish |
 | `translation_available` | boolean | yes |  |

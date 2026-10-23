@@ -329,8 +329,8 @@ transcribe, translate, export, search) makes **no outbound requests**.
 `backend/app/api/videos.py`, `backend/app/services/storage.py`,
 `backend/app/utils/filenames.py`.
 
-1. **The caption language** must be `same` or one of the thirteen codes, or
-   422; the Hindi script (`hindi_script`) must be `roman`, `devanagari` or
+1. **The caption language** must be `same` or one of the nine codes, and
+   the spoken language `auto` or one of them, or 422 (v1.0.11); the Hindi script (`hindi_script`) must be `roman`, `devanagari` or
    `auto`, or 422.
 2. **Both** the declared content type **and** the extension must be on the
    allow-lists (415 otherwise). The extensions are `.mp4 .mov .mkv .webm
