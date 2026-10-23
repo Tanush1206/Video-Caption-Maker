@@ -6,6 +6,39 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.11] - 2026-10-23
+
+Quiet recordings get captions, and the languages offered are the ones that
+work. No migration. Expected update from 1.0.10: about 7 MB (backend app
+code; frontend app layers ~7 MB); no dependency layer changes. Measured
+after release.
+
+### Fixed
+- **Quiet recordings got no captions.** A video whose speech stayed under
+  -40 dB (a quiet or distant microphone) had everything thrown away as
+  invented over silence, and finished with no captions and no word why
+  (27 of 50 English test clips). When the usual level would count most of
+  the speech as silence, silence is now judged against how loud the
+  recording itself speaks.
+- **"No speech was found in this video."** A video that still ends with no
+  captions says so on its page.
+
+### Removed
+- **Tamil, Marathi, Bengali and Malayalam** as caption and spoken
+  languages. Measured on Google's FLEURS speech set they were heard and
+  translated poorly (63-122% of words wrong; Malayalam in the wrong
+  script); see docs/LANGUAGE_QUALITY.md. Videos already made in them keep
+  their captions and still export; their Redo asks for another language.
+  They're planned to return with Indian-language speech models.
+
+### Changed
+- **Speech in a language the app doesn't support** is said up front:
+  "Tamil speech isn't supported yet, so captions would be inaccurate.",
+  with a choice of the spoken language or "Try anyway (low quality)". The
+  video's page repeats the warning on captions made that way.
+- The "Hindi or Marathi?" question is gone: Marathi heard gets the same
+  warning, and Hindi can be chosen there.
+
 ## [1.0.10] - 2026-10-22
 
 Captions for every stretch of speech. No migration. Updating from 1.0.9

@@ -603,6 +603,32 @@ Gemini gets the Devanagari too until it is measured on Roman.
 
 ---
 
+## D18. Four Indian languages removed rather than marked Beta
+
+**Context.** The v1.0.10 language report (FLEURS, [LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md))
+measured Tamil, Marathi, Bengali and Malayalam as the weakest by far:
+63-122% word error on large-v3 (Malayalam in the wrong script) and chrF
+24-43 into them, against 3-7% and 55-68 for the European languages.
+
+**Decision (Tanush, 2026-10-23).**
+- Removed in v1.0.11, not marked Beta: from every picker and from the
+  API's validation, as captions and as speech.
+- Speech heard in a language not offered (any, not only these) isn't made
+  into captions silently: the language step says so and waits for a spoken
+  language to be chosen or "Try anyway", neither preset. "Try anyway" with
+  "Same as spoken" gives captions in what was heard, and the video's page
+  says they are likely inaccurate.
+- Videos made in them keep their captions and export; nothing is deleted.
+  Their fonts stay (those captions, and "Try anyway", use them).
+- Back on the [ROADMAP](ROADMAP.md) with Indian-language fine-tuned speech
+  models, judged by the same eval.
+
+**Alternatives.** A "Beta" label: the captions would still be wrong most
+of the time, and the label easy to miss. Refusing unsupported speech
+outright: no way left to try a language Whisper half-knows.
+
+---
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open

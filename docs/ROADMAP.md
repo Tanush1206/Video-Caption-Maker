@@ -63,6 +63,25 @@ The original 10-milestone build plan is historical and lives in
   both have to change, and the preview's and libass's line breaking would
   have to agree without spaces to break at.
 
+### Re-add Tamil, Marathi, Bengali and Malayalam
+- **What:** offer them again, spoken and as captions, with Indian-language
+  fine-tuned speech models (e.g. AI4Bharat's IndicWhisper / IndicConformer)
+  instead of Whisper large-v3, and a better translator into them.
+- **Why not yet:** measured on FLEURS for v1.0.10
+  ([LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)), large-v3 made 76% word
+  error on Marathi, 73% Bengali, 63% Tamil (28% of characters) and wrote
+  Malayalam in Gurmukhi, Devanagari or Telugu script (95% of characters
+  wrong); turbo on the CPU was worse (82%, 92%, 95%). Detection called
+  Marathi Hindi a third of the time. M2M100 into them scored chrF 43
+  (Bengali), 38 (Marathi), 34 (Malayalam) and 24 (Tamil), against 55-68
+  for the European languages. Removed in v1.0.11.
+- **Must:** a model under a permissive licence that downloads on first use
+  like Apex (not baked into the image), measured with
+  `scripts/language_eval.py` to at least "Usable" (WER 35% or less, CER 20%
+  for Tamil and Malayalam) on large-v3's hardware tier and an honest number
+  for the CPU, captions in the right script, and the checks in TESTING.md
+  "Adding a caption language". The fonts are still bundled.
+
 ### Forced alignment of word timings
 - **What:** after Whisper, force its own text onto the audio with a CTC
   aligner (a wav2vec2/MMS model) and time captions to those word starts
@@ -84,7 +103,7 @@ The original 10-milestone build plan is historical and lives in
   (Devanagari and others); the v1.0.8 timing rules still hold.
 
 ## Possible, not planned
-- **More caption languages.** Thirteen are offered (v1.0.7). Telugu is not in
+- **More caption languages.** Nine are offered (v1.0.11). Telugu is not in
   M2M100; Kannada, Gujarati and Punjabi came out of it unusable (samples in
   PROGRESS.md, v1.0.7). Any of them needs a different local model, which is a
   model change, not a list entry. A new language is admitted only after the

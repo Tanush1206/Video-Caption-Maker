@@ -747,6 +747,66 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## v1.0.11 (prepared 2026-10-23): quiet recordings, nine languages
+Brief (Tanush, 2026-10-22/23): fix quiet recordings (found by the language
+eval) and say "No speech was found in this video." when a job still ends
+empty; remove Tamil, Marathi, Bengali and Malayalam instead of marking them
+Beta, warn about speech in a language not offered with "pick the spoken
+language" or "Try anyway" (neither preset; "Try anyway" + "Same as spoken"
+kept, with the video-page note); existing videos keep working; README,
+PRD, CHANGELOG, ROADMAP and eval docs; tests.
+
+### Done
+- [x] Quiet recordings (`services/transcription.py`, `silence_for`): -40 dB
+      as before unless more than half of the voiced envelope windows fall
+      inside that silence, then 15 dB under the speaking level, floor -80.
+      FLEURS large-v3: English 58.6 → 5.7% WER (27 empty clips → 0), French
+      6.9 → 5.5%; Spanish, Portuguese, Italian, Russian, German, Dutch the
+      same text line for line; Hindi 26.4 → 25.7% (run-to-run variation).
+      The first version (lower the threshold whenever the speaking level
+      was quiet) kept an invented "Vielen Dank." on two German clips: caught
+      by the re-measure, replaced, and covered by a test.
+- [x] A job with no captions completes with "No speech was found in this
+      video." (`NO_SPEECH_NOTICE`), shown once on the video page.
+- [x] Languages: `LANGUAGES` is nine; `RETIRED` names bn/mr/ta/ml. API
+      validation refuses them as caption or spoken language (422). The
+      language step warns about any detected language not offered
+      ("Tamil speech isn't supported yet, so captions would be
+      inaccurate."), with a spoken-language picker or "Try anyway (low
+      quality)", neither preset, Start held; Hindi chosen asks how it's
+      written. The Marathi answer to the Hindi question is gone. The video
+      page notes captions from unsupported speech; existing videos keep
+      their names, captions and exports, and their Redo asks for an
+      offered language. Fonts kept.
+- [x] Tests: `test_languages_offered.py` (11) and 5 in
+      `test_transcription.py`; 14 of them fail on v1.0.10, the 3 that pass
+      there guard what must not change (Try anyway accepted, an old Tamil
+      video opens and exports, a silent track stays silent). New
+      `checks.js unsupported-speech` (28) and `retired-language`;
+      `editor-languages`, `language-step`, `hindi-script` updated.
+- [x] Backend 536 passed, 1 skipped (after the rule refinement);
+      ruff, frontend lint, type-check and tests clean; ui-checks
+      `editor-languages language-step unsupported-speech retired-language
+      redo-script hindi-script script-fonts` all PASS on the dev stack
+      (3001). Screenshots of the notice at 375/1440, light and dark.
+- [x] Real Tamil video 7600, made on v1.0.10 in the dev stack: on v1.0.11
+      it opens, reads "Auto-detect → Tamil", shows the note, its Redo asks
+      for a language, and exports SRT and a burned MP4 drawn in Noto Sans
+      Tamil.
+- [x] Pipeline on v1.0.11 (videos 7601-7610, deleted by id): the same
+      captions, gaps and timing results as on v1.0.10 for all nine.
+- [x] Docs: README (no more "Same as spoken works for any language"), PRD,
+      ARCHITECTURE, API, SECURITY, TESTING, DECISIONS D18, ROADMAP (re-add
+      the four with Indian-language models, with the numbers), CHANGELOG,
+      LANGUAGE_QUALITY ("After the fix").
+
+### Known, not changed
+- A recording mixing a loud and a very quiet speaker can still lose the
+  quiet one (the joined English pipeline clip loses 7 of 17 utterances).
+- Captions under 0.8 s where a 0.5 s pause follows ("है गाइस", 0.60 s, on
+  the install's E2E); words heard but uncaptioned in loud German (1.9 s) and
+  English in the FLEURS pipeline runs.
+
 ## Language quality eval (done 2026-10-23), then v1.0.10 install, then v1.0.11
 
 Resumed 2026-10-23: the CPU runs finished (kept languages only, 38 min),

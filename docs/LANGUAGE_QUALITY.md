@@ -72,8 +72,8 @@ fixed -40 dB: the whole clip counted as silence, and everything the model
 heard in it was dropped as invented. A real video recorded with a quiet or
 distant microphone got no captions and no message. From v1.0.11 the
 threshold follows a quiet file's speaking level down (and a job with nothing
-to caption says "No speech was found in this video."). English is measured
-again with the fix in v1.0.11.
+to caption says "No speech was found in this video."). See "After the fix"
+below.
 
 ## 2. The app's pipeline
 
@@ -114,6 +114,32 @@ Every language was detected correctly. What the table shows:
 
 These two are left for a later release unless they show up on real videos.
 
+## After the fix (v1.0.11)
+
+The nine languages kept, measured again on large-v3 (GPU) with v1.0.11's
+silence rule: -40 dB as before, unless more than half of a file's speech
+would fall inside that silence (true of all 28 clips that came back empty,
+of no clip that worked).
+
+| Language | v1.0.10 WER / CER | v1.0.11 WER / CER | Clips with no text |
+|---|---|---|---|
+| English | 58.6% / 57.8% | **5.7% / 3.6%** | 27 → 0 |
+| French | 6.9% / 3.3% | 5.5% / 1.7% | 1 → 0 |
+| Hindi | 26.4% / 11.2% | 25.7% / 10.1% | 0 (4 lines differ: run-to-run variation in Hindi decoding; another run gave 25.9%) |
+| Spanish, Portuguese, Italian, Russian, German, Dutch | 2.6-6.5% | the same, line for line | 0 |
+
+English is **Good**. A first version of the rule lowered the threshold for
+every moderately quiet clip; faint noise around three German and Russian
+clips then stopped counting as silence and an invented "Vielen Dank." was
+kept (German 5.0 → 5.3%). The rule shipped only intervenes when the speech
+itself would be silenced, and those clips are back to v1.0.10's text.
+
+The pipeline runs (section 2) gave the same captions, gaps and timing
+results on v1.0.11 as on v1.0.10. The joined English clip still loses its 7
+quiet utterances: they sit between loud ones, so the file as a whole speaks
+loudly and -40 dB stays. A recording that mixes a loud and a very quiet
+speaker is still a limitation.
+
 ## 3. Translation (M2M100, local)
 
 chrF against FLEURS's own sentence in that language.
@@ -149,7 +175,7 @@ the speech model heard, which is worse (26% WER).
 | CPU transcription is roughly real time | Faster on these clips: turbo 0.23-0.81× of the audio's length, small 0.10-0.46×. Short read sentences; long videos with re-decoding take longer. |
 | (not listed) Speech recognition in Marathi, Bengali, Tamil, Malayalam | Weak: 63-122% WER. The languages are removed in v1.0.11. |
 | (not listed) Malayalam in the wrong script | large-v3 writes it in other scripts; removed in v1.0.11. |
-| (not listed) Quiet recordings | No captions at all: the bug above, fixed in v1.0.11. |
+| (not listed) Quiet recordings | No captions at all: the bug above, fixed in v1.0.11 (English 59% → 6% WER). |
 
 ## 5. Samples
 
