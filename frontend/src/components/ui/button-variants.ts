@@ -19,10 +19,10 @@ import { cn } from "@/lib/utils";
 export const buttonVariants = cva(
   cn(
     "inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap",
-    "rounded-md font-medium transition-colors duration-150",
+    "rounded-lg font-medium transition-[background-color,color,opacity] duration-200 ease-out",
     // Pointer events off while disabled, so a disabled submit cannot swallow a
     // click and look merely unresponsive.
-    "disabled:pointer-events-none disabled:opacity-50",
+    "disabled:pointer-events-none disabled:opacity-40",
     // Icons are sized by the button rather than at each call site, and never
     // shrink when the label wraps.
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
@@ -30,30 +30,28 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
-        // surface-2, not card: a secondary button sits *on* a card in this
-        // design and has to read as raised above it, which in dark means one
-        // step lighter rather than a heavier border.
-        secondary:
-          "border border-border bg-surface-2 text-foreground shadow-sm hover:bg-surface-3",
-        ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
-        // Filled, not outlined: this is for the confirm step of a destructive
-        // action, where it should be obvious which button does the damage.
+        // The one action a screen is for: at most one per screen.
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
+        // Everything else that needs a shape: a light grey fill, no border.
+        secondary: "bg-surface-3 text-foreground hover:bg-surface-3/70 active:bg-surface-3/50",
+        // Plain accent text: the quiet secondary action.
+        plain: "text-primary hover:bg-surface-2 active:bg-surface-3",
+        // Grey icon buttons and tools.
+        ghost: "text-muted-foreground hover:bg-surface-2 hover:text-foreground active:bg-surface-3",
+        // Filled red: only inside the confirm dialog of a destructive action.
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
-        // The way *into* a destructive flow — quiet until hovered, so "delete
-        // account" isn't shouting on a settings page nobody came to use it on.
-        danger: "border border-destructive/40 text-destructive hover:bg-destructive/10",
+          "bg-destructive-fill text-destructive-foreground hover:bg-destructive-fill/90 active:bg-destructive-fill/80",
+        // The way *into* a destructive flow: red text, nothing filled.
+        danger: "text-destructive hover:bg-destructive/10 active:bg-destructive/15",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // 44 px on a phone (the minimum touch target), desktop sizes from sm up.
       size: {
-        sm: "h-8 px-3 text-body-sm",
-        md: "h-9 px-4 text-body-md",
-        lg: "h-11 px-6 text-body-md",
-        // Square, for icon-only buttons. Anything smaller than this fails the
-        // minimum touch target on a phone.
-        icon: "size-9",
-        "icon-sm": "size-8 [&_svg]:size-3.5",
+        sm: "h-11 px-3 text-sm sm:h-8",
+        md: "h-11 px-4 text-[15px] sm:h-9",
+        lg: "h-11 px-5 text-[15px]",
+        icon: "size-11 sm:size-9",
+        "icon-sm": "size-11 sm:size-8 [&_svg]:size-4",
       },
     },
     defaultVariants: { variant: "primary", size: "md" },

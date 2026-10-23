@@ -43,7 +43,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           className={cn(
             inputClasses,
             "cursor-pointer appearance-none pr-8",
-            size === "sm" && "h-8 text-body-sm",
+            size === "sm" && "h-11 text-sm sm:h-8",
             className
           )}
           {...props}

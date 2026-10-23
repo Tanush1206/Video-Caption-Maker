@@ -10,13 +10,16 @@ import { cn } from "@/lib/utils";
  * the inert page behind and the top layer, so none of that is rebuilt here.
  * Closing by Escape or the backdrop reports through onClose, so the parent's
  * `open` stays the one source of truth.
+ *
+ * Centred, 16 px radius, the floating shadow, over a dimmed, blurred
+ * backdrop. No rules inside: the title, body and footer are separated by
+ * space alone.
  */
 export function Dialog({
   open,
   onClose,
   title,
   description,
-  icon,
   children,
   footer,
   className,
@@ -26,6 +29,7 @@ export function Dialog({
   onClose: () => void;
   title: string;
   description?: React.ReactNode;
+  /** Accepted from callers, not drawn: the title says what a dialog is. */
   icon?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -53,39 +57,32 @@ export function Dialog({
       }}
       aria-labelledby="dialog-title"
       className={cn(
-        "m-auto max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden rounded-lg border border-border bg-card p-0 text-foreground shadow-overlay",
-        "backdrop:bg-black/60 backdrop:backdrop-blur-sm",
+        "m-auto max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden rounded-2xl bg-background p-0 text-foreground shadow-overlay dark:bg-card",
+        "backdrop:bg-black/40 backdrop:backdrop-blur-sm",
         className
       )}
     >
       {open && (
         <div className="flex max-h-[calc(100vh-2rem)] flex-col">
-          <header className="flex shrink-0 items-start gap-3 border-b border-border px-5 py-4 sm:px-7 sm:py-5">
-            {icon && (
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-primary">
-                {icon}
-              </span>
-            )}
+          <header className="flex shrink-0 items-start gap-3 px-6 pb-2 pt-6">
             <div className="min-w-0 flex-1">
-              <h2 id="dialog-title" className="text-lg font-semibold tracking-tight">
+              <h2 id="dialog-title" className="text-xl font-semibold">
                 {title}
               </h2>
-              {description && <div className="mt-0.5 text-[13px] text-muted-foreground">{description}</div>}
+              {description && <div className="mt-1 text-sm text-muted-foreground">{description}</div>}
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="-mr-2 -mt-1 flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-surface-2 hover:text-foreground sm:size-8"
             >
-              <X className="size-5" />
+              <X className="size-[18px]" />
             </button>
           </header>
-          <div className={cn("min-h-0 flex-1", bodyClassName ?? "overflow-y-auto px-5 py-5 sm:px-7")}>
-            {children}
-          </div>
+          <div className={cn("min-h-0 flex-1", bodyClassName ?? "overflow-y-auto px-6 py-4")}>{children}</div>
           {footer && (
-            <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-7">
+            <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 px-6 pb-6 pt-2">
               {footer}
             </footer>
           )}

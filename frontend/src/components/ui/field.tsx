@@ -9,11 +9,13 @@ import { cn } from "@/lib/utils";
  * focus treatment. Use this directly for a bare input; use Field when it
  * needs a label and error message.
  */
+// Inputs keep a hairline border (DESIGN_SYSTEM.md: borders only for row
+// separators and inputs). 44 px tall on a phone.
 export const inputClasses = cn(
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm",
-  "transition-colors placeholder:text-muted-foreground/70",
-  "hover:border-muted-foreground/40",
-  "disabled:cursor-not-allowed disabled:opacity-50"
+  "h-11 w-full rounded-lg border border-input bg-background px-3 text-[15px] sm:h-9",
+  "transition-colors duration-200 ease-out placeholder:text-muted-foreground",
+  "focus-visible:border-ring",
+  "disabled:cursor-not-allowed disabled:opacity-40"
 );
 
 interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
