@@ -98,9 +98,12 @@ Every language was detected correctly. What the table shows:
   clip's own speaking level and those utterances sit far under their louder
   neighbours.
 - **Short captions:** 8 captions across 6 of the 10 runs are under the 0.8 s
-  minimum (0.24-0.76 s). These clips have 0.6 s between utterances, shorter
-  than real speech usually pauses, which leaves a last word no room to be
-  held longer; not seen on real videos so far. Not changed.
+  minimum (0.24-0.76 s). These clips have 0.6 s between utterances, which
+  leaves a last word little room to be held longer. It happens on a real
+  video too: in the v1.0.10 release check, the Hindi tutorial in Devanagari
+  had "है गाइस" for 0.60 s at 200.48 s, followed by a 0.5 s pause. Holding
+  it to 0.8 s would leave a 0.3 s gap, which the flicker rule forbids, and
+  it was left short. Not changed.
 - **Words heard but not captioned**, in loud speech: German 36.70-38.56 s
   (1.9 s) and English 141.90-142.78 s, and audio with no caption in
   Portuguese (0.84 s at 3.70 s). Fewer and shorter than the v1.0.9 gaps

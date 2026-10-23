@@ -822,7 +822,7 @@ change would alter what the eval measures.
   language", PRD, CHANGELOG, ROADMAP "re-add with Indian-language
   fine-tuned speech models (e.g. AI4Bharat)" with the eval numbers, TESTING).
 
-## v1.0.10 (in progress: speech with no caption)
+## v1.0.10 (released 2026-10-22, tag on a1b822a)
 Brief (Tanush, 2026-10-22): stretches of 1-2 s where someone speaks and no
 caption appears, seen on video 84 after a Redo. Find every one (over 0.7 s)
 on video 84 and `hinglish.mp4`, find why, fix with the smallest change on
@@ -876,6 +876,36 @@ pass after, release as v1.0.10.
       Video 84 on the install was only read.
 - [x] Backend 519 passed, 1 skipped; ruff, frontend lint, type-check and
       tests clean.
+
+### Release check (2026-10-23)
+- Tag v1.0.10 on a1b822a; CI and `release.yml` green on it; 8 assets, all 7
+  match SHA256SUMS; 1.0.10-cuda, 1.0.10-cpu and frontend 1.0.10 fetch
+  anonymously (200).
+- Backup per DATABASE.md §7 (31 s downtime, including a busybox pull):
+  `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.0.10` (vcm.dump 32 KB,
+  all 7 tables; vcm-media.tgz 284 MB, 28 files as on the volume; .env copy;
+  rowcounts: 1 video, 159 captions, 5 exports, 1 style, caption-text md5).
+  The `pre-1.0.9` backup deleted, as Tanush asked.
+- `vcm update` (Windows GPU) in 36 s: the API reports 1.0.10, alembic
+  `b6e0f4a9c2d1` (head, no migration); rows and caption-text md5 unchanged.
+  Download **7.4 MB**: backend CUDA 3/15 layers, 0.2 MB; frontend 4/10,
+  7.2 MB.
+- Guard (POST): own origin passes at localhost and 127.0.0.1 (422, no
+  file); another port, another origin, cross-site and a rebinding Host 403.
+  `flow.js` 7/7 PASS at both addresses, nothing refused.
+- E2E on the install, `hinglish.mp4`: same (128 captions, 110 s), en (126,
+  41 s), es (134, 110 s), SRT, VTT and MP4 each: ALL PASSED.
+  `coverage_check.py` on the Devanagari video: PASS (0 uncaptioned
+  stretches). `timing_check.py`: one 0.60 s caption ("है गाइस", 200.48 s,
+  before a 0.5 s pause): the minimum-length and flicker rules meet there.
+  Reported, not changed.
+- Test videos 94, 95, 96 (E2E) deleted: 95 and 96 by `flow.js`, 94 by
+  `DELETE /api/videos/94`. The install holds video 84 only, as before.
+  Check scripts copied into the worker's /tmp for the run, then removed.
+- Secrets: nothing forbidden in git history (`docs/learning-guide.md` was
+  tracked for one commit on 2026-08-06, not a secret); the 1.0.10 images
+  hold only public CA bundles (grpc's roots.pem). The 1.0.10 tags pulled
+  for the check and busybox:latest untagged again.
 
 ## v1.0.9 (released 2026-10-21, tag on 1a5cf30)
 Started 2026-10-19, after v1.0.8 was released and the install updated.

@@ -8,9 +8,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.0.10] - 2026-10-22
 
-Captions for every stretch of speech. No migration. Expected update from
-1.0.9: about 7 MB (backend app code; frontend app layers ~7 MB); no
-dependency layer changes. Measured after release.
+Captions for every stretch of speech. No migration. Updating from 1.0.9
+downloads 7.4 MB (measured on the Windows GPU install: backend 3 of 15
+layers, 0.2 MB; frontend 4 of 10, 7.2 MB); no dependency layer changes.
 
 ### Fixed
 - **Speech with no caption.** A stretch of 1–2.5 s where someone was
