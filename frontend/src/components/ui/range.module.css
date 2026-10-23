@@ -24,8 +24,8 @@
  */
 
 .range {
-  --track: 6px;
-  --thumb: 16px;
+  --track: 4px;
+  --thumb: 20px;
 
   /* The thumb's centre travels from thumb/2 to width - thumb/2, but a
      percentage background stop measures from 0 to width. Left alone the fill
@@ -59,8 +59,8 @@
 .range::-webkit-slider-runnable-track {
   height: var(--track);
   border-radius: 9999px;
-  background-color: hsl(var(--input));
-  background-image: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  background-color: hsl(var(--border));
+  background-image: linear-gradient(hsl(var(--accent)), hsl(var(--accent)));
   background-repeat: no-repeat;
   background-size: var(--fill-width) 100%;
 }
@@ -68,8 +68,8 @@
 .range::-moz-range-track {
   height: var(--track);
   border-radius: 9999px;
-  background-color: hsl(var(--input));
-  background-image: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  background-color: hsl(var(--border));
+  background-image: linear-gradient(hsl(var(--accent)), hsl(var(--accent)));
   background-repeat: no-repeat;
   background-size: var(--fill-width) 100%;
 }
@@ -81,10 +81,12 @@
   height: var(--thumb);
   width: var(--thumb);
   border-radius: 9999px;
-  background: hsl(var(--primary));
+  /* A white knob with a hairline: a control, not a floating layer, so no
+     shadow (v1.1.0). */
+  background: #fff;
   /* A ring of the panel colour, so the thumb reads as a separate object rather
      than a bulge in the bar it is sitting on. */
-  border: 2px solid hsl(var(--card));
+  border: 1px solid hsl(240 5.9% 83.3%);
   /* Zero-spread and transparent rather than `none`, so the hover ring below
      has something to grow from instead of popping into place. */
   box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
@@ -100,8 +102,10 @@
   width: var(--thumb);
   box-sizing: border-box;
   border-radius: 9999px;
-  background: hsl(var(--primary));
-  border: 2px solid hsl(var(--card));
+  /* A white knob with a hairline: a control, not a floating layer, so no
+     shadow (v1.1.0). */
+  background: #fff;
+  border: 1px solid hsl(240 5.9% 83.3%);
   box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
   transition: box-shadow 120ms ease;
 }
@@ -114,19 +118,19 @@
 /* --- pointer states ---------------------------------------------------- */
 
 .range:hover::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2);
+  box-shadow: none;
 }
 
 .range:hover::-moz-range-thumb {
-  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2);
+  box-shadow: none;
 }
 
 .range:active::-webkit-slider-thumb {
-  box-shadow: 0 0 0 6px hsl(var(--primary) / 0.28);
+  box-shadow: none;
 }
 
 .range:active::-moz-range-thumb {
-  box-shadow: 0 0 0 6px hsl(var(--primary) / 0.28);
+  box-shadow: none;
 }
 
 /* --- focus ------------------------------------------------------------- */
@@ -145,11 +149,11 @@
 }
 
 .range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.5);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.5);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 /* --- disabled ---------------------------------------------------------- */

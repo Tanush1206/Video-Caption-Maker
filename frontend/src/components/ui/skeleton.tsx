@@ -17,10 +17,8 @@ export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivEl
       // Hidden from assistive tech: a screen reader should hear the loading
       // state announced once by the region, not read out a row of empty boxes.
       aria-hidden="true"
-      className={cn("relative overflow-hidden rounded-md bg-muted", className)}
+      className={cn("animate-pulse rounded-md bg-surface-2", className)}
       {...props}
-    >
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-foreground/[0.07] to-transparent" />
-    </div>
+    />
   );
 }
