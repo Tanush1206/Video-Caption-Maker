@@ -15,7 +15,7 @@ import type { SystemInfo } from "@/types/system";
 import type { LanguageOptions } from "@/types/video";
 
 /**
- * Step 2 of Upload → Language → Export, while the picked file uploads.
+ * Step 2 of Upload → Language → Captions → Export, while the picked file uploads.
  *
  * The spoken language is heard, not asked: the server listens to the first
  * 30 s of the upload. When that is Hindi the step asks how the captions are
@@ -153,18 +153,19 @@ export function LanguageStep({
 
         {question.show && (
           <fieldset className="mt-6">
-            <legend className="px-4 text-[15px] font-semibold" id="hindi-script-heading">
+            <legend className="text-[17px] font-semibold" id="hindi-script-heading">
               {question.heading}
             </legend>
             {question.required && (
-              <p className="mt-0.5 px-4 text-[13px] text-muted-foreground" id="hindi-script-hint">
+              <p className="mt-0.5 text-[13px] text-muted-foreground" id="hindi-script-hint">
                 {chosenSpoken
                   ? "Choose how to write Hindi to start."
                   : "Hindi was heard, but not surely. Choose how to write it to start."}
               </p>
             )}
-            {/* A grouped list with a check on the chosen row (System Settings). */}
-            <div role="radiogroup" aria-labelledby="hindi-script-heading" className="group-inset mt-2">
+            {/* The same tiles as "Caption into": a radio circle, and the
+                accent outline on the chosen one. Start waits for a choice. */}
+            <div role="radiogroup" aria-labelledby="hindi-script-heading" className="mt-2 grid gap-2 sm:grid-cols-2">
               {question.options.map((code) => {
                 const selected = script === code;
                 const { label, download } = scriptLabel(code);
@@ -172,8 +173,10 @@ export function LanguageStep({
                   <label
                     key={code}
                     className={cn(
-                      "group-row cursor-pointer transition-colors duration-200 ease-out hover:bg-surface-3/50",
-                      "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring",
+                      "flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-card px-4 py-3.5",
+                      "transition-[background-color,box-shadow] duration-200 ease-out",
+                      "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
+                      selected ? "ring-2 ring-inset ring-accent" : "hover:bg-surface-3/60",
                       busy && "pointer-events-none opacity-60"
                     )}
                   >
@@ -187,7 +190,10 @@ export function LanguageStep({
                       className="sr-only"
                     />
                     <span className="min-w-0">
-                      <span className="block text-[15px]" lang={code === "roman" ? "hi-Latn" : "hi"}>
+                      <span
+                        className="block text-[17px] font-semibold leading-[25px]"
+                        lang={code === "roman" ? "hi-Latn" : "hi"}
+                      >
                         {label}
                       </span>
                       <span className="block text-[13px] text-muted-foreground">
@@ -198,10 +204,15 @@ export function LanguageStep({
                           : "Hindi in its own script"}
                       </span>
                     </span>
-                    <Check
+                    <span
                       aria-hidden="true"
-                      className={cn("size-5 shrink-0 text-primary", !selected && "invisible")}
-                    />
+                      className={cn(
+                        "flex size-5 shrink-0 items-center justify-center rounded-full",
+                        selected ? "bg-accent text-white" : "border border-input"
+                      )}
+                    >
+                      {selected && <Check className="size-3.5" strokeWidth={2.5} />}
+                    </span>
                   </label>
                 );
               })}
