@@ -53,7 +53,7 @@ export function Inspector({
         className
       )}
     >
-      <div className="shrink-0 px-4 pb-3 pt-2 lg:px-5 lg:pt-5">
+      <div className="shrink-0 px-4 pb-3 pt-2 lg:px-5 lg:pt-4">
         <button
           type="button"
           onClick={() => setRaised((value) => !value)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { CornerRightDown, Highlighter, PlayCircle, Scissors, Trash2 } from "lucide-react";
+import { CornerRightDown, Highlighter, Scissors, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -8,9 +8,10 @@ import { formatTimecode } from "@/lib/format";
 import type { Caption } from "@/types/caption";
 
 
-/** The row's tools: plain grey icons, 44 px on a phone. */
+/** The row's tools: plain grey icons, 44 px on a phone, 24 px on the time
+    line from sm up so they don't make the row taller. */
 const ICON_BUTTON =
-  "flex size-11 items-center justify-center rounded-full transition-colors duration-200 ease-out hover:bg-surface-3 sm:size-8";
+  "flex size-11 items-center justify-center rounded-full transition-colors duration-200 ease-out hover:bg-surface-3 sm:size-6 [&_svg]:size-4 sm:[&_svg]:size-3.5";
 
 /** Whisper's avg_logprob; below this the line is usually worth checking. */
 const LOW_CONFIDENCE = -1.0;
@@ -117,26 +118,28 @@ export function CaptionRow({
     caption.override_scale !== null;
 
   return (
-    // A row per caption (v1.1.0): the list separates them with hairlines,
-    // and the one under the playhead sits on the grouped grey.
+    // A row per caption (v1.1.0): dense, the list draws hairlines between
+    // rows, and the one under the playhead sits on the grouped grey with its
+    // time in the accent.
     <div
       ref={registerRow}
       className={cn(
-        "group rounded-xl px-3 py-2.5 transition-colors duration-200 ease-out",
-        isActive ? "bg-surface-2" : "hover:bg-surface-2/60"
+        "group relative px-3 py-2 transition-colors duration-200 ease-out",
+        isActive ? "bg-surface-2" : "hover:bg-surface-2/50"
       )}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
+      {/* 16 px from sm up, the tools overhanging it; a phone's 44 px tools
+          need the room. */}
+      <div className="flex items-center justify-between gap-2 max-sm:min-h-11 sm:h-4">
         <button
           type="button"
           onClick={onSeek}
           title="Jump the video here"
           className={cn(
-            "flex min-h-8 items-center gap-1.5 rounded-md font-mono text-xs tabular-nums transition-colors duration-200 ease-out hover:text-primary",
+            "flex items-center gap-1 rounded-sm font-mono text-xs leading-4 tabular-nums transition-colors duration-200 ease-out hover:text-primary",
             isActive ? "text-primary" : "text-muted-foreground"
           )}
         >
-          <PlayCircle className="size-4" />
           {formatTimecode(caption.start_ms)}
           <span aria-hidden="true">→</span>
           <span className="sr-only">to</span>
@@ -144,7 +147,7 @@ export function CaptionRow({
         </button>
 
         {lowConfidence && (
-          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground group-hover:hidden">
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground group-hover:hidden">
             <span className="size-2 rounded-full bg-warning" aria-hidden="true" />
             Check this line
           </span>
@@ -216,7 +219,7 @@ export function CaptionRow({
         className={cn(
           // Reads as text, not a form field, until it is touched: DESIGN.md's
           // "transparent background and seamless borders".
-          "-mx-1.5 w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-1 text-[15px] leading-[22px] transition-colors duration-200 ease-out",
+          "-mx-1.5 mt-0.5 block w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-0 text-[15px] leading-[22px] transition-colors duration-200 ease-out",
           "hover:border-border focus:border-ring focus:bg-background focus:outline-none",
           dirty ? "border-accent/60" : "border-transparent"
         )}

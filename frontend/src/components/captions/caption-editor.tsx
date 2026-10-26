@@ -317,7 +317,8 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           captions say" is a translation, and a different operation entirely. */}
       {languageOptions && (
         <div className="mb-4">
-          <div className="group-inset">
+          {/* Compact rows from sm up, so the list below keeps the room. */}
+          <div className="group-inset sm:[&_.group-row]:min-h-9 sm:[&_.group-row]:py-1">
             <div className="group-row">
               <span className="shrink-0 text-sm" aria-hidden="true">
                 Captions
@@ -387,7 +388,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           two bordered cards reads as a third stray line. */}
       <div
         ref={list}
-        className="relative min-h-0 flex-1 space-y-0.5 overflow-y-auto"
+        className="relative min-h-0 flex-1 divide-y divide-border overflow-y-auto"
       >
         {captions.map((caption, index) => (
           <CaptionRow

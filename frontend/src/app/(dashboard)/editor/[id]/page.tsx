@@ -46,7 +46,7 @@ const WORKSPACE_HEIGHT = "lg:h-[calc(100vh-104px)]";
  * the stage's padding, the controls and hint, and the timeline. The video's
  * width follows from what is left, so a portrait clip fits too.
  */
-const NOT_VIDEO_PX = 104 + 48 + 92 + 196;
+const NOT_VIDEO_PX = 104 + 48 + 60 + 128;
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const videoId = Number(params.id);
@@ -209,12 +209,6 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
               hasAudioTrack={waveform ? waveform.peaks.length > 0 : null}
             />
           </div>
-          {/* The one instruction the video cannot give you by looking at it.
-              Dragging the caption is the editor's least discoverable feature
-              and its most useful one. */}
-          <p className="text-center text-xs text-muted-foreground">
-            Drag the caption to place it anywhere on the frame · Click the video to play or pause
-          </p>
         </section>
 
         <Inspector
@@ -238,7 +232,7 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
         <section
           aria-label="Timeline"
-          className="min-w-0 border-t border-border px-4 py-4 sm:px-8 lg:col-span-2 lg:row-start-2"
+          className="min-w-0 border-t border-border px-4 py-3 sm:px-8 lg:col-span-2 lg:row-start-2"
         >
           <Timeline
             captions={captions}

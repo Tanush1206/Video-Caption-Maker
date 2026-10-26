@@ -5,10 +5,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import type { Playback } from "@/hooks/use-playback";
 import { formatTimecode } from "@/lib/format";
+import { HINT_CLASS, useOnceHint } from "@/lib/hints";
 import { cn } from "@/lib/utils";
 import type { Caption } from "@/types/caption";
 
-const TRACK_HEIGHT = 88;
+const TRACK_HEIGHT = 76;
 const RULER_HEIGHT = 18;
 
 /** Zoom bounds. Two seconds across the width is enough to place a syllable. */
@@ -77,10 +78,16 @@ export function Timeline({
 
   const durationMs = playback.durationMs;
 
-  // The window should track the playhead during playback, but not yank itself
-  // away while the user is dragging a boundary.
+  // The window tracks the playhead, so it is in view at every zoom: paged
+  // ahead during playback, and brought back whenever a seek lands outside it
+  // (v1.1.0, which dropped the scroll slider). Never while a boundary is
+  // being dragged.
   const following = useRef(false);
-  following.current = playback.isPlaying && drag === null;
+  following.current = drag === null;
+  const playing = useRef(false);
+  playing.current = playback.isPlaying;
+  const edgeHint = useOnceHint("timeline-edge");
+  const [hintX, setHintX] = useState(0);
 
   const msToX = useCallback(
     (ms: number) => ((ms - windowStartMs) / windowMs) * width,
@@ -130,8 +137,10 @@ export function Timeline({
 
         // Page the window forward once the playhead nears the right edge,
         // rather than scrolling continuously — a timeline sliding under a
-        // stationary playhead is much harder to read than a still one.
-        if (following.current && (ms < windowStartMs || x > width * 0.9)) {
+        // stationary playhead is much harder to read than a still one. When
+        // paused, only once it reaches the last 3% of the view, so a click
+        // near the edge doesn't move the track under the pointer.
+        if (following.current && (ms < windowStartMs || x > width * (playing.current ? 0.9 : 0.97))) {
           setWindowStartMs(clamp(ms - windowMs * 0.1, 0, Math.max(0, durationMs - windowMs)));
         }
       }),
@@ -297,7 +306,7 @@ export function Timeline({
 
   return (
     <section>
-      <header className="mb-2 flex items-center justify-between">
+      <header className="mb-1.5 flex items-center justify-between">
         <h2 className="label-caps">Timeline</h2>
         <div className="flex items-center gap-1">
           {isLoadingWaveform && (
@@ -306,9 +315,15 @@ export function Timeline({
               Reading audio…
             </span>
           )}
-          <span className="mr-1 text-xs tabular-nums text-muted-foreground">
-            {(windowMs / 1000).toFixed(1)} s across
-          </span>
+          {drag ? (
+            <span className="mr-1 font-mono text-xs tabular-nums text-primary">
+              {formatTimecode(drag.startMs)} → {formatTimecode(drag.endMs)}
+            </span>
+          ) : (
+            <span className="mr-1 text-xs tabular-nums text-muted-foreground">
+              {(windowMs / 1000).toFixed(1)} s across
+            </span>
+          )}
           <button
             type="button"
             onClick={() => zoom(-1)}
@@ -331,6 +346,12 @@ export function Timeline({
       <div
         ref={container}
         onPointerDown={handleTrackPointerDown}
+        // A horizontal swipe, or Shift and the wheel, pans the window.
+        onWheel={(event) => {
+          const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+          if (!delta || width <= 0) return;
+          setWindowStartMs((start) => clamp(start + (delta / width) * windowMs, 0, maxStart));
+        }}
         style={{ height: TRACK_HEIGHT }}
         className="relative w-full cursor-pointer select-none overflow-hidden rounded-lg bg-surface-2"
       >
@@ -377,6 +398,12 @@ export function Timeline({
               {(["start", "end"] as const).map((edge) => (
                 <div
                   key={edge}
+                  onPointerEnter={(event) => {
+                    const track = container.current?.getBoundingClientRect();
+                    if (track) setHintX(event.currentTarget.getBoundingClientRect().left - track.left);
+                    edgeHint.show();
+                  }}
+                  onPointerLeave={edgeHint.done}
                   onPointerDown={(event) => beginDrag(event, caption, index, edge)}
                   onPointerMove={handleDragMove}
                   onPointerUp={endDrag}
@@ -393,39 +420,26 @@ export function Timeline({
           );
         })}
 
-        {/* Fixed red, deliberately outside the theme. Every video tool draws
-            the playhead red, and it has to stay legible over an arbitrary
-            waveform in either theme — a token that shifts with the palette
-            could land the same colour as the caption blocks behind it. Flat:
-            no glow (v1.1.0). */}
+        {/* The playhead (v1.1.0): a 2 px accent line with a small head,
+            drawn over the blocks; the window follows it, so it is in view at
+            every zoom. */}
         <div
           ref={playhead}
-          className="pointer-events-none absolute top-0 h-full w-0.5 bg-[#FF3B30]"
+          className="pointer-events-none absolute top-0 z-10 h-full w-0.5 -translate-x-px bg-accent"
           style={{ willChange: "transform" }}
         >
-          <div className="absolute -left-[3px] top-0 size-2 rounded-full bg-[#FF3B30]" />
+          <div className="absolute -left-[4px] -top-px h-2.5 w-2.5 rounded-b-full rounded-t-sm bg-accent" />
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Drag a caption&apos;s edge to retime it · click the track to seek</span>
-        {drag && (
-          <span className="font-mono tabular-nums text-primary">
-            {formatTimecode(drag.startMs)} → {formatTimecode(drag.endMs)}
+      {/* Shown once, the first time a caption's edge is hovered. */}
+      <div className="relative h-0">
+        {edgeHint.showing && (
+          <span className={HINT_CLASS} style={{ left: Math.max(0, hintX - 60), top: 6 }}>
+            Drag an edge to retime the caption · click the track to seek
           </span>
         )}
       </div>
-
-      <input
-        type="range"
-        min={0}
-        max={Math.max(0, maxStart)}
-        value={Math.min(windowStartMs, maxStart)}
-        onChange={(event) => setWindowStartMs(Number(event.target.value))}
-        aria-label="Scroll the timeline"
-        disabled={maxStart <= 0}
-        className="mt-2 w-full accent-[hsl(var(--accent))] disabled:opacity-30"
-      />
     </section>
   );
 }
