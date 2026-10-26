@@ -40,16 +40,18 @@ MIN_RAM_GB_FOR_LARGE = 12.0
 
 # Offered in Settings. A curated list rather than all of faster-whisper's:
 # the `.en` and distil variants cannot transcribe the non-English languages
-# this app exists to caption.
+# this app exists to caption. The three the automatic tiers use, and nothing
+# else: `medium` was offered until v1.1.0 and taken out, because it is as big
+# as large-v3-turbo (1.5 vs 1.6 GB), slower, and measured worse on Hindi
+# (DECISIONS.md, "Hardware tiers").
 WHISPER_CHOICES: dict[str, str] = {
     "small": "Small · fastest, ~500 MB",
-    "medium": "Medium · ~1.5 GB",
     "large-v3-turbo": "Large v3 Turbo · fast and accurate, ~1.6 GB",
     "large-v3": "Large v3 · most accurate, ~3 GB",
 }
 
 # Download sizes, for telling someone what the first run will fetch.
-WHISPER_SIZES_MB = {"small": 484, "medium": 1530, "large-v3-turbo": 1620, "large-v3": 3090}
+WHISPER_SIZES_MB = {"small": 484, "large-v3-turbo": 1620, "large-v3": 3090}
 
 
 @dataclass(frozen=True)

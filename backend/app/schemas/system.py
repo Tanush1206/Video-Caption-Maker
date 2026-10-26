@@ -19,6 +19,15 @@ class WhisperInfo(BaseModel):
     source: str
 
 
+class ModelDownload(BaseModel):
+    """A model fetched the first time it is needed (v1.1.0: Hinglish)."""
+
+    #: Already on this machine (the models volume the API shares with the worker).
+    downloaded: bool
+    #: What the first use downloads.
+    size_bytes: int
+
+
 class Choice(BaseModel):
     value: str
     label: str
@@ -33,6 +42,9 @@ class SystemInfo(BaseModel):
     whisper: WhisperInfo | None
     whisper_choice: str
     whisper_choices: list[Choice]
+    #: The Hinglish speech model (Oriserve's Apex), used for Hindi in Roman
+    #: script whatever the choice above.
+    hinglish_model: ModelDownload
     translation_engine: str  # "gemini" or "local"
     translator_model: str | None
     # Whether a key is set. The key itself is never sent back out.

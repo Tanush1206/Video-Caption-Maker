@@ -52,8 +52,8 @@ def test_cpu_with_little_ram_gets_small_int8(auto_env):
 
 
 def test_the_users_choice_beats_the_tier(auto_env):
-    profile = hardware.whisper_profile(a_machine(ram_gb=7.6), "medium")
-    assert profile.model == "medium"
+    profile = hardware.whisper_profile(a_machine(ram_gb=7.6), "large-v3")
+    assert profile.model == "large-v3"
     assert profile.source == "user"
 
 
@@ -142,13 +142,42 @@ async def test_whisper_choice_is_validated_and_reported(
         app_settings.WORKER_HARDWARE,
         json.dumps(a_machine(ram_gb=8.0).as_dict()),
     )
-    body = (await client.patch("/api/system/settings", json={"whisper_model": "medium"})).json()
-    assert body["whisper_choice"] == "medium"
-    assert body["whisper"]["model"] == "medium"
+    body = (await client.patch("/api/system/settings", json={"whisper_model": "large-v3-turbo"})).json()
+    assert body["whisper_choice"] == "large-v3-turbo"
+    assert body["whisper"]["model"] == "large-v3-turbo"
     assert body["whisper"]["source"] == "user"
 
     body = (await client.patch("/api/system/settings", json={"whisper_model": "auto"})).json()
     assert body["whisper_choice"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_medium_is_no_longer_offered(client, local_mode, preserved_settings, db_session):
+    """
+    v1.1.0: the choices are the three the tiers use. Medium can't be chosen,
+    and an install that had chosen it reads as Automatic, so Settings shows a
+    checked row and the worker uses the tier's model.
+    """
+    body = (await client.get("/api/system")).json()
+    assert [c["value"] for c in body["whisper_choices"]] == ["auto", "small", "large-v3-turbo", "large-v3"]
+
+    refused = await client.patch("/api/system/settings", json={"whisper_model": "medium"})
+    assert refused.status_code == 422
+
+    await app_settings.set_value(db_session, app_settings.WHISPER_MODEL, "medium")
+    assert await app_settings.whisper_override(db_session) is None
+    assert (await client.get("/api/system")).json()["whisper_choice"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_the_system_reports_the_hinglish_model(client, local_mode, monkeypatch):
+    """Settings lists the Hinglish model: on this machine or not, and its size."""
+    from app.services import hinglish
+
+    for ready in (False, True):
+        monkeypatch.setattr(hinglish, "apex_ready", lambda ready=ready: ready)
+        model = (await client.get("/api/system")).json()["hinglish_model"]
+        assert model == {"downloaded": ready, "size_bytes": hinglish.APEX_DOWNLOAD_BYTES}
 
 
 @pytest.mark.asyncio

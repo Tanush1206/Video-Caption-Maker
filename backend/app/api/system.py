@@ -13,11 +13,12 @@ from app.dependencies import CurrentUser, DbSession
 from app.schemas.system import (
     Choice,
     HardwareInfo,
+    ModelDownload,
     SystemInfo,
     SystemSettingsUpdate,
     WhisperInfo,
 )
-from app.services import app_settings, hardware
+from app.services import app_settings, hardware, hinglish
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -46,6 +47,9 @@ async def _info(db) -> SystemInfo:
         whisper_choice=choice,
         whisper_choices=[Choice(value=hardware.AUTO, label="Automatic (recommended)")]
         + [Choice(value=value, label=label) for value, label in hardware.WHISPER_CHOICES.items()],
+        hinglish_model=ModelDownload(
+            downloaded=hinglish.apex_ready(), size_bytes=hinglish.APEX_DOWNLOAD_BYTES
+        ),
         translation_engine="gemini" if key else "local",
         translator_model=translator,
         gemini_configured=bool(key),

@@ -54,7 +54,16 @@ async def gemini_key(session: AsyncSession) -> str:
 
 
 async def whisper_override(session: AsyncSession) -> str | None:
-    return await get_value(session, WHISPER_MODEL)
+    """
+    The speech model chosen in Settings, or None for automatic.
+
+    A choice no longer offered (`medium`, until v1.1.0) counts as automatic,
+    so Settings shows a checked row and the worker uses the tier's model.
+    """
+    from app.services.hardware import WHISPER_CHOICES
+
+    value = await get_value(session, WHISPER_MODEL)
+    return value if value in WHISPER_CHOICES else None
 
 
 async def worker_hardware(session: AsyncSession) -> dict | None:
