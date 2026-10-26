@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
 import { InstallSettings } from "@/components/settings/install-settings";
 import { useDeleteAccount, useChangePassword, useUpdateProfile } from "@/hooks/use-account";
 import { useAuth } from "@/hooks/use-auth";
@@ -26,19 +26,19 @@ function Section({
   danger?: boolean;
 }) {
   return (
-    <Card className={cn("p-4 sm:p-5", danger && "border-destructive/40")}>
-      <h2 className={cn("text-sm font-semibold", danger && "text-destructive")}>{title}</h2>
-      <p className="mb-4 mt-1 text-sm text-muted-foreground">{description}</p>
+    <section className="rounded-xl bg-card p-4 sm:p-5">
+      <h2 className={cn("text-[17px] font-semibold", danger && "text-destructive")}>{title}</h2>
+      <p className="mb-4 mt-1 text-[13px] text-muted-foreground">{description}</p>
       {children}
-    </Card>
+    </section>
   );
 }
 
 /** A confirmation that appears next to the button that caused it. */
 function Saved({ label }: { label: string }) {
   return (
-    <span className="flex animate-fade-in items-center gap-1.5 text-sm text-success">
-      <Check className="size-4" />
+    <span className="flex animate-fade-in items-center gap-1.5 text-[13px] text-muted-foreground">
+      <Check className="size-4 text-success" aria-hidden="true" />
       {label}
     </span>
   );
@@ -71,7 +71,7 @@ function ProfileSection() {
 
         <div className="space-y-1.5">
           <label className="block text-sm font-medium">Email</label>
-          <p className="rounded-md border border-dashed border-border bg-subtle px-3 py-2 text-sm text-muted-foreground">
+          <p className="rounded-lg bg-background px-3 py-2 text-[15px] text-muted-foreground">
             {user?.email}
           </p>
           {/* Not an oversight worth hiding: say why it's fixed. */}
@@ -219,13 +219,10 @@ function DangerSection() {
         </Button>
       ) : (
         <form onSubmit={confirm} className="animate-fade-in space-y-4">
-          <div className="flex gap-2.5 rounded-md border border-destructive/30 bg-destructive/10 p-3">
-            <AlertTriangle className="mt-px size-4 shrink-0 text-destructive" />
-            <p className="text-sm text-destructive">
-              This permanently deletes everything owned by{" "}
-              <span className="font-medium">{user?.email}</span>.
-            </p>
-          </div>
+          <Notice tone="error" className="bg-background">
+            This permanently deletes everything owned by{" "}
+            <span className="font-medium text-foreground">{user?.email}</span>.
+          </Notice>
 
           {/* Asked for even though the session is already authenticated: this
               is the one action with nothing to restore afterwards, and a
@@ -269,11 +266,10 @@ function DangerSection() {
 
 export default function SettingsPage() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-      <h1 className="text-2xl font-semibold tracking-tight">
-        {LOCAL_MODE ? "Settings & hardware" : "Account settings"}
-      </h1>
-      <p className="mb-6 mt-1 max-w-2xl text-[13px] text-muted-foreground">
+    // One narrow column of grouped lists, as System Settings is.
+    <main className="mx-auto w-full max-w-[720px] px-4 py-8 sm:px-8">
+      <h1 className="text-2xl font-semibold">{LOCAL_MODE ? "Settings" : "Account settings"}</h1>
+      <p className="mb-8 mt-1 text-[15px] text-muted-foreground">
         {LOCAL_MODE
           ? "What this install runs on, the speech model it uses, translation, and storage."
           : "Your profile, password and account."}
@@ -284,7 +280,7 @@ export default function SettingsPage() {
       {LOCAL_MODE ? (
         <InstallSettings />
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-8">
           <ProfileSection />
           <PasswordSection />
           <DangerSection />

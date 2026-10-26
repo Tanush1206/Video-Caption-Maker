@@ -1,11 +1,13 @@
 "use client";
 
-import { Check, Cpu, HardDrive, KeyRound, Languages, Monitor, Moon, Sparkles, Sun } from "lucide-react";
+import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useTheme } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
+import { inputClasses } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStats } from "@/hooks/use-stats";
 import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
@@ -14,64 +16,48 @@ import { formatDurationLong, formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
 
-/** One settings card: a small caps eyebrow, a title, and its controls. */
+/**
+ * One settings group (System Settings): a small grey heading, the inset
+ * rounded group of rows, and a footnote under it.
+ */
 export function SettingsSection({
-  eyebrow,
   title,
-  description,
-  icon: Icon,
-  aside,
+  footnote,
   children,
 }: {
-  eyebrow?: string;
   title: string;
-  description?: string;
-  icon?: typeof Cpu;
-  aside?: React.ReactNode;
+  footnote?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          {Icon && (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-primary">
-              <Icon className="size-5" aria-hidden="true" />
-            </span>
-          )}
-          <div className="min-w-0">
-            {eyebrow && <p className="label-caps">{eyebrow}</p>}
-            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-            {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
-          </div>
-        </div>
-        {aside}
-      </div>
-      <div className="mt-5">{children}</div>
+    <section aria-label={title}>
+      <h2 className="label-caps mb-1.5 px-4">{title}</h2>
+      <div className="group-inset">{children}</div>
+      {footnote && <div className="mt-1.5 px-4 text-[13px] text-muted-foreground">{footnote}</div>}
     </section>
+  );
+}
+
+/** A row: the label on the left, its value (grey) or control on the right. */
+function Row({ label, sub, children }: { label: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <div className="group-row">
+      <div className="min-w-0">
+        <div className="whitespace-nowrap text-[15px]">{label}</div>
+        {sub && <div className="text-[13px] text-muted-foreground">{sub}</div>}
+      </div>
+      {children !== undefined && (
+        <div className="min-w-0 text-right text-[15px] text-muted-foreground">{children}</div>
+      )}
+    </div>
   );
 }
 
 function Saved() {
   return (
-    <span className="flex animate-fade-in items-center gap-1.5 text-sm text-success" role="status">
-      <Check className="size-4" aria-hidden="true" />
+    <span className="flex animate-fade-in items-center gap-1.5 text-[13px] text-muted-foreground" role="status">
+      <Check className="size-4 text-success" aria-hidden="true" />
       Saved
-    </span>
-  );
-}
-
-function Chip({ tone = "neutral", children }: { tone?: "neutral" | "success" | "primary"; children: React.ReactNode }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 font-mono text-[11px]",
-        tone === "success" && "border-success/30 bg-success/10 text-success",
-        tone === "primary" && "border-primary/30 bg-primary/10 text-primary",
-        tone === "neutral" && "border-border bg-surface-2 text-muted-foreground"
-      )}
-    >
-      {children}
     </span>
   );
 }
@@ -80,47 +66,50 @@ function MachineSection({ info }: { info: SystemInfo }) {
   const hw = info.hardware;
   return (
     <SettingsSection
-      eyebrow="Hardware profile"
       title="Your computer"
-      icon={Cpu}
-      aside={hw && <Chip tone={hw.cuda ? "success" : "neutral"}>{hw.cuda ? "● CUDA active" : "CPU only"}</Chip>}
+      footnote={
+        hw && (
+          <>
+            {!hw.cuda && <p>No NVIDIA GPU found. Everything still works; transcription just takes longer.</p>}
+            {info.whisper && (
+              <p>
+                The speech model runs on {info.whisper.device === "cuda" ? "the GPU" : "the CPU"},{" "}
+                {info.whisper.source === "auto"
+                  ? "chosen automatically for this hardware."
+                  : info.whisper.source === "user"
+                    ? "chosen by you below."
+                    : "set by the WHISPER_MODEL_SIZE environment variable."}
+              </p>
+            )}
+            {/* The rule the worker applies (backend/app/services/hardware.py). */}
+            <p className="mt-1">
+              Automatic: GPU ≥ 6 GB VRAM → large-v3 · CPU ≥ 12 GB RAM → large-v3-turbo · otherwise → small
+            </p>
+          </>
+        )
+      }
     >
       {!hw ? (
-        <p className="text-sm text-muted-foreground" role="status">
+        <p className="group-row text-[15px] text-muted-foreground" role="status">
           Waiting for the processing service to report in. It does so as soon as it has started.
         </p>
       ) : (
         <>
-          <p className="font-mono text-sm text-primary">
-            {hw.cuda ? `${hw.gpu_name ?? "NVIDIA GPU"}${hw.vram_gb ? ` · ${hw.vram_gb} GB VRAM` : ""}` : `CPU · ${hw.cpu_count} cores`}
-            {` · ${hw.ram_gb} GB RAM`}
-          </p>
-          {!hw.cuda && (
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              No NVIDIA GPU found. Everything still works; transcription just takes longer.
-            </p>
+          <Row label="Acceleration">
+            <span className="inline-flex items-center gap-1.5">
+              <span className={cn("size-2 rounded-full", hw.cuda ? "bg-success" : "bg-muted-foreground")} aria-hidden="true" />
+              {hw.cuda ? "CUDA active" : "CPU only"}
+            </span>
+          </Row>
+          {hw.cuda && (
+            <Row label="Graphics">
+              {hw.gpu_name ?? "NVIDIA GPU"}
+              {hw.vram_gb ? ` · ${hw.vram_gb} GB VRAM` : ""}
+            </Row>
           )}
-          <div className="mt-4 rounded-lg border border-border bg-surface-1 p-4">
-            {info.whisper && (
-              <p className="flex flex-wrap items-center gap-2 text-[13px]">
-                <Sparkles className="size-4 text-primary" aria-hidden="true" />
-                <span className="font-semibold">Speech model in use:</span>
-                <Chip tone="primary">{info.whisper.model}</Chip>
-                <span className="text-muted-foreground">
-                  on {info.whisper.device === "cuda" ? "the GPU" : "the CPU"},{" "}
-                  {info.whisper.source === "auto"
-                    ? "chosen automatically for this hardware."
-                    : info.whisper.source === "user"
-                      ? "chosen by you below."
-                      : "set by the WHISPER_MODEL_SIZE environment variable."}
-                </span>
-              </p>
-            )}
-            {/* The rule the worker applies (backend/app/services/hardware.py). */}
-            <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-              Automatic: GPU ≥ 6 GB VRAM → large-v3 · CPU ≥ 12 GB RAM → large-v3-turbo · otherwise → small
-            </p>
-          </div>
+          {!hw.cuda && <Row label="Processor">{hw.cpu_count} cores</Row>}
+          <Row label="Memory">{hw.ram_gb} GB RAM</Row>
+          {info.whisper && <Row label="Speech model in use">{info.whisper.model}</Row>}
         </>
       )}
     </SettingsSection>
@@ -134,10 +123,27 @@ function ModelSection({ info }: { info: SystemInfo }) {
   return (
     <SettingsSection
       title="Speech model"
-      description="Larger models are more accurate and slower. Each one is downloaded once, the first time it's used. Applies to the next video you process."
-      aside={<Chip tone="primary">faster-whisper</Chip>}
+      footnote={
+        <>
+          <p>
+            faster-whisper. Larger models are more accurate and slower. Each one is downloaded once, the first
+            time it&apos;s used. Applies to the next video you process.
+          </p>
+          {(update.isSuccess || update.isError) && (
+            <div className="mt-1 flex min-h-5 items-center gap-3">
+              {update.isSuccess && <Saved />}
+              {update.isError && (
+                <span role="alert" className="text-destructive">
+                  Couldn&apos;t save that. Try again.
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      }
     >
-      <div role="radiogroup" aria-label="Speech model" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {/* A grouped list with a check on the chosen row. */}
+      <div role="radiogroup" aria-label="Speech model">
         {info.whisper_choices.map((choice) => {
           // "Small · fastest, ~500 MB" → name and what it costs.
           const [name, detail] = choice.label.split(" · ");
@@ -146,9 +152,8 @@ function ModelSection({ info }: { info: SystemInfo }) {
             <label
               key={choice.value}
               className={cn(
-                "flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition-colors",
-                "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
-                active ? "border-primary/60 bg-primary/10" : "border-border bg-surface-1 hover:bg-surface-2",
+                "group-row cursor-pointer transition-colors duration-200 ease-out hover:bg-surface-3/50",
+                "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring",
                 update.isPending && "pointer-events-none opacity-60"
               )}
             >
@@ -161,35 +166,19 @@ function ModelSection({ info }: { info: SystemInfo }) {
                 onChange={() => update.mutate({ whisper_model: choice.value })}
                 className="sr-only"
               />
-              <span className="flex items-start justify-between gap-2">
-                <span className="text-base font-semibold">{name}</span>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded-full",
-                    active ? "bg-primary text-primary-foreground" : "border border-border bg-card"
-                  )}
-                >
-                  {active && <Check className="size-3" />}
-                </span>
+              <span className="min-w-0">
+                <span className="block text-[15px]">{name}</span>
+                {detail && <span className="block text-[13px] text-muted-foreground">{detail}</span>}
               </span>
-              {detail && <span className="text-[13px] text-muted-foreground">{detail}</span>}
-              {choice.value !== "auto" && choice.value === automatic && (
-                <span className="self-start">
-                  <Chip tone="primary">Picked for this computer</Chip>
-                </span>
-              )}
+              <span className="flex shrink-0 items-center gap-3">
+                {choice.value !== "auto" && choice.value === automatic && (
+                  <span className="text-[13px] text-muted-foreground">Picked for this computer</span>
+                )}
+                <Check aria-hidden="true" className={cn("size-5 text-primary", !active && "invisible")} />
+              </span>
             </label>
           );
         })}
-      </div>
-      <div className="mt-3 flex min-h-5 items-center gap-3">
-        {update.isSuccess && <Saved />}
-        {update.isError && (
-          <span role="alert" className="text-sm text-destructive">
-            Couldn&apos;t save that. Try again.
-          </span>
-        )}
       </div>
     </SettingsSection>
   );
@@ -224,103 +213,107 @@ function TranslationSection({ info }: { info: SystemInfo }) {
       inUse: gemini,
     },
   ];
+  // Served, not listed here: this used to be five names typed into the page,
+  // which the language list had already outgrown.
+  const languages = (languageOptions?.caption ?? []).filter((option) => option.native);
 
   return (
-    <SettingsSection eyebrow="Caption languages" title="Translation" icon={Languages}>
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2">
-        <span className="label-caps mr-1">Languages</span>
-        {/* Served, not listed here: this used to be five names typed into
-            the page, which the language list had already outgrown. */}
-        {(languageOptions?.caption ?? [])
-          .filter((option) => option.native)
-          .map((option) => (
-            <Chip key={option.code}>
-              <span lang={option.code}>{option.native}</span>
-              {option.native !== option.label && (
-                <span className="ml-1 text-muted-foreground">{option.label}</span>
-              )}
-            </Chip>
-          ))}
-      </div>
-
-      <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-8">
+      <SettingsSection title="Translation">
         {engines.map((engine) => (
-          <div
+          <Row
             key={engine.id}
-            className={cn(
-              "flex items-start gap-3 rounded-lg border p-4",
-              engine.inUse ? "border-primary/50 bg-primary/10" : "border-border bg-surface-1"
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2",
-                engine.inUse ? "border-primary" : "border-border"
-              )}
-            >
-              {engine.inUse && <span className="size-1.5 rounded-full bg-primary" />}
-            </span>
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold">
+            label={
+              <>
                 {engine.name}
-                {engine.chips.map((chip) => (
-                  <Chip key={chip}>{chip}</Chip>
-                ))}
-                {engine.inUse && <Chip tone="primary">In use</Chip>}
-              </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">{engine.body}</p>
-            </div>
-          </div>
+                {engine.inUse && <span className="sr-only"> (in use)</span>}
+              </>
+            }
+            sub={`${engine.chips.join(" · ")} — ${engine.body}`}
+          >
+            <Check aria-hidden="true" className={cn("size-5 text-primary", !engine.inUse && "invisible")} />
+          </Row>
         ))}
-      </div>
+        <Row label="Caption languages">
+          <span className="block text-[13px]">
+            {languages.map((option, index) => (
+              <span key={option.code}>
+                {index > 0 && " · "}
+                <span lang={option.code}>{option.native}</span>
+              </span>
+            ))}
+          </span>
+        </Row>
+      </SettingsSection>
 
-      <form onSubmit={save} className="mt-5 space-y-3">
-        <p className="flex items-start gap-2 text-sm">
-          <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          {info.gemini_configured ? (
-            <span>
-              <span className="font-medium text-success">Key set.</span>
-              {info.gemini_source === "env" && " (Set by the GEMINI_API_KEY environment variable.)"}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">No key: translating locally.</span>
-          )}
-        </p>
-        <Field
-          label={info.gemini_configured ? "Replace Gemini API key" : "Gemini API key (optional)"}
-          name="gemini_api_key"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          value={key}
-          onChange={(event) => setKey(event.target.value)}
-          placeholder="AIza…"
-          hint="Create one at aistudio.google.com/apikey. With a key, caption text (never the video or audio) is sent to Google."
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" disabled={!key.trim()} loading={update.isPending}>
-            Save key
-          </Button>
-          {info.gemini_source === "settings" && (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={update.isPending}
-              onClick={() => update.mutate({ gemini_api_key: "" })}
-            >
-              Remove key
+      <SettingsSection
+        title="Gemini"
+        footnote={
+          <>
+            <p>
+              Create one at aistudio.google.com/apikey. With a key, caption text (never the video or audio) is
+              sent to Google.
+            </p>
+            {(update.isSuccess || update.isError) && (
+              <div className="mt-1 flex min-h-5 items-center gap-3">
+                {update.isSuccess && <Saved />}
+                {update.isError && (
+                  <span role="alert" className="text-destructive">
+                    Couldn&apos;t save the key. Try again.
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        }
+      >
+        <Row label="Key">
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-3">
+            {info.gemini_configured ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-success" aria-hidden="true" />
+                Set{info.gemini_source === "env" && " by the GEMINI_API_KEY environment variable"}
+              </span>
+            ) : (
+              "No key: translating locally"
+            )}
+            {info.gemini_source === "settings" && (
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                className="-mr-3"
+                disabled={update.isPending}
+                onClick={() => update.mutate({ gemini_api_key: "" })}
+              >
+                Remove key
+              </Button>
+            )}
+          </span>
+        </Row>
+        <form onSubmit={save} className="group-row flex-wrap gap-y-2">
+          <label htmlFor="gemini_api_key" className="text-[15px]">
+            {info.gemini_configured ? "Replace Gemini API key" : "Gemini API key (optional)"}
+          </label>
+          <span className="flex w-full items-center gap-2 sm:w-auto">
+            <input
+              id="gemini_api_key"
+              name="gemini_api_key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={key}
+              onChange={(event) => setKey(event.target.value)}
+              placeholder="AIza…"
+              className={cn(inputClasses, "min-w-0 flex-1 sm:w-56")}
+            />
+            <Button type="submit" disabled={!key.trim()} loading={update.isPending}>
+              Save key
             </Button>
-          )}
-          {update.isSuccess && <Saved />}
-          {update.isError && (
-            <span role="alert" className="text-sm text-destructive">
-              Couldn&apos;t save the key. Try again.
-            </span>
-          )}
-        </div>
-      </form>
-    </SettingsSection>
+          </span>
+        </form>
+      </SettingsSection>
+    </div>
   );
 }
 
@@ -335,90 +328,68 @@ function StorageSection() {
   const percent = data && data.disk_total_bytes > 0 ? Math.round((used / data.disk_total_bytes) * 100) : 0;
 
   return (
-    <SettingsSection eyebrow="Disk usage" title="Storage & theme" icon={HardDrive}>
-      {data ? (
-        <>
-          <p className="flex flex-wrap items-baseline gap-2">
-            <span className="text-3xl font-semibold tabular-nums">{formatFileSize(used)}</span>
-            <span className="text-[13px] text-muted-foreground">used of {formatFileSize(data.disk_total_bytes)} on this disk</span>
-          </p>
-          <div
-            className="mt-3 h-2 overflow-hidden rounded-full bg-surface-3"
-            role="progressbar"
-            aria-label="Disk usage"
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <p className="flex items-center justify-between rounded-md border border-border bg-surface-1 px-3 py-2 text-[13px]">
-              <span className="flex items-center gap-2">
-                <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-                This app&apos;s videos and exports
-              </span>
-              <span className="font-mono tabular-nums">{formatFileSize(data.storage_bytes)}</span>
-            </p>
-            <p className="flex items-center justify-between rounded-md border border-border bg-surface-1 px-3 py-2 text-[13px]">
-              <span className="flex items-center gap-2">
-                <span className="size-2 rounded-full bg-success" aria-hidden="true" />
-                Free
-              </span>
-              <span className="font-mono tabular-nums">{formatFileSize(data.disk_free_bytes)}</span>
-            </p>
-          </div>
-          {/* The library's figures, moved here from the dashboard (v1.1.0),
-              which keeps only the count and the size. */}
-          <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
-            {[
-              ["Footage", formatDurationLong(data.duration_ms)],
-              ["Captions", data.captions.toLocaleString()],
-              ["In the queue", String(data.by_status.pending + data.by_status.processing)],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-3 sm:block">
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="tabular-nums">{value}</dd>
+    <>
+      <SettingsSection title="Storage">
+        {data ? (
+          <>
+            <div className="group-row flex-col items-stretch gap-2 py-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[15px]">This disk</span>
+                <span className="text-[15px] tabular-nums text-muted-foreground">
+                  {formatFileSize(used)} used of {formatFileSize(data.disk_total_bytes)}
+                </span>
               </div>
-            ))}
-          </dl>
-        </>
-      ) : (
-        <Skeleton className="h-20 w-full" />
-      )}
+              <div
+                className="h-1 overflow-hidden rounded-full bg-surface-3"
+                role="progressbar"
+                aria-label="Disk usage"
+                aria-valuenow={percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div className="bar-fill h-full rounded-full" style={{ width: `${percent}%` }} />
+              </div>
+            </div>
+            <Row label="This app's videos and exports">
+              <span className="tabular-nums">{formatFileSize(data.storage_bytes)}</span>
+            </Row>
+            <Row label="Free">
+              <span className="tabular-nums">{formatFileSize(data.disk_free_bytes)}</span>
+            </Row>
+            {/* The library's figures, moved here from the dashboard (v1.1.0),
+                which keeps only the count and the size. */}
+            <Row label="Footage">{formatDurationLong(data.duration_ms)}</Row>
+            <Row label="Captions">
+              <span className="tabular-nums">{data.captions.toLocaleString()}</span>
+            </Row>
+            <Row label="In the queue">
+              <span className="tabular-nums">{data.by_status.pending + data.by_status.processing}</span>
+            </Row>
+          </>
+        ) : (
+          <Skeleton className="m-4 h-20" />
+        )}
+      </SettingsSection>
 
-      <div className="mt-6 border-t border-border pt-5">
-        <p className="label-caps">Appearance</p>
-        <p className="mb-3 text-base font-semibold">Interface theme</p>
-        <div role="radiogroup" aria-label="Interface theme" className="inline-flex gap-1 rounded-lg border border-border bg-surface-1 p-1">
-          {(
-            [
+      <SettingsSection title="Appearance">
+        <div className="group-row flex-wrap gap-y-2">
+          <span className="text-[15px]">Interface theme</span>
+          <Segmented
+            kind="radio"
+            label="Interface theme"
+            segments={[
               { value: "light", label: "Light", icon: Sun },
               { value: "dark", label: "Dark", icon: Moon },
               { value: "system", label: "System", icon: Monitor },
-            ] as const
-          ).map((option) => {
-            const active = mounted && preference === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => !active && setPreference(option.value)}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-5 py-1.5 text-[13px] transition-colors",
-                  active ? "bg-surface-3 font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <option.icon className="size-4" aria-hidden="true" />
-                {option.label}
-              </button>
-            );
-          })}
+            ]}
+            value={mounted ? preference : null}
+            onChange={(value) => value !== null && value !== preference && setPreference(value)}
+            className="w-full sm:w-auto"
+            segmentClassName="px-4"
+          />
         </div>
-      </div>
-    </SettingsSection>
+      </SettingsSection>
+    </>
   );
 }
 
@@ -428,27 +399,26 @@ export function InstallSettings() {
 
   if (system.isPending) {
     return (
-      <div className="space-y-4" aria-busy="true" aria-label="Loading settings">
-        <Skeleton className="h-40 w-full rounded-lg" />
-        <Skeleton className="h-32 w-full rounded-lg" />
+      <div className="flex flex-col gap-8" aria-busy="true" aria-label="Loading settings">
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-32 w-full rounded-xl" />
       </div>
     );
   }
 
   if (system.isError || !system.data) {
     return (
-      <section className="rounded-lg border border-border bg-card p-5" role="alert">
-        <p className="text-sm font-medium">Couldn&apos;t load settings.</p>
-        <p className="mt-1 text-sm text-muted-foreground">The app&apos;s server didn&apos;t answer.</p>
-        <Button className="mt-3" variant="secondary" size="sm" onClick={() => system.refetch()}>
+      <Notice role="alert" tone="error" title="Couldn't load settings.">
+        The app&apos;s server didn&apos;t answer.
+        <Button className="mt-3 flex" variant="secondary" size="sm" onClick={() => system.refetch()}>
           Try again
         </Button>
-      </section>
+      </Notice>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-8">
       <MachineSection info={system.data} />
       <ModelSection info={system.data} />
       <TranslationSection info={system.data} />
