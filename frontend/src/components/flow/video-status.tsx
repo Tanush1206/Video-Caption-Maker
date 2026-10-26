@@ -289,7 +289,7 @@ function CompletedNotes({ video, captionCount }: { video: Video; captionCount: n
 
 /**
  * The top of a video's page: while it is on its way to captions, where it is
- * (step 2 of Upload → Language → Export) and what is running; once it is
+ * (step 3 of Upload → Language → Captions → Export) and what is running; once it is
  * there, only what the job had to say. Exporting is the editor bar's Export.
  */
 export function VideoStatus({
@@ -304,7 +304,8 @@ export function VideoStatus({
 
   return (
     <section aria-label="Captioning progress" className="mx-auto mb-8 flex max-w-[880px] flex-col gap-8">
-      <Stepper current={2} />
+      {/* Upload and Language are done; the captions are being made. */}
+      <Stepper current={3} />
       {video.status === "failed" ? <Failed video={video} /> : <Processing video={video} />}
     </section>
   );

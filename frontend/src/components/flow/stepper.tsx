@@ -2,16 +2,17 @@ import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-export const FLOW_STEPS = ["Upload", "Language", "Export"] as const;
+export const FLOW_STEPS = ["Upload", "Language", "Captions", "Export"] as const;
 
 /**
- * Where you are in Upload → Language → Export.
+ * Where you are in Upload → Language → Captions → Export. "Captions" is the
+ * job itself (v1.1.0): while it runs, the language step is done.
  *
  * An ordered list, so a screen reader announces "step 2 of 3" from the markup
  * alone; `aria-current="step"` marks the live one. Steps before `current` are
  * done, steps after it are still ahead.
  */
-export function Stepper({ current, className }: { current: 1 | 2 | 3 | 4; className?: string }) {
+export function Stepper({ current, className }: { current: 1 | 2 | 3 | 4 | 5; className?: string }) {
   return (
     <ol className={cn("flex min-w-0 items-center gap-2 sm:gap-3", className)} aria-label="Progress">
       {FLOW_STEPS.map((label, index) => {

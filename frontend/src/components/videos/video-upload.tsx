@@ -28,14 +28,14 @@ function isAcceptedFile(file: File): boolean {
 }
 
 /**
- * Steps 1 and 2 of Upload → Language → Export.
+ * Steps 1 and 2 of Upload → Language → Captions → Export.
  *
  * The file uploads as soon as it is picked, held (v1.0.9): the server listens
  * to the first 30 s while the caption language is chosen, so the step can
  * ask how Hindi is written before anything is transcribed, and so speech in
  * a language not offered is said before captions are made of it (v1.0.11).
  * Start sends the choice (POST …/transcribe) and goes to the video's own
- * page, where step 3 lives. Back, or leaving the page, deletes the upload
+ * page, where step 3 (Captions) lives. Back, or leaving the page, deletes the upload
  * and its files.
  */
 export function VideoUpload() {
