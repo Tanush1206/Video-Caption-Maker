@@ -309,7 +309,9 @@
     --primary: 210 100% 44.5%; /* #0071E3 fill: white on #0A84FF fails AA */
     --primary-foreground: 0 0% 100%;
     --primary-muted: 210 60% 14%;
-    --primary-text: 210 100% 52%; /* #0A84FF */
+    /* #409CFF, the system blue's higher-contrast tone: #0A84FF text is
+       3.8:1 on a raised grey (#2C2C2E). Fills and rings stay #0A84FF. */
+    --primary-text: 211 100% 62.5%;
 
     --accent: 210 100% 52%; /* #0A84FF */
 
