@@ -602,11 +602,19 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `hardware` | [HardwareInfo](#hardwareinfo) \| null | yes |  |
 | `whisper` | [WhisperInfo](#whisperinfo) \| null | yes |  |
 | `whisper_choice` | string | yes |  |
-| `whisper_choices` | [Choice](#choice)[] | yes |  |
+| `whisper_choices` | [Choice](#choice)[] | yes | `auto`, `small`, `large-v3-turbo`, `large-v3` (`medium` until v1.1.0) |
+| `hinglish_model` | [ModelDownload](#modeldownload) | yes | the Hinglish speech model (Apex) (v1.1.0) |
 | `translation_engine` | string | yes |  |
 | `translator_model` | string \| null | yes |  |
 | `gemini_configured` | boolean | yes |  |
 | `gemini_source` | string \| null | no |  |
+
+### ModelDownload
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `downloaded` | boolean | yes | already in the models volume |
+| `size_bytes` | integer | yes | what the first use downloads |
 
 ### SystemSettingsUpdate
 

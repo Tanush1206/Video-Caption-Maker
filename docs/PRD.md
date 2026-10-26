@@ -405,8 +405,11 @@ removed.
 - Interface theme: **Light**, **Dark** or **System** (the default). System
   follows the OS, including a change while the app is open. The header's
   theme button flips to an explicit Light or Dark.
-- The speech model can be `auto`, `small`, `medium`, `large-v3-turbo` or
-  `large-v3`. Anything else is rejected with 422.
+- The speech model can be `auto`, `small`, `large-v3-turbo` or `large-v3`,
+  the three the hardware tiers use. Anything else is rejected with 422.
+  `medium` was offered until v1.1.0; an install that had chosen it reads as
+  `auto`.
+- Lists the Hinglish speech model (Apex): downloaded or not, and its size.
 - The Gemini key can be set or cleared, **only here** on an install. It is
   stored server-side, **never returned** by any response (only
   `gemini_configured` and `gemini_source` are), and **never logged**
@@ -468,7 +471,7 @@ the production compose agree).
 ### Models
 | Model | Use | Licence | Download |
 |---|---|---|---|
-| Whisper `small` / `medium` / `large-v3-turbo` / `large-v3` (faster-whisper, CTranslate2) | speech | MIT | 484 / 1530 / 1620 / 3090 MB (`WHISPER_SIZES_MB`) |
+| Whisper `small` / `large-v3-turbo` / `large-v3` (faster-whisper, CTranslate2) | speech | MIT | 484 / 1620 / 3090 MB (`WHISPER_SIZES_MB`) |
 | M2M100 1.2B / 418M (`jncraton/*-ct2-int8`, pinned commits) | translation | MIT | 1260 / 500 MB |
 | `sentence-transformers/all-MiniLM-L6-v2` | search embeddings | Apache-2.0 | ~90 MB (README) |
 | Gemini (`gemini-flash-latest`) | optional translation and answers | Google API terms | none (remote) |

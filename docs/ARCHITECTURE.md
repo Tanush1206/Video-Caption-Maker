@@ -362,7 +362,7 @@ logged and never surfaced to the user.
      - Otherwise: `small`.
    - **Device:** `WHISPER_DEVICE`, unless it asks for `cuda` without CUDA.
    - **Compute:**
-     - CUDA: `float16` for large/medium, `int8_float16` otherwise.
+     - CUDA: `float16` for large (and `medium`, if set by `WHISPER_MODEL_SIZE`), `int8_float16` otherwise.
      - CPU: `int8`. A `float16` setting on a CPU is overridden, because
        CTranslate2 has no CPU float16 kernel.
 3. `translator_profile(hw)`:

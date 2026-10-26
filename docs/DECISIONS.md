@@ -104,6 +104,11 @@ CPU with a notice.
   `small` wastes a GPU.
 - `medium` for GPUs: measured worse than large-v3 on Hindi with music. It
   missed 46 s and injected Spanish and Russian words (`config.py`).
+  Offered in Settings as a manual choice until v1.1.0, then removed: at
+  1.53 GB it is as big as large-v3-turbo (1.62 GB), slower, and measured
+  worse, so no machine is better served by it. A stored `medium` choice
+  reads as `auto`; `WHISPER_MODEL_SIZE=medium` still works for anyone who
+  sets it by hand.
 
 **Reason.** One image has to work on a 16 GB-VRAM desktop and an 8 GB laptop.
 
