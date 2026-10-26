@@ -774,6 +774,21 @@ Process:
       video 7611 (to delete at the end); the 4 axe failures are on the
       language step, restyled in phase 2. Screenshots sent; **waiting for
       Tanush's OK** before phase 2.
+- [x] Phase 1 review (Tanush, 2026-10-26): direction right, the 8 decisions
+      accepted; 11 notes applied (round 2): upload area 140 px with an icon
+      and "Drop a video here, or choose one. Everything runs on this
+      computer."; stats "6 videos · 1.2 GB" (footage, captions, queue and
+      free disk moved to Settings → Storage); footer "VideoCaptionMaker
+      v1.x.x" (new `version` in `/api/system`); one quiet player row (time;
+      previous, play, next; volume and speed popovers; no resolution, no
+      6-button speed); dense caption list (~8 rows at 1440: 12 px mono time,
+      15 px text, hairlines, current row on the grouped tint with an accent
+      time); no scroll slider under the timeline (the view follows the
+      playhead; a horizontal swipe or Shift+wheel pans), a 2 px accent
+      playhead with a head; caption handles 3 px and the drag dot shown only
+      while hovered, focused or dragged; the two helper lines become hints
+      shown once (localStorage); the phone's bottom tab bar kept, the
+      editor's sheet as it was. Screenshots sent; **waiting for OK**.
 - [ ] Phase 2, one commit per screen: language step, processing, failed,
       export dialog, search, settings, empty states, notices, 404.
 - [ ] Final: all checks, E2E, DESIGN_SYSTEM.md, CHANGELOG, final

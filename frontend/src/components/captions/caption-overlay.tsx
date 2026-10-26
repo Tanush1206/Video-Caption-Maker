@@ -1,6 +1,5 @@
 "use client";
 
-import { GripHorizontal } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useInjectedFontFace } from "@/hooks/use-fonts";
@@ -17,6 +16,7 @@ import {
   type Layout,
 } from "@/lib/caption-layout";
 import { captionLineStyle, captionPaintStyle } from "@/lib/caption-style";
+import { HINT_CLASS, useOnceHint } from "@/lib/hints";
 import { cn } from "@/lib/utils";
 import type { Caption } from "@/types/caption";
 import type { CaptionStyle, Font } from "@/types/style";
@@ -108,6 +108,10 @@ export function CaptionOverlay({
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [live, setLive] = useState<Live | null>(null);
   const [dragging, setDragging] = useState<Grab["kind"] | null>(null);
+  // The pointer is over or close to the caption (v1.1.0): the handles show
+  // then, while one has focus, or while dragging; never permanently.
+  const [near, setNear] = useState(false);
+  const hint = useOnceHint("caption-drag");
   /** Bumped when a face finishes loading, so the layout measures it again. */
   const [, setFontsVersion] = useState(0);
 
@@ -374,8 +378,30 @@ export function CaptionOverlay({
     : null;
   const widthPercent = style ? Math.round((live?.boxWidth ?? boxWidthOf(style, video)) * 100) : 0;
 
+  /** Whether a pointer at this client position is on or close to the caption box. */
+  function trackNear(event: React.PointerEvent) {
+    const rect = frame.current?.getBoundingClientRect();
+    if (!rect || !layout) return;
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const left = layout.boxLeft * scale;
+    const top = layout.y * scale;
+    const close =
+      x >= left - 20 && x <= left + layout.boxWidth * scale + 20 && y >= top - 32 && y <= top + layout.height * scale + 20;
+    setNear(close);
+    if (close) hint.show();
+    else hint.done();
+  }
+
+  function leave() {
+    setNear(false);
+    hint.done();
+  }
+
+  const handlesShown = near || dragging !== null;
+
   return (
-    <div ref={frame} className="pointer-events-none absolute inset-0">
+    <div ref={frame} className="group/cap pointer-events-none absolute inset-0">
       {/*
         The whole frame is a drag surface for the box, not just the caption:
         aiming at one line of type is hard, and in a gap between captions there
@@ -386,9 +412,12 @@ export function CaptionOverlay({
         <div
           className={dragging === "move" ? "absolute inset-0 cursor-grabbing" : "absolute inset-0 cursor-grab"}
           style={{ pointerEvents: "auto", touchAction: "none" }}
-          title="Drag to place the caption · click to play"
           onPointerDown={handleSurfaceDown}
-          onPointerMove={handleMove}
+          onPointerMove={(event) => {
+            trackNear(event);
+            handleMove(event);
+          }}
+          onPointerLeave={leave}
           onPointerUp={handleSurfaceUp}
           onPointerCancel={(event) => end(event)}
         />
@@ -439,6 +468,16 @@ export function CaptionOverlay({
         </div>
       )}
 
+      {/* Shown once, the first time the caption is hovered. */}
+      {hint.showing && layout && !dragging && (
+        <span
+          className={HINT_CLASS}
+          style={{ left: Math.max(4, layout.boxLeft * scale), top: Math.max(4, layout.y * scale - 40) }}
+        >
+          Drag to place the caption · drag its edges to change the width · click the video to play or pause
+        </span>
+      )}
+
       {/* The wrap box and its width handles: dashed while it's being changed. */}
       {draggable && layout && caption && (
         <>
@@ -479,8 +518,11 @@ export function CaptionOverlay({
               }}
               className={cn(
                 "group absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                "transition-opacity duration-200 ease-out group-focus-within/cap:opacity-100",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-white",
+                handlesShown ? "opacity-100" : "opacity-0"
               )}
+              onPointerEnter={() => setNear(true)}
               onPointerDown={(event) => start("width", event)}
               onPointerMove={handleMove}
               onPointerUp={(event) => end(event)}
@@ -490,7 +532,8 @@ export function CaptionOverlay({
                 keyedWidth.current = null;
               }}
             >
-              <span className="h-full w-1.5 rounded-full border border-white/90 bg-primary shadow-lg" />
+              {/* 3 px to see, the button around it wide enough to grab. */}
+              <span className="h-full w-[3px] rounded-full bg-white ring-1 ring-black/30" />
             </button>
           ))}
         </>
@@ -512,10 +555,12 @@ export function CaptionOverlay({
           }}
           className={cn(
             "absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full",
-            "border-2 border-white/90 bg-primary text-primary-foreground shadow-lg",
+            "transition-opacity duration-200 ease-out group-focus-within/cap:opacity-100",
             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+            handlesShown ? "opacity-100" : "opacity-0",
             dragging === "move" ? "cursor-grabbing" : "cursor-grab"
           )}
+          onPointerEnter={() => setNear(true)}
           onPointerDown={(event) => start("move", event)}
           onPointerMove={handleMove}
           onPointerUp={(event) => end(event)}
@@ -525,7 +570,8 @@ export function CaptionOverlay({
             keyed.current = null;
           }}
         >
-          <GripHorizontal aria-hidden="true" className="size-3.5" />
+          {/* A small white dot to see; the button is the 28 px to grab. */}
+          <span aria-hidden="true" className="size-3 rounded-full bg-white ring-1 ring-black/30" />
         </button>
       )}
     </div>
