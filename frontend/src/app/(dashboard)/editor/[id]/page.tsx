@@ -331,7 +331,9 @@ function EditorBar({
               Search this video
             </Link>
           )}
-          <Button size="sm" onClick={onExport}>
+          {/* The primary action once there are captions; until then the
+              page's own action (Try again) is. */}
+          <Button size="sm" variant={video.status === "completed" ? "primary" : "secondary"} onClick={onExport}>
             Export
           </Button>
         </div>

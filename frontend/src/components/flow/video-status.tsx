@@ -16,6 +16,7 @@ import {
 
 import { Stepper } from "@/components/flow/stepper";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
 import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
@@ -189,77 +190,71 @@ function Failed({ video }: { video: Video }) {
   const failedToRetry = updateSettings.error ?? retranscribe.error;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div role="alert" className="rounded-lg border border-border bg-card p-5 sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-destructive">
-              <AlertCircle className="size-6" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-2xl font-semibold tracking-tight">Processing stopped</h2>
-              <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-                {video.error_message ?? "Something went wrong while processing it."}
-              </p>
-              <p className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[13px]">
-                <ShieldCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
-                Your video is still on this computer. There is no need to upload it again.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col gap-2.5 sm:flex-row lg:w-64 lg:flex-col">
+    <div className="flex flex-col gap-8">
+      <div role="alert">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
+          <AlertCircle className="size-5 shrink-0 text-destructive" aria-hidden="true" />
+          Processing stopped
+        </h2>
+        <p className="mt-1 max-w-2xl text-[15px] text-muted-foreground">
+          {video.error_message ?? "Something went wrong while processing it."}
+        </p>
+        <p className="mt-2 flex items-center gap-2 text-[13px] text-muted-foreground">
+          <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
+          Your video is still on this computer. There is no need to upload it again.
+        </p>
+
+        {/* One primary action; the rest are quiet. */}
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <Button
+            loading={retranscribe.isPending}
+            onClick={() => {
+              askToNotify();
+              retranscribe.mutate({ id: video.id }, { onSuccess: () => watchTranscription(video.id) });
+            }}
+          >
+            <RefreshCw />
+            Try again
+          </Button>
+          {canGoSmaller && (
             <Button
-              size="lg"
-              loading={retranscribe.isPending}
-              onClick={() => {
-                askToNotify();
-                retranscribe.mutate({ id: video.id }, { onSuccess: () => watchTranscription(video.id) });
-              }}
+              variant="secondary"
+              loading={updateSettings.isPending}
+              disabled={retranscribe.isPending}
+              onClick={() => void retrySmall().catch(() => undefined)}
+              aria-describedby="retry-small-note"
             >
-              <RefreshCw />
-              Try again
+              <Feather />
+              Retry with small model
             </Button>
-            {canGoSmaller && (
-              <Button
-                size="lg"
-                variant="secondary"
-                loading={updateSettings.isPending}
-                disabled={retranscribe.isPending}
-                onClick={() => void retrySmall().catch(() => undefined)}
-                aria-describedby="retry-small-note"
-              >
-                <Feather />
-                Retry with small model
-              </Button>
-            )}
-            <Link href="/settings" className={buttonVariants({ variant: "secondary", size: "lg" })}>
-              <SlidersHorizontal />
-              Open Settings
-            </Link>
-            {canGoSmaller && (
-              <p id="retry-small-note" className="text-[12px] leading-snug text-muted-foreground">
-                Small switches the speech model in Settings for every video, until you change it back.
-              </p>
-            )}
-          </div>
+          )}
+          <Link href="/settings" className={buttonVariants({ variant: "plain" })}>
+            <SlidersHorizontal />
+            Open Settings
+          </Link>
         </div>
+        {canGoSmaller && (
+          <p id="retry-small-note" className="mt-2 text-[13px] text-muted-foreground">
+            Small switches the speech model in Settings for every video, until you change it back.
+          </p>
+        )}
       </div>
 
-      {failedToRetry && (
-        <p role="alert" className="text-[13px] text-destructive">
-          {failedToRetry.message}
-        </p>
-      )}
+      {failedToRetry && <Notice role="alert" tone="error" title={failedToRetry.message} />}
 
       {model && (
-        <div className="rounded-lg border border-border bg-card p-5">
-          <p className="label-caps">Speech model in use</p>
-          <p className="mt-2 text-xl font-semibold">{model}</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">
+        <section>
+          <div className="group-inset">
+            <div className="group-row">
+              <span className="text-[15px]">Speech model in use</span>
+              <span className="text-[15px] text-muted-foreground">{model}</span>
+            </div>
+          </div>
+          <p className="mt-1.5 px-4 text-[13px] text-muted-foreground">
             If this stopped because the computer ran out of memory, a smaller model (Settings → Speech
             model) needs less.
           </p>
-        </div>
+        </section>
       )}
     </div>
   );
