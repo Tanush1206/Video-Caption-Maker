@@ -747,6 +747,35 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## Website on GitHub Pages (2026-10-27)
+Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
+facts in README, PRD and LANGUAGE_QUALITY.md only; the app's design system;
+plain HTML and CSS in `site/`, a few lines of JS; no frameworks, trackers or
+external fonts or scripts; axe 0; a Pages workflow for pushes to main that
+change `site/`.
+
+- [x] `site/`: index.html, style.css (the DESIGN_SYSTEM.md tokens, light and
+      dark from the OS), main.js (copy buttons; Linux preselected on Linux
+      and macOS), favicon.svg, and the four v1.1.0 screenshots from
+      docs/images as WebP (1.2 MB of PNG → 256 KB). The Windows/Linux
+      toggle is two radio buttons switched with CSS `:has()`, so it works
+      without JS. A Content-Security-Policy allows only the site's own
+      files.
+- [x] Checked at 375 and 1440 px, light and dark (served locally on 8090):
+      axe 0 (WCAG 2.1 A/AA), no horizontal overflow, no request outside the
+      site, no console errors; the toggle by click and arrow keys; Copy puts
+      the command on the clipboard and says "Copied".
+- [x] `.github/workflows/pages.yml`: configure-pages, upload-pages-artifact
+      (site/), deploy-pages; on pushes to main touching `site/**` or the
+      workflow, and by hand.
+- [x] README: the site link; image links fixed to the files' capitalised
+      names (lowercase links break on GitHub); "about 7 MB" a typical
+      update (measured 7.2–7.4 MB for 1.0.7 to 1.1.0).
+- Decisions: Search shown instead of an Export screenshot (docs/images has
+  none); the footer names the models' licences only, since the repo has no
+  LICENSE file for its own code (Tanush to choose); the command is in
+  monospace (code, not UI text).
+
 ## v1.1.0 (in progress): minimal, Apple-like redesign
 Brief (Tanush, 2026-10-23): restyle only (hooks, API calls, state, data
 flow and behaviour unchanged) to a minimal, Apple-like look: hierarchy from
