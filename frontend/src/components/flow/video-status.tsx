@@ -3,11 +3,9 @@
 import Link from "next/link";
 import {
   AlertCircle,
-  AlertTriangle,
   Check,
   Download,
   Feather,
-  Info,
   Loader2,
   RefreshCw,
   ShieldCheck,
@@ -272,27 +270,18 @@ function CompletedNotes({ video, captionCount }: { video: Video; captionCount: n
   const unsupported = heard !== null && options !== undefined && !isOfferedSpeech(heard, options) ? heard : null;
   if (unsupported === null && !video.notice && captionCount > 0) return null;
   return (
-    <div className="mb-5 flex flex-col gap-2">
+    <div className="mx-auto mb-6 flex max-w-[880px] flex-col gap-2">
       {unsupported !== null && captionCount > 0 && (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-[13px]">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-          {unsupportedSpeech(languageName(unsupported, options), true)}
-        </p>
+        <Notice tone="warning" title={unsupportedSpeech(languageName(unsupported, options), true)} />
       )}
-      {video.notice && captionCount > 0 && (
-        <p className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
-          <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-          {video.notice}
-        </p>
-      )}
+      {video.notice && captionCount > 0 && <Notice title={video.notice} />}
       {captionCount === 0 && (
         // The job says "No speech was found in this video." since v1.0.11,
         // after anything else it had to say; older videos say nothing.
-        <p className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
-          <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-          {video.notice ?? "No speech was found in this video."} There is nothing to export. If
-          that&apos;s wrong, try a larger speech model in Settings and process it again.
-        </p>
+        <Notice title={video.notice ?? "No speech was found in this video."}>
+          There is nothing to export. If that&apos;s wrong, try a larger speech model in Settings and process
+          it again.
+        </Notice>
       )}
     </div>
   );
