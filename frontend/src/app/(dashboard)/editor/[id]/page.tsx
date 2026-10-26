@@ -251,6 +251,7 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
         title="Export"
         description={<ExportSubtitle video={video} />}
         bodyClassName="flex flex-col overflow-hidden"
+        className="max-w-2xl"
       >
         <ExportPanel
           videoId={videoId}
