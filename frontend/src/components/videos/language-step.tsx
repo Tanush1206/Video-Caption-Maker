@@ -1,23 +1,11 @@
 "use client";
 
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  AudioLines,
-  Check,
-  Cpu,
-  FileVideo,
-  Loader2,
-  Search,
-  Sparkles,
-  Subtitles,
-  X,
-} from "lucide-react";
+import { AudioLines, Check, FileVideo, Loader2, Search, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
 import { LanguagePicker, matchesLanguage } from "@/components/videos/language-picker";
 import { formatFileSize } from "@/lib/format";
 import type { ScriptChoice, ScriptQuestion } from "@/lib/hindi-script";
@@ -100,26 +88,19 @@ export function LanguageStep({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[880px] animate-fade-in flex-col gap-4">
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-        <div className="flex items-center gap-1.5">
-          <AudioLines className="size-[18px] text-primary" aria-hidden="true" />
-          <h3 className="text-lg font-semibold tracking-tight">Spoken audio</h3>
-        </div>
-        <div
-          className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-surface-2 p-3"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-            {detection.listening || (!heard && upload) ? (
-              <Loader2 className="size-[18px] animate-spin" aria-hidden="true" />
-            ) : (
-              <Sparkles className="size-[18px]" aria-hidden="true" />
-            )}
-          </span>
+    <div className="mx-auto flex w-full max-w-[880px] animate-fade-in flex-col gap-12">
+      <section aria-labelledby="spoken-audio-heading">
+        <h3 className="text-xl font-semibold" id="spoken-audio-heading">
+          Spoken audio
+        </h3>
+        <div className="group-inset mt-3 flex items-center gap-3 px-4 py-3" role="status" aria-live="polite">
+          {detection.listening || (!heard && upload) ? (
+            <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <AudioLines className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          )}
           <div className="min-w-0">
-            <p className="text-sm font-semibold">
+            <p className="text-[15px] font-medium">
               {heard
                 ? `${heard} · heard at ${Math.round((detection.confidence ?? 0) * 100)}%`
                 : upload
@@ -128,7 +109,7 @@ export function LanguageStep({
                     ? "Listening to the first 30 seconds…"
                     : "Auto-detect"}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {heard
                 ? unsupported
                   ? "Detected from the audio."
@@ -141,15 +122,9 @@ export function LanguageStep({
         </div>
 
         {unsupported && heard && (
-          <div className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-4">
-            <p className="flex items-start gap-2 text-sm font-semibold">
-              <AlertTriangle className="mt-px size-4 shrink-0 text-warning" aria-hidden="true" />
-              {unsupportedSpeech(heard, false)}
-            </p>
-            <p className="mt-1 pl-6 text-xs text-muted-foreground" id="unsupported-speech-hint">
-              Choose the language that is spoken, or try anyway, to start.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3 pl-6">
+          <Notice tone="warning" title={unsupportedSpeech(heard, false)} className="mt-3">
+            <p id="unsupported-speech-hint">Choose the language that is spoken, or try anyway, to start.</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
               <LanguagePicker
                 label="Spoken language"
                 options={spokenOptions}
@@ -159,40 +134,37 @@ export function LanguageStep({
                 className="w-56"
               />
               <span className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">or</span>
+                <span>or</span>
                 <Button
                   variant="secondary"
                   size="sm"
                   aria-pressed={spoken === TRY_ANYWAY}
                   onClick={() => onSpoken(TRY_ANYWAY)}
                   disabled={busy}
-                  className={cn(spoken === TRY_ANYWAY && "border-warning/60 bg-warning/15")}
+                  className={cn(spoken === TRY_ANYWAY && "ring-2 ring-inset ring-accent")}
                 >
                   {spoken === TRY_ANYWAY && <Check />}
                   Try anyway (low quality)
                 </Button>
               </span>
             </div>
-          </div>
+          </Notice>
         )}
 
         {question.show && (
-          <fieldset className="mt-4">
-            <legend className="text-sm font-semibold" id="hindi-script-heading">
+          <fieldset className="mt-6">
+            <legend className="px-4 text-[15px] font-semibold" id="hindi-script-heading">
               {question.heading}
             </legend>
             {question.required && (
-              <p className="mt-1 text-xs text-muted-foreground" id="hindi-script-hint">
+              <p className="mt-0.5 px-4 text-[13px] text-muted-foreground" id="hindi-script-hint">
                 {chosenSpoken
                   ? "Choose how to write Hindi to start."
                   : "Hindi was heard, but not surely. Choose how to write it to start."}
               </p>
             )}
-            <div
-              role="radiogroup"
-              aria-labelledby="hindi-script-heading"
-              className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-            >
+            {/* A grouped list with a check on the chosen row (System Settings). */}
+            <div role="radiogroup" aria-labelledby="hindi-script-heading" className="group-inset mt-2">
               {question.options.map((code) => {
                 const selected = script === code;
                 const { label, download } = scriptLabel(code);
@@ -200,11 +172,8 @@ export function LanguageStep({
                   <label
                     key={code}
                     className={cn(
-                      "flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 transition-colors",
-                      "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
-                      selected
-                        ? "border-primary/60 bg-primary/10"
-                        : "border-border bg-surface-2 hover:bg-surface-3",
+                      "group-row cursor-pointer transition-colors duration-200 ease-out hover:bg-surface-3/50",
+                      "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring",
                       busy && "pointer-events-none opacity-60"
                     )}
                   >
@@ -218,18 +187,10 @@ export function LanguageStep({
                       className="sr-only"
                     />
                     <span className="min-w-0">
-                      <span
-                        className="block font-semibold leading-tight"
-                        lang={code === "roman" ? "hi-Latn" : "hi"}
-                      >
+                      <span className="block text-[15px]" lang={code === "roman" ? "hi-Latn" : "hi"}>
                         {label}
                       </span>
-                      <span
-                        className={cn(
-                          "mt-1 block text-[13px] font-medium",
-                          selected ? "text-primary" : "text-muted-foreground"
-                        )}
-                      >
+                      <span className="block text-[13px] text-muted-foreground">
                         {code === "roman"
                           ? download
                             ? `Downloads ${formatFileSize(download)} the first time`
@@ -237,15 +198,10 @@ export function LanguageStep({
                           : "Hindi in its own script"}
                       </span>
                     </span>
-                    <span
+                    <Check
                       aria-hidden="true"
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-full",
-                        selected ? "bg-primary text-primary-foreground" : "border border-border bg-card"
-                      )}
-                    >
-                      {selected && <Check className="size-4" />}
-                    </span>
+                      className={cn("size-5 shrink-0 text-primary", !selected && "invisible")}
+                    />
                   </label>
                 );
               })}
@@ -254,16 +210,11 @@ export function LanguageStep({
         )}
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-        <div className="flex items-center gap-1.5">
-          <Subtitles className="size-[18px] text-primary" aria-hidden="true" />
-          <h3 className="text-lg font-semibold tracking-tight" id="caption-language-heading">
-            Caption into
-          </h3>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The language the captions come out in.
-        </p>
+      <section aria-labelledby="caption-language-heading">
+        <h3 className="text-xl font-semibold" id="caption-language-heading">
+          Caption into
+        </h3>
+        <p className="mt-1 text-[15px] text-muted-foreground">The language the captions come out in.</p>
 
         <div className="relative mt-4">
           <Search
@@ -284,7 +235,7 @@ export function LanguageStep({
         <div
           role="radiogroup"
           aria-labelledby="caption-language-heading"
-          className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
         >
           {visible.map((option) => {
             const selected = option.code === language;
@@ -294,11 +245,11 @@ export function LanguageStep({
               <label
                 key={option.code}
                 className={cn(
-                  "flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 transition-colors",
+                  "flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-card px-4 py-3.5",
+                  "transition-[background-color,box-shadow] duration-200 ease-out",
                   "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
-                  selected
-                    ? "border-primary/60 bg-primary/10"
-                    : "border-border bg-surface-2 hover:bg-surface-3",
+                  // The chosen one is outlined in the accent: the selected state.
+                  selected ? "ring-2 ring-inset ring-accent" : "hover:bg-surface-3/60",
                   (!options || busy) && "pointer-events-none opacity-60"
                 )}
               >
@@ -314,75 +265,88 @@ export function LanguageStep({
                 <span className="min-w-0">
                   <span
                     className={cn(
-                      "block truncate font-semibold leading-tight",
-                      option.code === "same" ? "text-xl" : "text-2xl sm:text-[28px]"
+                      "block truncate font-semibold",
+                      option.code === "same" ? "text-[17px] leading-[25px]" : "text-xl"
                     )}
                     lang={option.code === "same" ? undefined : option.code}
                   >
                     {native}
                   </span>
-                  <span
-                    className={cn(
-                      "mt-1 block text-[13px] font-medium",
-                      selected ? "text-primary" : "text-muted-foreground"
-                    )}
-                  >
-                    {sub}
-                  </span>
+                  <span className="block text-[13px] text-muted-foreground">{sub}</span>
                 </span>
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-full",
-                    selected ? "bg-primary text-primary-foreground" : "border border-border bg-card"
+                    "flex size-5 shrink-0 items-center justify-center rounded-full",
+                    selected ? "bg-accent text-white" : "border border-input"
                   )}
                 >
-                  {selected && <Check className="size-4" />}
+                  {selected && <Check className="size-3.5" strokeWidth={2.5} />}
                 </span>
               </label>
             );
           })}
         </div>
         {visible.length === 1 && query.trim() && (
-          <p role="status" className="mt-3 text-sm text-muted-foreground">
+          <p role="status" className="mt-3 text-[13px] text-muted-foreground">
             No caption language matches “{query.trim()}”.
           </p>
         )}
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-        <p className="flex items-center gap-2 text-[13px]">
-          <Cpu className="size-[18px] text-primary" aria-hidden="true" />
-          <span>
-            Speech engine: <strong className="font-semibold">faster-whisper</strong>
-            {model && (
-              <>
-                {" "}· Model: <strong className="font-semibold">{model}</strong>
-              </>
-            )}
-          </span>
-        </p>
-        <span
-          className={cn(
-            "flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider",
-            viaGemini ? "text-warning" : "text-success"
-          )}
-        >
-          <span className="size-2 rounded-full bg-current" aria-hidden="true" />
-          {viaGemini ? "Translated with Gemini" : "Local & offline"}
-        </span>
-      </div>
+      {/* The file, how it will run, and the step's one action. */}
+      <div className="flex flex-col gap-4 border-t border-border pt-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-[13px] text-muted-foreground">
+          <p className="flex min-w-0 items-center gap-2">
+            <FileVideo className="size-4 shrink-0" aria-hidden="true" />
+            <span className="truncate" title={file.name}>
+              {file.name}
+            </span>
+            <span className="shrink-0 tabular-nums">· {formatFileSize(file.size)}</span>
+          </p>
+          <p className="flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className={cn("size-2 shrink-0 rounded-full", viaGemini ? "bg-warning" : "bg-success")}
+            />
+            {viaGemini ? "Translated with Gemini" : "Local and offline"}
+            {" · "}faster-whisper{model && ` ${model}`}
+          </p>
+        </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
-        <p className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
-          <FileVideo className="size-[18px] shrink-0" aria-hidden="true" />
-          <span className="truncate" title={file.name}>
-            {file.name}
-          </span>
-          <span className="shrink-0 font-mono tabular-nums">· {formatFileSize(file.size)}</span>
-        </p>
+        {upload && (
+          <div>
+            <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+              <span className="flex items-center gap-2">
+                {upload.percent >= 100 && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                {/* The bar hits 100% when the bytes are sent, but the server
+                    is still probing the file and making a thumbnail. */}
+                {upload.percent < 100 ? "Uploading…" : "Preparing…"}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="tabular-nums">{upload.percent}%</span>
+                <Button variant="ghost" size="icon-sm" onClick={onCancel} aria-label="Cancel upload">
+                  <X />
+                </Button>
+              </span>
+            </div>
+            <div
+              className="mt-1 h-1 overflow-hidden rounded-full bg-surface-3"
+              role="progressbar"
+              aria-label="Upload progress"
+              aria-valuenow={upload.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="bar-fill h-full rounded-full transition-all duration-200 ease-out"
+                style={{ width: `${upload.percent}%` }}
+              />
+            </div>
+          </div>
+        )}
 
-        <div className="flex w-full flex-col items-stretch gap-1 sm:w-auto sm:items-end">
+        <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
           <div className="flex w-full items-center gap-3 sm:w-auto">
             <Button
               variant="secondary"
@@ -390,7 +354,6 @@ export function LanguageStep({
               disabled={starting}
               aria-label="Choose a different video"
             >
-              <ArrowLeft />
               Back
             </Button>
             <Button
@@ -403,49 +366,16 @@ export function LanguageStep({
             >
               {busy && <Loader2 className="animate-spin" />}
               {waitingToStart ? "Starting when uploaded…" : "Start generating captions"}
-              {!busy && <ArrowRight />}
             </Button>
           </div>
           {needsSpoken ? (
-            <p className="text-xs text-muted-foreground">Choose the spoken language, or try anyway, first.</p>
+            <p className="text-[13px] text-muted-foreground">Choose the spoken language, or try anyway, first.</p>
           ) : (
             needsScript && (
-              <p className="text-xs text-muted-foreground">Choose how to write the captions first.</p>
+              <p className="text-[13px] text-muted-foreground">Choose how to write the captions first.</p>
             )
           )}
         </div>
-
-        {upload && (
-          <div className="w-full">
-            <div className="flex items-center justify-between text-body-sm text-muted-foreground">
-              <span className="flex items-center gap-2">
-                {upload.percent >= 100 && <Loader2 className="size-3.5 animate-spin" />}
-                {/* The bar hits 100% when the bytes are sent, but the server
-                    is still probing the file and making a thumbnail. */}
-                {upload.percent < 100 ? "Uploading…" : "Preparing…"}
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="font-mono tabular-nums">{upload.percent}%</span>
-                <Button variant="ghost" size="icon-sm" onClick={onCancel} aria-label="Cancel upload">
-                  <X />
-                </Button>
-              </span>
-            </div>
-            <div
-              className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2"
-              role="progressbar"
-              aria-label="Upload progress"
-              aria-valuenow={upload.percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-200 ease-out"
-                style={{ width: `${upload.percent}%` }}
-              />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

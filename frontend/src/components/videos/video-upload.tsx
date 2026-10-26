@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Stepper } from "@/components/flow/stepper";
+import { Notice } from "@/components/ui/notice";
 import { LanguageStep } from "@/components/videos/language-step";
 import { statsKeys } from "@/hooks/use-stats";
 import { useSystem } from "@/hooks/use-system";
@@ -227,7 +228,7 @@ export function VideoUpload() {
       <h2 className="sr-only">Caption a video</h2>
       {/* Where you are, once a file is picked. The hardware readout lives in
           Settings (v1.1.0). */}
-      {file && <Stepper current={step} />}
+      {file && <Stepper current={step} className="mx-auto max-w-[880px]" />}
 
       <div>
         {!file ? (
@@ -315,14 +316,7 @@ export function VideoUpload() {
         )}
       </div>
 
-      {error && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {error}
-        </p>
-      )}
+      {error && <Notice role="alert" tone="error" title={error} />}
     </div>
   );
 }
