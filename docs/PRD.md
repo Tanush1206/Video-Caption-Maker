@@ -336,9 +336,10 @@ the speech model for every video until changed back.
 - SRT, VTT and JSON are written immediately and come back `completed`.
 - MP4 is queued to the worker. The client polls every 1.5 s while a render
   runs.
-- MP4 can be rendered at 360/480/720/1080/1440/2160 p plus the source height.
-  The default resolution is the smallest one at which captions are at least
-  24 px tall (`recommended_height`), and it is never below the source height.
+- MP4 can be rendered at the 360/480/720/1080/1440/2160 p steps **up to the
+  source height**, plus the source height itself; never above it (v1.1.0: a
+  1080p source is offered 360p–1080p). A larger height is rejected with 422.
+  The default (`recommended_height`) is the source height, capped at 2160.
 - Encoding uses NVENC when it is available, and x264 (CRF 18) otherwise.
 - A download needs a short-lived token (15 min) bound to one export.
 - Sidecars are named exactly after the video (`movie.srt`). A burn gets

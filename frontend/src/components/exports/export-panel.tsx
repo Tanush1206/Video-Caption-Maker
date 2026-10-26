@@ -138,10 +138,8 @@ export function ExportPanel({
   const { data: languages } = useLanguageOptions();
 
   /**
-   * The height to burn at. Null means "whatever the server recommends", which
-   * is not the source's own size — see `recommended_height`. A 144p source
-   * renders its captions at 6px, so defaulting to the source would make the
-   * obvious button produce a file whose captions cannot be read.
+   * The height to burn at. Null means "whatever the server recommends": the
+   * source's own size, since nothing larger is offered (v1.1.0).
    */
   const [height, setHeight] = useState<number | null>(null);
 
@@ -293,17 +291,12 @@ export function ExportPanel({
               : "Leave blank to use the video's own filename."}
           </p>
           {choice === "mp4" && resolutions.length > 0 && (
-            // Said plainly, because "1080p" on a 144p source promises
-            // something it cannot deliver.
+            // Offered only up to the source's own size (v1.1.0): never an upscale.
             <p className="mt-1 px-4 text-[13px] text-muted-foreground">
-              {recommended !== null &&
-                `Recommended: ${resolutions.find((r) => r.height === recommended)?.label ?? `${recommended}p`}. `}
               {options?.source_height && `Source: ${options.source_height}p. `}
-              {chosenOption?.upscaled
-                ? `Upscaled from ${options?.source_height}p: captions are drawn sharp at ${chosenOption.label}, the picture gains no detail. At ${options?.source_height}p they would render too small to read.`
-                : chosenOption?.native
-                  ? "The source's own size: nothing is resampled."
-                  : `Rendered at ${chosenOption?.label ?? ""}.`}
+              {chosenOption?.native
+                ? "The source's own size: nothing is resampled."
+                : `Scaled down to ${chosenOption?.label ?? ""}.`}
               {options?.hardware_encoder ? " GPU encoding." : ""}
             </p>
           )}

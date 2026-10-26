@@ -43,8 +43,6 @@ export interface ExportResolution {
   /** Derived from the source's aspect ratio server-side, so it cannot disagree. */
   width: number;
   label: string;
-  /** Above the source's own height: sharper captions, no more picture detail. */
-  upscaled: boolean;
   /** The source's own size, and so the only choice that resamples nothing. */
   native: boolean;
 }
@@ -60,13 +58,8 @@ export interface ExportOptions {
   source_width: number | null;
   source_height: number | null;
   /**
-   * What the picker should default to — not the source's own height.
-   *
-   * Caption sizes scale with the frame, so a 144p source renders a 48px
-   * caption at 6px. Defaulting to the source would mean the obvious button
-   * produces output whose captions cannot be read, which is the one thing this
-   * tool must not do. The server picks the smallest step that clears a legible
-   * caption size, and never one below the source.
+   * What the picker defaults to: the source's own height (the 2160p cap for
+   * a taller source). Nothing above the source is offered (v1.1.0).
    */
   recommended_height: number | null;
   /** The hardware encoder doing the work, or null when it is CPU x264. */

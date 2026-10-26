@@ -150,7 +150,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| POST* | `/api/videos/{video_id}/exports` | [ExportCreate](#exportcreate): `format`, optional `height` 144–2160 (ignored for sidecars) | `201` [ExportRead](#exportread): `completed` for srt/vtt/json, `pending` for mp4 | 404 · 409 `This video has no captions to export yet` · 422 · 503 render queue unreachable |
+| POST* | `/api/videos/{video_id}/exports` | [ExportCreate](#exportcreate): `format`, optional `height` 2–2160, at most the source's height (ignored for sidecars) | `201` [ExportRead](#exportread): `completed` for srt/vtt/json, `pending` for mp4 | 404 · 409 `This video has no captions to export yet` · 422 (also `An export can't be larger than the video (240p)`) · 503 render queue unreachable |
 | GET* | `/api/videos/{video_id}/exports` | — | `200` [ExportList](#exportlist) (newest first) | 404 |
 | GET* | `/api/videos/{video_id}/exports/options` | — | `200` [ExportOptions](#exportoptions): resolution ladder, recommended height, `hardware_encoder` (`h264_nvenc` or null) | 404 |
 | GET* | `/api/exports/{export_id}` | — | `200` [ExportRead](#exportread) (polled during a render) | 404 `Export not found` |
@@ -404,7 +404,7 @@ columns are NOT NULL.
 | Field | Type | Required | Constraints / default |
 |---|---|---|---|
 | `format` | [ExportFormat](#exportformat) | yes |  |
-| `height` | integer \| null | no | minimum 144, maximum 2160 |
+| `height` | integer \| null | no | minimum 2, maximum 2160 and the source's height |
 
 ### ExportFormat
 
@@ -450,7 +450,6 @@ Enum: `srt`, `vtt`, `json`, `mp4`
 | `height` | integer | yes |  |
 | `width` | integer | yes |  |
 | `label` | string | yes |  |
-| `upscaled` | boolean | yes |  |
 | `native` | boolean | yes |  |
 
 ### ExportStatus
