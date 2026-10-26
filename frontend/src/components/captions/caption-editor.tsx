@@ -382,10 +382,17 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
         </p>
       )}
 
+      {/* A Redo is running: the list still holds the old captions, while the
+          picker above already names the new language. */}
+      {(video.status === "pending" || video.status === "processing") && (
+        <p role="status" className="mb-2 flex items-center gap-1.5 px-1 text-[13px] text-muted-foreground">
+          <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+          Showing the previous captions until the new ones are ready.
+        </p>
+      )}
+
       {/* `relative` so each row's offsetTop is measured against this box, which
-          is what the auto-scroll above assumes. */}
-      {/* space-y, not divide-y: the rows are cards now, and a divider between
-          two bordered cards reads as a third stray line. */}
+          is what the auto-scroll above assumes. Rows are split by hairlines. */}
       <div
         ref={list}
         className="relative min-h-0 flex-1 divide-y divide-border overflow-y-auto"
