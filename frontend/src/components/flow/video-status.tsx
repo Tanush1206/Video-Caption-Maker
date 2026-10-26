@@ -5,10 +5,10 @@ import {
   AlertCircle,
   AlertTriangle,
   Check,
-  Clock,
   Download,
   Feather,
   Info,
+  Loader2,
   RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
@@ -28,7 +28,7 @@ import type { Video } from "@/types/video";
 function ProgressBar({ percent, label }: { percent: number; label: string }) {
   return (
     <div
-      className="h-1.5 overflow-hidden rounded-full bg-surface-3"
+      className="h-1 overflow-hidden rounded-full bg-surface-3"
       role="progressbar"
       aria-label={label}
       aria-valuenow={percent}
@@ -36,7 +36,7 @@ function ProgressBar({ percent, label }: { percent: number; label: string }) {
       aria-valuemax={100}
     >
       <div
-        className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+        className="bar-fill h-full rounded-full transition-[width] duration-500 ease-out"
         style={{ width: `${Math.max(2, percent)}%` }}
       />
     </div>
@@ -75,41 +75,40 @@ function Processing({ video }: { video: Video }) {
     video.stage === "downloading" && /^downloading/i.test(video.stage_detail ?? "");
 
   return (
-    <div role="status" aria-live="polite" className="flex flex-col gap-4">
+    <div role="status" aria-live="polite" className="flex flex-col gap-8">
       {downloading && (
-        <div className="rounded-lg border border-border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success">
-                <Download className="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-base font-semibold">Downloading the speech model. This happens once.</p>
-                <p className="mt-0.5 text-[13px] text-muted-foreground">
-                  It is saved on this computer; later videos start straight away.
-                </p>
-              </div>
+        <div className="group-inset px-4 py-3">
+          <div className="flex items-start gap-3">
+            <Download className="mt-[3px] size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-medium">Downloading the speech model. This happens once.</p>
+              <p className="text-[13px] text-muted-foreground">
+                It is saved on this computer; later videos start straight away.
+              </p>
             </div>
-            <span className="text-right font-mono text-xs tabular-nums">
-              {video.stage_detail && <span className="block">{video.stage_detail}</span>}
-              <span className="text-success">{video.progress}%</span>
-            </span>
+            <span className="shrink-0 text-[15px] font-medium tabular-nums">{video.progress}%</span>
           </div>
-          <div className="mt-4">
+          <div className="mt-3 pl-7">
             <ProgressBar percent={video.progress} label="Downloading the speech model" />
+            {video.stage_detail && (
+              <p className="mt-1.5 text-[13px] tabular-nums text-muted-foreground">{video.stage_detail}</p>
+            )}
           </div>
         </div>
       )}
 
-      <div className="rounded-lg border border-border bg-card p-5">
-        <h2 className="text-xl font-semibold tracking-tight">Pipeline</h2>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
+      <section aria-labelledby="pipeline-heading">
+        <h2 className="text-xl font-semibold" id="pipeline-heading">
+          Pipeline
+        </h2>
+        <p className="mt-1 text-[15px] text-muted-foreground">
           {video.status === "pending"
             ? "Waiting: another video is being processed first."
             : "Running on this computer. You can leave this page; it carries on."}
         </p>
 
-        <ol className="mt-5 flex flex-col gap-2">
+        {/* One grouped list; the stage that is running has the bar. */}
+        <ol className="group-inset mt-4">
           {pipeline(video).map((step, index) => {
             const at = ORDER.indexOf(step.stage);
             const done = current > at;
@@ -118,54 +117,44 @@ function Processing({ video }: { video: Video }) {
               <li
                 key={step.stage}
                 aria-current={active ? "step" : undefined}
-                className={cn(
-                  "rounded-lg p-4",
-                  active ? "border border-border bg-surface-2" : "bg-surface-1",
-                  !done && !active && "opacity-60"
-                )}
+                className="group-row flex-col items-stretch gap-0 py-3"
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold",
-                      done && "bg-success/15 text-success",
-                      active && "bg-primary text-primary-foreground ring-4 ring-primary/20",
-                      !done && !active && "border border-border text-muted-foreground"
+                  <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center" aria-hidden="true">
+                    {done ? (
+                      <Check className="size-4 text-muted-foreground" />
+                    ) : active ? (
+                      <Loader2 className="size-4 animate-spin text-primary" />
+                    ) : (
+                      <span className="size-1.5 rounded-full bg-muted-foreground/50" />
                     )}
-                    aria-hidden="true"
-                  >
-                    {done ? <Check className="size-4" /> : active ? index + 1 : <Clock className="size-4" />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                      {index + 1}. {step.title}
-                      {active && (
-                        <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
-                          Active
-                        </span>
-                      )}
+                    <p className={cn("text-[15px]", active && "font-medium", !done && !active && "text-muted-foreground")}>
+                      <span className="sr-only">{index + 1}. </span>
+                      {step.title}
                     </p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    <p className="text-[13px] text-muted-foreground">
                       {active && video.stage_detail ? video.stage_detail : step.detail}
                     </p>
                   </div>
-                  <span className="shrink-0 text-right font-mono text-xs uppercase tracking-wider">
+                  <span className="shrink-0 text-right text-[13px] text-muted-foreground">
                     {done ? (
-                      <span className="text-success">Done</span>
+                      "Done"
                     ) : active ? (
                       <>
-                        <span className="block text-base font-semibold tabular-nums text-primary">
+                        <span className="block text-[15px] font-medium tabular-nums text-foreground">
                           {video.progress}%
                         </span>
-                        {eta && <span className="normal-case tracking-normal text-muted-foreground">{eta}</span>}
+                        {eta && <span className="block">{eta}</span>}
                       </>
                     ) : (
-                      <span className="text-muted-foreground">Queued</span>
+                      "Queued"
                     )}
                   </span>
                 </div>
                 {active && (
-                  <div className="mt-3">
+                  <div className="mt-2.5 pl-[30px]">
                     <ProgressBar percent={video.progress} label={label} />
                   </div>
                 )}
@@ -174,10 +163,10 @@ function Processing({ video }: { video: Video }) {
           })}
         </ol>
 
-        <p className="mt-4 text-xs text-muted-foreground">
+        <p className="mt-2 px-4 text-[13px] text-muted-foreground">
           You&apos;ll get a notification when it&apos;s done, if you allowed them.
         </p>
-      </div>
+      </section>
     </div>
   );
 }
@@ -330,10 +319,8 @@ export function VideoStatus({
   if (video.status === "completed") return <CompletedNotes video={video} captionCount={captionCount} />;
 
   return (
-    <section aria-label="Captioning progress" className="mb-6 flex flex-col gap-4">
-      <div className="rounded-lg border border-border bg-card px-4 py-3 sm:px-6">
-        <Stepper current={2} />
-      </div>
+    <section aria-label="Captioning progress" className="mx-auto mb-8 flex max-w-[880px] flex-col gap-8">
+      <Stepper current={2} />
       {video.status === "failed" ? <Failed video={video} /> : <Processing video={video} />}
     </section>
   );
