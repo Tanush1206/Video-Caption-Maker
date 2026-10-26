@@ -835,7 +835,38 @@ Process:
       production build; ui-checks 352 PASS; axe 0 on the 4 review screens
       in both themes and widths; E2E flow all PASS. Test videos 7615 and
       7616 created and deleted (7426, not ours, remains). Release steps
-      sent; **waiting for the push**.
+      sent.
+- [x] Released (2026-10-27): Tanush pushed `main` and tagged v1.1.0 on
+      d252f06.
+
+### Release check (2026-10-27)
+- CI green on d252f06 (frontend, backend, scripts); `release.yml` green
+  (images backend cpu and cuda, frontend; release). 8 assets, all 7 match
+  SHA256SUMS; 1.1.0-cuda, 1.1.0-cpu, latest-cuda, latest-cpu and frontend
+  1.1.0/latest fetch anonymously (200).
+- Backup per DATABASE.md §7 (24 s downtime):
+  `C:\Users\Admin\VideoCaptionMaker-backups\pre-1.1.0` (vcm.dump 32 KB,
+  all 7 tables; vcm-media.tgz 284 MB, 28 files as on the volume; .env copy;
+  rowcounts 1 video, 159 captions, 5 exports, 1 style, caption md5).
+  `pre-1.0.11` kept (Tanush hasn't asked to delete it).
+- `vcm update` (Windows GPU) in 24 s: the API reports 1.1.0, alembic
+  `b6e0f4a9c2d1` (head, no migration); rows and caption md5 unchanged;
+  `/api/system` serves the three speech models and `hinglish_model`
+  (downloaded). Download **7.2 MB**: backend CUDA 3/15 layers, 0.2 MB;
+  frontend 4/10, 7.0 MB.
+- Guard (POST): own origin passes at localhost and 127.0.0.1 (422, no
+  file); another port, another origin, cross-site and a rebinding Host 403.
+  `flow.js` 7/7 PASS at both addresses (delete via "…", speech model small
+  and back, SRT and a 1080p burned MP4), nothing refused.
+- `scripts/e2e.py` not run: transcription and translation are unchanged;
+  the export change (heights up to the source) is covered by `flow.js`'s
+  MP4 at the new default and by the backend tests.
+- Test videos 101-104 on the install (101, 103 deleted by `flow.js`; 102,
+  104 by `DELETE /api/videos/{id}`); it holds video 84 only, speech model
+  back on Automatic.
+- Secrets: no forbidden path or key pattern in the v1.1.0 commits; the
+  images hold only the distro CA bundle and an empty extra-CA dir. The
+  1.1.0 tags pulled for the check were removed (layers shared with latest).
 
 ### Phase 2 decisions (taken under the brief; listed for Tanush)
 - **Dark accent text #409CFF**, not #0A84FF: #0A84FF text is 3.8:1 on the
