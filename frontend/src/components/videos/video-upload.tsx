@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -221,8 +222,6 @@ export function VideoUpload() {
 
   const step = file ? 2 : 1;
 
-  const localOnly = system?.translation_engine !== "gemini";
-
   return (
     <div className="space-y-6">
       <h2 className="sr-only">Caption a video</h2>
@@ -255,19 +254,17 @@ export function VideoUpload() {
               if (dropped) choose(dropped);
             }}
             className={cn(
-              // A dashed hairline, one line of text, one button.
-              "flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-4 py-12 text-center",
+              // A dashed hairline, a small icon, one line of text, one button;
+              // about 140 px tall.
+              "flex min-h-[140px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed px-4 py-5 text-center",
               "transition-colors duration-200 ease-out",
               "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
               dragging ? "border-accent bg-primary-muted" : "border-input hover:bg-surface-2/60"
             )}
           >
+            <Upload className="size-5 text-muted-foreground" aria-hidden="true" />
             <span className="text-[15px] text-muted-foreground">
-              {dragging
-                ? "Drop to choose this video"
-                : localOnly
-                  ? "Drop a video here to caption it on this computer."
-                  : "Drop a video here. Translations into another language use Gemini."}
+              {dragging ? "Drop to choose this video" : "Drop a video here, or choose one. Everything runs on this computer."}
             </span>
             {/* Looks like a button; the whole zone is the <label>, so a click
                 anywhere opens the picker. */}

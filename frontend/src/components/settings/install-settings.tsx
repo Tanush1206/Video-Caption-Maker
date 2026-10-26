@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useStats } from "@/hooks/use-stats";
 import { useSystem, useUpdateSystemSettings } from "@/hooks/use-system";
 import { useLanguageOptions } from "@/hooks/use-videos";
-import { formatFileSize } from "@/lib/format";
+import { formatDurationLong, formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SystemInfo } from "@/types/system";
 
@@ -368,6 +368,20 @@ function StorageSection() {
               <span className="font-mono tabular-nums">{formatFileSize(data.disk_free_bytes)}</span>
             </p>
           </div>
+          {/* The library's figures, moved here from the dashboard (v1.1.0),
+              which keeps only the count and the size. */}
+          <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+            {[
+              ["Footage", formatDurationLong(data.duration_ms)],
+              ["Captions", data.captions.toLocaleString()],
+              ["In the queue", String(data.by_status.pending + data.by_status.processing)],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-3 sm:block">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="tabular-nums">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </>
       ) : (
         <Skeleton className="h-20 w-full" />

@@ -1,21 +1,16 @@
 "use client";
 
-import { useHost } from "@/components/layout/engine-chip";
 import { useSystem } from "@/hooks/use-system";
-import { LOCAL_MODE } from "@/lib/config";
 
-/** One quiet line: where this is running and what it transcribes with. */
+/** "VideoCaptionMaker v1.1.0", small and grey (v1.1.0); the version from the API. */
 export function AppFooter() {
-  const host = useHost();
   const { data: system } = useSystem();
-  const model = system?.whisper?.model;
+  const version = system?.version;
 
   return (
     <footer className="mt-auto px-6 py-6 text-center">
       <p className="text-xs text-muted-foreground">
-        VideoCaptionMaker
-        {host && <> · {LOCAL_MODE ? "Running locally at " : ""}{host}</>}
-        {model && <> · faster-whisper {model}</>}
+        VideoCaptionMaker{version && <> {version === "dev" ? "dev" : `v${version}`}</>}
       </p>
     </footer>
   );
