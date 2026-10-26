@@ -440,7 +440,7 @@ export function CaptionOverlay({
       {dragging && layout && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/75 px-2 py-1 font-mono text-[11px] tabular-nums text-white shadow-lg"
+          className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/75 px-2 py-1 text-xs tabular-nums text-white"
         >
           {dragging === "width"
             ? `width ${widthPercent}%`

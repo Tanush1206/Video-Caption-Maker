@@ -311,7 +311,7 @@ function InfoPanel({ meta, available }: { meta: CatalogueMeta; available: number
   const missing = meta.google_families - available;
 
   return (
-    <div className="space-y-2 border-b border-border bg-subtle px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+    <div className="space-y-2 border-b border-border bg-card px-3 py-2.5 text-xs text-muted-foreground">
       <p>
         <span className="font-semibold text-foreground">
           {available.toLocaleString()} of Google&rsquo;s {meta.google_families.toLocaleString()}
