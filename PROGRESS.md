@@ -812,7 +812,30 @@ Process:
       refused by the guard). Throwaway videos 7612 (deleted by the flow) and
       7613; 7611 (from phase 1) and 7613 deleted through the API afterwards.
       DESIGN_SYSTEM.md replaced; CHANGELOG v1.1.0. No migration (head
-      `b6e0f4a9c2d1`). Release steps sent; **waiting for the push**.
+      `b6e0f4a9c2d1`). Release steps sent.
+- [x] Final review (Tanush, 2026-10-26), 5 fixes:
+      1. "Hindi captions in" as the caption-language tiles (radio, accent
+         outline when chosen); Start still waits for a choice (19d8c9b).
+      2. Export resolutions only up to the source, never an upscale; the
+         default is the source (cap 2160); a larger height is a 422; tests
+         (4ba532c, 98986f2). Reverses the earlier "upscale to rescue small
+         captions" default (PRD and API.md updated).
+      3. **Medium removed** rather than documented (ae6ce74, e6b7ae4,
+         28ff525): it is the size of large-v3-turbo (1.53 vs 1.62 GB),
+         slower, measured worse on Hindi (DECISIONS), and no tier picks it,
+         so no machine is better served by it. A stored `medium` reads as
+         `auto`; `WHISPER_MODEL_SIZE=medium` still works by hand. Settings
+         gains a Hinglish (Apex) row, downloaded or not and 1.6 GB, from a
+         new `hinglish_model` in `/api/system`; tests for both.
+      4. The stepper is Upload, Language, Captions, Export; Captions is
+         current while processing and on the failed view (f64690f).
+      5. During a Redo: "Showing the previous captions until the new ones
+         are ready." above the list (d6c38dd).
+      Checks after: ruff; pytest 538 passed, 1 skipped; npm test 3/3;
+      production build; ui-checks 352 PASS; axe 0 on the 4 review screens
+      in both themes and widths; E2E flow all PASS. Test videos 7615 and
+      7616 created and deleted (7426, not ours, remains). Release steps
+      sent; **waiting for the push**.
 
 ### Phase 2 decisions (taken under the brief; listed for Tanush)
 - **Dark accent text #409CFF**, not #0A84FF: #0A84FF text is 3.8:1 on the

@@ -41,8 +41,25 @@ size is measured when the install is updated.
   Speech model, Translation, Gemini, Storage, Appearance), and now lists
   the computer's graphics, memory and model in use.
 
+- **Export resolutions stop at the video's own size.** A 1080p video is
+  offered 360p to 1080p, and the default is its own size; upscaling is no
+  longer offered (it added no detail, only a bigger file and a longer
+  encode), and the API refuses a height above the source.
+- **Speech models:** Settings offers Automatic, Small, Large v3 Turbo and
+  Large v3. Medium is gone: as big as Large v3 Turbo, slower, and less
+  accurate on Hindi. An install that had chosen it goes back to Automatic.
+- **While a video is processed** the steps read Upload, Language,
+  Captions, Export, with Captions current.
+
 ### Added
-- `version` in `GET /api/system`, for the footer.
+- **The Hinglish model in Settings:** whether it's downloaded, and its size.
+- **During a Redo** the caption list says "Showing the previous captions
+  until the new ones are ready."
+- `version` and `hinglish_model` in `GET /api/system`.
+
+### Fixed
+- The language step's "Hindi captions in" choice had no visible selection;
+  it now has the same radio and blue outline as the caption languages.
 
 ## [1.0.11] - 2026-10-23
 
