@@ -31,7 +31,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         // The one action a screen is for: at most one per screen.
-        primary: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
+        primary: "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-hover",
         // Everything else that needs a shape: a light grey fill, no border.
         secondary: "bg-surface-3 text-foreground hover:bg-surface-3/70 active:bg-surface-3/50",
         // Plain accent text: the quiet secondary action.

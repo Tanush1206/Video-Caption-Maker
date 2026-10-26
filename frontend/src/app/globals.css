@@ -247,6 +247,8 @@
     --muted-foreground: 240 2.2% 44.1%; /* #6E6E73, 4.7:1 on #F5F5F7 */
 
     --primary: 210 100% 44.5%; /* #0071E3 */
+    /* Hover and press darken (#0062C4): a lighter fill puts white text under AA. */
+    --primary-hover: 210 100% 38.5%;
     --primary-foreground: 0 0% 100%;
     --primary-muted: 210 100% 96%;
     --primary-text: 210 100% 40%; /* #0066CC */
@@ -307,6 +309,7 @@
     --muted-foreground: 240 2.5% 60.6%; /* #98989D */
 
     --primary: 210 100% 44.5%; /* #0071E3 fill: white on #0A84FF fails AA */
+    --primary-hover: 210 100% 38.5%;
     --primary-foreground: 0 0% 100%;
     --primary-muted: 210 60% 14%;
     /* #409CFF, the system blue's higher-contrast tone: #0A84FF text is

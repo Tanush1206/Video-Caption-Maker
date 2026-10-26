@@ -90,6 +90,7 @@ const config: Config = {
         },
         primary: {
           DEFAULT: withAlpha("--primary"),
+          hover: withAlpha("--primary-hover"),
           foreground: withAlpha("--primary-foreground"),
           muted: withAlpha("--primary-muted"),
         },
