@@ -2,13 +2,15 @@
 
 **Private, offline AI captions and translation, on your own computer.**
 
+Website: **https://tanush1206.github.io/Video-Caption-Maker/**
+
 Captions for your videos, made on your own computer. Upload a video, choose
 the caption language, export it with the captions burned in, or as subtitle
 files. Speech recognition (Whisper) and translation (M2M100) run locally on
 your CPU or NVIDIA GPU. There's no account and no cloud service, and your
 video never leaves the machine.
 
-![VideoCaptionMaker dashboard](docs/images/dashboard.png)
+![VideoCaptionMaker dashboard](docs/images/Dashboard.png)
 
 ## Install
 
@@ -69,16 +71,16 @@ below the export step.
 - **Semantic search** across everything said in all your videos, with
   clickable timestamps.
 - **Light and dark themes**, responsive from phone to desktop.
-- **Small updates**: `vcm update` downloads only what changed, about 6 MB
+- **Small updates**: `vcm update` downloads only what changed, about 7 MB
   for a typical release.
 
 ## Screenshots
 
 | Dashboard | Editor |
 |---|---|
-| ![Dashboard](docs/images/dashboard.png) | ![Editor](docs/images/editor.png) |
+| ![Dashboard](docs/images/Dashboard.png) | ![Editor](docs/images/Editor.png) |
 | **Search** | **Settings** |
-| ![Search](docs/images/search.png) | ![Settings](docs/images/settings.png) |
+| ![Search](docs/images/Search.png) | ![Settings](docs/images/Settings.png) |
 
 ## Requirements
 
@@ -276,6 +278,9 @@ Backend tests run against an isolated test database; see
   during that build step and never stored in an image layer.
 - Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which
   pushes the images to GHCR and attaches the installers to a GitHub Release.
+- Website: plain HTML and CSS in `site/` (no build, no external requests),
+  published to GitHub Pages by `.github/workflows/pages.yml` on every push
+  to `main` that changes `site/`.
 - `AUTH_MODE=accounts` (backend) with `NEXT_PUBLIC_AUTH_MODE=accounts`
   (frontend build) turns registration, login and Google sign-in back on for
   a hosted deployment.
