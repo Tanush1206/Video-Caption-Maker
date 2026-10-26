@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef } from "react";
 
-import { Segmented } from "@/components/ui/segmented";
+import { Popover } from "@/components/ui/popover";
+import { Range } from "@/components/ui/range";
 import type { Playback } from "@/hooks/use-playback";
 import { PLAYBACK_RATES } from "@/hooks/use-playback";
 import { formatTimecode } from "@/lib/format";
@@ -55,26 +56,27 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
   const silent = playback.isMuted || playback.volume === 0;
 
   return (
-    <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 sm:grid-cols-[1fr_auto_1fr]">
-      {/* Three explicit columns rather than a flex row: the transport stays
-          optically centred no matter how wide the timecode or the speed
-          buttons get, which a flex row with ml-auto cannot guarantee. */}
-      <div className="flex min-w-0 items-baseline gap-1.5">
+    // One quiet row (v1.1.0): the time on the left, the transport in the
+    // centre, sound and speed behind two buttons on the right. Three explicit
+    // columns, so the transport stays optically centred whatever the time's
+    // width. On a phone the frame steps go, and the row still fits one line.
+    <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[1fr_auto_1fr]">
+      <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
         <PlaybackClock playback={playback} />
         <span className="font-mono text-sm tabular-nums text-muted-foreground">
           / {formatTimecode(playback.durationMs)}
         </span>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-center gap-1">
         <button
           type="button"
           onClick={() => playback.stepFrames(-1)}
           title="Previous frame (,)"
           aria-label="Step back one frame"
-          className={buttonClass}
+          className={cn(buttonClass, "max-sm:hidden")}
         >
-          <ChevronLeft className="size-4" />
+          <ChevronLeft className="size-5" />
         </button>
 
         <button
@@ -95,70 +97,80 @@ export function PlayerControls({ playback, hasAudioTrack }: PlayerControlsProps)
           onClick={() => playback.stepFrames(1)}
           title="Next frame (.)"
           aria-label="Step forward one frame"
-          className={buttonClass}
+          className={cn(buttonClass, "max-sm:hidden")}
         >
-          <ChevronRight className="size-4" />
+          <ChevronRight className="size-5" />
         </button>
       </div>
 
-      {/* Its own row on a phone: time, transport and speed do not fit one
-          375px line, and wrapping is better than a sideways-scrolling page. */}
-      <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end">
-        {/* The <video> is rendered without native controls, so this is the only
-            way to reach volume at all — and a muted player has to be obvious,
-            not a subtly different icon. */}
+      <div className="flex items-center justify-end gap-0.5">
+        {/* The <video> has no native controls, so this is the only way to
+            reach the volume, and a muted player has to be obvious. */}
         {hasAudioTrack === false ? (
           <span
             title="FFmpeg found no audio stream in this file"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground"
+            aria-label="No audio in this file"
+            className="flex size-11 items-center justify-center text-muted-foreground sm:size-9"
           >
-            <VolumeX className="size-4" />
-            <span className="hidden sm:inline">No audio</span>
+            <VolumeX className="size-5" />
           </span>
         ) : (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={playback.toggleMute}
-              aria-label={playback.isMuted ? "Unmute" : "Mute"}
-              aria-pressed={playback.isMuted}
-              className={cn(buttonClass, silent && "text-destructive")}
-            >
-              {silent ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={playback.isMuted ? 0 : playback.volume}
-              onChange={(event) => playback.changeVolume(Number(event.target.value))}
-              aria-label="Volume"
-              className="hidden w-16 accent-[hsl(var(--accent))] sm:block"
-            />
-          </div>
+          <Popover
+            label={silent ? "Volume (muted)" : "Volume"}
+            trigger={silent ? <VolumeX className="size-5 text-destructive" /> : <Volume2 className="size-5" />}
+            panelClassName="flex w-52 items-center gap-2"
+          >
+            {() => (
+              <>
+                <button
+                  type="button"
+                  onClick={playback.toggleMute}
+                  aria-label={playback.isMuted ? "Unmute" : "Mute"}
+                  aria-pressed={playback.isMuted}
+                  className={cn(buttonClass, "shrink-0", silent && "text-destructive")}
+                >
+                  {silent ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+                </button>
+                <Range
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={playback.isMuted ? 0 : playback.volume}
+                  onChange={(event) => playback.changeVolume(Number(event.target.value))}
+                  aria-label="Volume"
+                />
+              </>
+            )}
+          </Popover>
         )}
 
-      {/* The source's real pixel size. Shown because "the video looks worse
-          than my original" is otherwise unanswerable — nothing here re-encodes
-          video, so this is exactly what was uploaded. */}
-      {playback.intrinsic && (
-        <span
-          title="Source resolution — the file is served exactly as uploaded"
-          className="hidden text-sm tabular-nums text-muted-foreground xl:inline"
+        {/* One setting with six values, behind the button that shows it. */}
+        <Popover
+          label={`Playback speed: ${playback.playbackRate}×`}
+          trigger={<span className="text-sm font-medium tabular-nums">{playback.playbackRate}×</span>}
+          panelClassName="w-32 p-1"
         >
-          {playback.intrinsic.width}&times;{playback.intrinsic.height}
-        </span>
-      )}
-
-        {/* One setting with four positions: a segmented control. */}
-        <Segmented
-          label="Playback speed"
-          segments={PLAYBACK_RATES.map((rate) => ({ value: rate, label: `${rate}×` }))}
-          value={playback.playbackRate}
-          onChange={playback.changeRate}
-          segmentClassName="px-2 tabular-nums"
-        />
+          {(close) => (
+            <div role="menu" aria-label="Playback speed">
+              {PLAYBACK_RATES.map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={playback.playbackRate === rate}
+                  onClick={() => {
+                    playback.changeRate(rate);
+                    close();
+                  }}
+                  className="flex min-h-11 w-full items-center justify-between rounded-md px-3 text-[15px] tabular-nums transition-colors duration-150 ease-out hover:bg-surface-3 focus:bg-surface-3 focus-visible:ring-0 sm:min-h-8 sm:text-sm"
+                >
+                  {rate}×
+                  {playback.playbackRate === rate && <Check className="size-4 text-primary" aria-hidden="true" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </Popover>
       </div>
     </div>
   );
