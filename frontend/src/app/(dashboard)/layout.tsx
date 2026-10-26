@@ -9,6 +9,7 @@ import { ServerUnavailable } from "@/components/layout/server-unavailable";
 import { useAuth } from "@/hooks/use-auth";
 import { useTranscriptionAlerts } from "@/hooks/use-transcription-alerts";
 import { LOCAL_MODE } from "@/lib/config";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({
   children,
@@ -52,8 +53,8 @@ export default function DashboardLayout({
 
   return (
     // The bottom padding on phones is the tab bar's height, so the last row
-    // of any page can scroll clear of it.
-    <div className="flex min-h-screen flex-col pb-16 md:pb-0">
+    // of any page can scroll clear of it. The editor has no tab bar.
+    <div className={cn("flex min-h-screen flex-col", !pathname.startsWith("/editor") && "pb-16 md:pb-0")}>
       <DashboardHeader />
       {children}
       {/* The editor is a full-height workspace; a footer would only push its

@@ -35,9 +35,11 @@ function useIsActive() {
  */
 export function DashboardHeader() {
   const isActive = useIsActive();
+  const pathname = usePathname();
 
   return (
-    <PageHeader sticky wide>
+    // On a phone the editor's own bar (back, title, Export) is enough.
+    <PageHeader sticky wide className={cn(pathname.startsWith("/editor") && "max-md:hidden")}>
       <Brand href="/dashboard" />
 
       {/* Centred in the bar, independent of the name's width. */}

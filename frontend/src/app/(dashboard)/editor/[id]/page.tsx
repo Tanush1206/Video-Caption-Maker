@@ -11,6 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CaptionEditor } from "@/components/captions/caption-editor";
+import { CaptionPeek } from "@/components/captions/caption-peek";
 import { ExportPanel } from "@/components/exports/export-panel";
 import { VideoStatus } from "@/components/flow/video-status";
 import { PlayerControls } from "@/components/player/player-controls";
@@ -169,13 +170,14 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
         From lg: the stage (the video, centred on a neutral ground, with its
         controls) and the inspector side by side, the timeline across the
         bottom. Below lg everything stacks, video first, and the inspector
-        is a bottom sheet; the page pads for its closed height.
+        is a bottom sheet that fills the rest of the screen (one bar above it
+        on a phone, two from md).
       */}
       <main
         id="workspace"
         className={cn(
-          "grid scroll-mt-32 grid-cols-[minmax(0,1fr)] pb-36 lg:pb-0",
-          "lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)_auto]",
+          "flex scroll-mt-32 flex-col max-md:min-h-[calc(100dvh-52px)] md:max-lg:min-h-[calc(100dvh-104px)]",
+          "lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)_auto]",
           WORKSPACE_HEIGHT
         )}
       >
@@ -212,6 +214,9 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
         <Inspector
           tab={tool}
           onTab={setTool}
+          peek={
+            <CaptionPeek caption={activeCaption} onSave={(id, text) => updateCaption.mutate({ id, text })} />
+          }
           className="lg:col-start-2 lg:row-span-1 lg:row-start-1 lg:border-l lg:border-border"
         >
           {{
@@ -294,7 +299,8 @@ function EditorBar({
 }) {
   const languages = useLanguagePair(video);
   return (
-    <div className="bar-translucent sticky top-header z-30 border-b border-border">
+    // At the top on a phone, where the app header steps aside in the editor.
+    <div className="bar-translucent sticky top-0 z-30 border-b border-border md:top-header">
       <div className="mx-auto flex h-[52px] w-full max-w-[1800px] items-center gap-2 px-2 sm:px-6">
         <Link
           href="/dashboard"
