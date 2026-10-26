@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertCircle, ChevronLeft, ChevronRight, LayoutGrid, List, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, List, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { StatsStrip } from "@/components/dashboard/stats-strip";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VideoCard } from "@/components/videos/video-card";
@@ -96,10 +97,9 @@ export function VideoLibrary() {
 
   if (isError) {
     return (
-      <p role="alert" className="flex gap-2 text-[15px] text-destructive">
-        <AlertCircle className="mt-0.5 size-[18px] shrink-0" />
-        <span>Couldn&apos;t load your videos. {(error as Error).message}</span>
-      </p>
+      <Notice role="alert" tone="error" title="Couldn't load your videos.">
+        {(error as Error).message}
+      </Notice>
     );
   }
 
