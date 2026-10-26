@@ -789,10 +789,58 @@ Process:
       while hovered, focused or dragged; the two helper lines become hints
       shown once (localStorage); the phone's bottom tab bar kept, the
       editor's sheet as it was. Screenshots sent; **waiting for OK**.
-- [ ] Phase 2, one commit per screen: language step, processing, failed,
-      export dialog, search, settings, empty states, notices, 404.
-- [ ] Final: all checks, E2E, DESIGN_SYSTEM.md, CHANGELOG, final
-      screenshots, release steps.
+- [x] OK for phase 1 (Tanush, 2026-10-26), with two phone-editor fixes for
+      phase 2: a "peek" state on the sheet with the current caption
+      (time and text, editable on tap), and no app header in the editor on
+      a phone.
+- [x] Phase 2 (2026-10-26), one commit per screen: language step
+      (6a7f810, new `Notice`), processing (13b30bc), failed (d845290),
+      notices (0976b63), dark accent text token (ff62a99), export dialog
+      (fcc286d), primary hover token (675e5ad), search (ad3fbdf), settings
+      (d028e75), empty states (f2519f1), 404 and error pages (763fb4b), the
+      phone editor fixes (971c876), last monospace and unused Card /
+      EngineChip (5149d43). Every state shot and axe-scanned at 375 and
+      1440, light and dark: axe 0 everywhere (the language step's 4 and
+      /settings' 2 failures fixed).
+- [x] Final checks (2026-10-26, dev stack on 3001): lint and tsc clean;
+      npm test 3/3; production build (`docker build --target build`) OK,
+      image removed; ui-checks **352 PASS, 0 FAIL** (all 22 checks); axe 0
+      on all 112 final shots (28 screens and states × 375/1440 × light/dark)
+      and on /dashboard, /search, /settings; no horizontal overflow; E2E
+      `flow.js` at localhost:3001 all PASS (delete via "…", speech model
+      small → auto, SRT and burned MP4 exported and downloaded, nothing
+      refused by the guard). Throwaway videos 7612 (deleted by the flow) and
+      7613; 7611 (from phase 1) and 7613 deleted through the API afterwards.
+      DESIGN_SYSTEM.md replaced; CHANGELOG v1.1.0. No migration (head
+      `b6e0f4a9c2d1`). Release steps sent; **waiting for the push**.
+
+### Phase 2 decisions (taken under the brief; listed for Tanush)
+- **Dark accent text #409CFF**, not #0A84FF: #0A84FF text is 3.8:1 on the
+  #2C2C2E groups inside a dialog. Fills, rings and selection stay #0A84FF
+  (same reasoning as light's #0066CC).
+- **Primary hover darkens** (#0062C4) instead of fading to 90 %, which put
+  white text at 4.1:1 while hovered.
+- **One primary per screen:** the editor bar's Export is grey until the
+  video has captions (processing, failed: the page's own action is the
+  primary); the search preview's "Open in the caption editor" is grey
+  (Search is the primary).
+- **Peek:** the lowered phone sheet sits in the page after the timeline,
+  fills the rest of the screen and sticks to the bottom edge, so there is
+  no gap on a tall phone and no overlap on a short one (667 px: a 28 px
+  scroll). The caption is edited in the peek itself (a tap opens the
+  keyboard there, with the video still in view; the same autosave as a
+  list row, and it holds the caption being edited while the playhead moves
+  on). Raising the sheet to focus the list row instead would not open a
+  phone keyboard (focus outside the tap).
+- **Settings** title "Settings" (was "Settings & hardware"); Your computer
+  lists acceleration, graphics or processor, memory and the model in use as
+  rows (all from `/api/system`); the Gemini key has its own group, with
+  Remove key as red text in the Key row.
+- **Export resolution** on the segmented control, "Recommended: 1080p." in
+  the note under it rather than a word inside each segment.
+- **Removed dead code:** `ui/card.tsx` and `layout/engine-chip.tsx` (no
+  callers left).
+- **Accounts-mode screens** (landing, sign-in, user menu) still tokens only.
 
 ### Decisions (taken under the brief; listed for Tanush)
 - **AA over exact colour where they conflict:** the brief's colours are

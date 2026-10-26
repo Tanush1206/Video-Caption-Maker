@@ -6,6 +6,44 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-10-26
+
+A new look: minimal and calm, like Apple's own apps. Nothing about how the
+app works changed; every screen was restyled. No migration. The update
+size is measured when the install is updated.
+
+### Changed
+- **The whole interface**, light and dark: white (or black) pages and soft
+  grey groups instead of boxes and borders, one blue for the one main
+  action on a screen, the system font (no web fonts to load), and
+  monospace only for timestamps. Every screen meets WCAG AA, with a 2 px
+  focus ring for the keyboard.
+- **Videos:** a short upload area, then a grid of rounded thumbnails with
+  one grey line under each ("Hindi · 3:48 · Ready"); open, search and
+  delete are in a "…" menu, and delete asks first. The filters are a
+  segmented control. The counts line is just "6 videos · 1.2 GB"; footage,
+  captions and the queue moved to Settings → Storage.
+- **Header:** Videos, Search and Settings as plain tabs; the hardware chips
+  and the theme button moved to Settings. On a phone they're a tab bar at
+  the bottom. The footer shows the version.
+- **Editor:** the video large on a grey stage; one quiet player row, with
+  volume and speed (0.5–2×) in small pop-ups; the inspector is one
+  control (Captions · Typography · Appearance · Position) over grouped
+  settings; a denser caption list (about eight lines at 1440 px); the
+  timeline's view follows the playhead (a sideways swipe or Shift+scroll
+  pans it). The caption box's handles show only when you're near it, and
+  the two helper lines became tips shown once.
+- **Editor on a phone:** no app header (the editor's own bar has back,
+  title and Export), and the bottom sheet shows the caption that's playing,
+  editable with a tap.
+- **Language step, processing, failed, export, search and settings** are
+  grouped lists in the same style; Settings is one column (Your computer,
+  Speech model, Translation, Gemini, Storage, Appearance), and now lists
+  the computer's graphics, memory and model in use.
+
+### Added
+- `version` in `GET /api/system`, for the footer.
+
 ## [1.0.11] - 2026-10-23
 
 Quiet recordings get captions, and the languages offered are the ones that
