@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /** Search across everything the signed-in user owns. */
 export default function LibrarySearchPage() {
   return (
-    <main className={cn(WIDE_CONTAINER, "py-6")}>
+    <main className={cn(WIDE_CONTAINER, "py-8")}>
       <SearchWorkspace
         videoId={null}
         heading="Search everything"
