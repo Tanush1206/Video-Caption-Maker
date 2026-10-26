@@ -752,19 +752,21 @@ def test_requested_height_is_capped():
     assert height == rendering.MAX_OUTPUT_HEIGHT
 
 
-def test_available_heights_include_the_source_and_upscales():
+def test_available_heights_stop_at_the_source():
     """
-    Upscaling is offered on purpose. It adds no picture detail, but captions
-    are drawn after the scale, so a 144p source rendered at 1080p turns an
-    illegible 6px caption into a 45px one.
+    Never an upscale (v1.1.0): a 1080p source is offered 360p to 1080p, and
+    a source between steps gets its own height as the top one.
     """
     from app.services import rendering
 
-    heights = rendering.available_heights(144)
-    assert 144 in heights, "the source's own size must always be offered"
-    assert 1080 in heights
-    assert heights == sorted(heights)
-    assert all(h <= rendering.MAX_OUTPUT_HEIGHT for h in heights)
+    assert rendering.available_heights(1080) == [360, 480, 720, 1080]
+    assert rendering.available_heights(240) == [240]
+    assert rendering.available_heights(600) == [360, 480, 600]
+    assert rendering.available_heights(2160) == [360, 480, 720, 1080, 1440, 2160]
+    # Taller than the cap: up to the cap, never the source's own size.
+    assert rendering.available_heights(4320)[-1] == rendering.MAX_OUTPUT_HEIGHT
+    # Unknown (couldn't be probed): the ladder, there being nothing to compare.
+    assert rendering.available_heights(0) == list(rendering.RESOLUTION_LADDER)
 
 
 def test_the_scale_runs_before_the_subtitles_filter():
@@ -802,11 +804,11 @@ async def test_requested_height_is_stored_on_the_burn(
         await client.post(
             f"/api/videos/{exportable}/exports",
             headers=auth_headers,
-            json={"format": "mp4", "height": 720},
+            json={"format": "mp4", "height": 240},
         )
     ).json()
 
-    assert created["height"] == 720
+    assert created["height"] == 240
 
 
 @pytest.mark.asyncio
@@ -856,53 +858,42 @@ async def test_options_report_the_ladder_and_the_encoder(
     assert sum(1 for r in body["resolutions"] if r["native"]) <= 1
     for resolution in body["resolutions"]:
         assert resolution["label"] == f"{resolution['height']}p"
-        if body["source_height"]:
-            assert resolution["upscaled"] == (resolution["height"] > body["source_height"])
+        assert "upscaled" not in resolution
 
 
-def test_the_default_height_rescues_an_unreadable_caption():
-    """
-    The default is not the source's own size, and that is the point.
+@pytest.mark.asyncio
+async def test_options_never_offer_more_than_the_source(client, auth_headers, exportable):
+    """The 320x240 fixture is offered 240p and nothing above it (v1.1.0)."""
+    body = (
+        await client.get(f"/api/videos/{exportable}/exports/options", headers=auth_headers)
+    ).json()
 
-    Caption sizes are stored against a 1080p canvas and scaled by
-    height/1080, so a 256x144 source renders a 48px caption at 6px. Defaulting
-    to the source would mean the obvious button produces a file whose captions
-    cannot be read - which is the one thing a captioning tool must not do.
-    """
-    from app.services import rendering
-
-    default = rendering.recommended_height(144, font_size=48, reference_height=1080)
-
-    assert default > 144, "a 6px caption is not an acceptable default"
-    assert 48 * default / 1080 >= rendering.MIN_CAPTION_PX
+    assert body["source_height"] == 240
+    assert [r["height"] for r in body["resolutions"]] == [240]
+    assert body["resolutions"][0]["native"]
+    assert body["recommended_height"] == 240
 
 
-def test_a_big_enough_source_keeps_its_own_size():
-    """The common case, and it must not be resampled for no reason."""
-    from app.services import rendering
-
-    assert rendering.recommended_height(1080, font_size=48, reference_height=1080) == 1080
-    assert rendering.recommended_height(2160, font_size=48, reference_height=1080) == 2160
-
-
-def test_the_default_never_downscales():
-    """
-    Upscaling to rescue legibility is a fair trade; throwing away detail the
-    source actually has is not, and must never happen without being asked.
-    """
-    from app.services import rendering
-
-    for source in (360, 480, 720, 1080, 1440, 2160):
-        assert rendering.recommended_height(source, 48, 1080) >= source
-
-
-def test_a_larger_caption_needs_less_upscaling():
-    """The recommendation follows the style, not just the source."""
-    from app.services import rendering
-
-    assert rendering.recommended_height(144, font_size=90, reference_height=1080) <= (
-        rendering.recommended_height(144, font_size=48, reference_height=1080)
+@pytest.mark.asyncio
+async def test_a_burn_larger_than_the_source_is_rejected(client, auth_headers, exportable):
+    """A client that asks for an upscale anyway is told why, not served one."""
+    response = await client.post(
+        f"/api/videos/{exportable}/exports",
+        headers=auth_headers,
+        json={"format": "mp4", "height": 720},
     )
+
+    assert response.status_code == 422
+    assert "240p" in response.json()["detail"]
+
+
+def test_the_default_is_the_source_size():
+    """Nothing is resampled unless asked; a source above the cap gets the cap."""
+    from app.services import rendering
+
+    for source in (144, 240, 360, 720, 1080, 1440, 2160):
+        assert rendering.recommended_height(source) == source
+    assert rendering.recommended_height(4320) == rendering.MAX_OUTPUT_HEIGHT
 
 
 @pytest.mark.asyncio

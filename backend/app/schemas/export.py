@@ -47,7 +47,9 @@ class ExportCreate(BaseModel):
     # reaching an encoder: a height of 100000 is minutes of work and a file
     # nobody can play, and a negative one is an FFmpeg error the user would see
     # as a failed export with no explanation.
-    height: int | None = Field(default=None, ge=144, le=MAX_OUTPUT_HEIGHT)
+    # The floor is only "a frame": the ceiling that matters is the source's
+    # own height, checked against the file in the route (v1.1.0).
+    height: int | None = Field(default=None, ge=2, le=MAX_OUTPUT_HEIGHT)
 
 
 class DownloadTicket(BaseModel):
@@ -63,8 +65,6 @@ class ExportResolution(BaseModel):
     height: int
     width: int
     label: str
-    #: Above the source's own height, so the picture gains no detail.
-    upscaled: bool
     #: The source's own size, and therefore the no-resampling choice.
     native: bool
 
@@ -85,9 +85,8 @@ class ExportOptions(BaseModel):
 
     source_width: int | None
     source_height: int | None
-    #: What to default the picker to. Not simply the source's own height: a
-    #: small source renders captions too small to read, and the default has to
-    #: rescue that rather than reproduce it.
+    #: What to default the picker to: the source's own height (the cap for a
+    #: taller source), so nothing is resampled.
     recommended_height: int | None
     #: The hardware encoder in use, or null when falling back to CPU x264.
     hardware_encoder: str | None

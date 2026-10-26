@@ -65,58 +65,33 @@ def target_dimensions(source_width: int, source_height: int, height: int | None)
 
 def available_heights(source_height: int) -> list[int]:
     """
-    The ladder steps worth offering for a source of this height.
+    The ladder steps worth offering for a source of this height: those up to
+    the source's own height, and that height itself.
 
-    Everything up to the cap, including steps above the source. Upscaling adds
-    no detail to the picture and is normally pointless — but captions are drawn
-    *after* the scale, as vector glyphs at the output size, so rendering a 144p
-    source at 1080p genuinely does turn an illegible 6px caption into a sharp
-    45px one. The picture stays soft; the text stops being a smudge. The UI
-    labels which steps are upscales so that trade is the user's to make.
+    Never above it (v1.1.0). An upscale adds no picture detail, only a bigger
+    file and a longer encode; it used to be offered because captions are
+    drawn after the scale, but a choice that looks like "better quality" and
+    isn't was judged worse than small captions on a small source.
+
+    A source that can't be probed (0) gets the whole ladder: there is nothing
+    to measure it against.
     """
-    steps = [h for h in RESOLUTION_LADDER if h <= MAX_OUTPUT_HEIGHT]
-    if source_height and source_height not in steps and source_height <= MAX_OUTPUT_HEIGHT:
+    if not source_height:
+        return [h for h in RESOLUTION_LADDER if h <= MAX_OUTPUT_HEIGHT]
+    ceiling = min(source_height, MAX_OUTPUT_HEIGHT)
+    steps = [h for h in RESOLUTION_LADDER if h <= ceiling]
+    if source_height <= MAX_OUTPUT_HEIGHT and source_height not in steps:
         steps.append(source_height)
     return sorted(set(steps))
 
 
-# The smallest a burned-in caption may end up, in output pixels.
-#
-# Below roughly this, text stops being readable on a phone and no longer
-# survives the re-compression a video gets when it is uploaded anywhere. 24 is
-# a deliberately modest floor: it is about the size of body text on a page, and
-# a caption is meant to be easier to read than that.
-MIN_CAPTION_PX = 24
-
-
-def recommended_height(source_height: int, font_size: int, reference_height: int) -> int:
+def recommended_height(source_height: int) -> int:
     """
-    The height to default the picker to.
-
-    Not simply the source's own size, which is the obvious answer and the wrong
-    one. Caption sizes are stored against a 1080p canvas and scaled by
-    `height / 1080`, so a 256x144 source renders a 48px caption at **6px** —
-    unreadable, and unreadable is what pressing the obvious button would then
-    produce. A captioning tool defaulting to output whose captions cannot be
-    read is failing at the one thing it does.
-
-    So: the smallest step on the ladder at which the caption clears
-    MIN_CAPTION_PX, and never below the source's own height — the default may
-    upscale to rescue legibility, but it must never quietly throw away detail
-    that was there. A source that is already big enough keeps its own size and
-    nothing is resampled, which is the common case.
+    The height to default the picker to: the source's own, so nothing is
+    resampled. A source taller than the cap gets the cap.
     """
-    if source_height <= 0 or font_size <= 0:
+    if source_height <= 0:
         return source_height
-
-    for height in available_heights(source_height):
-        if height < source_height:
-            continue
-        if font_size * height / reference_height >= MIN_CAPTION_PX:
-            return height
-
-    # Every step was still too small — only reachable with a tiny font size.
-    # The largest offer is the best available answer.
     return max(available_heights(source_height))
 
 

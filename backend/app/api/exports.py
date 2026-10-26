@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
 from app.dependencies import CurrentUser, DbSession
-from app.models.caption_style import REFERENCE_HEIGHT
 from app.models.export import INSTANT_FORMATS, MEDIA_TYPES, ExportFormat, ExportStatus
 from app.schemas.export import (
     DownloadTicket,
@@ -114,6 +113,16 @@ async def create_export(
     # formats the resolution applies to.
     height = None if payload.format in INSTANT_FORMATS else payload.height
 
+    # Never larger than the source (v1.1.0): the picker doesn't offer it, and
+    # a client that asks anyway is told why rather than given a blown-up file.
+    if height is not None:
+        dimensions = await media.probe_dimensions(storage.resolve(video.storage_path))
+        if dimensions and height > dimensions[1]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"An export can't be larger than the video ({dimensions[1]}p)",
+            )
+
     export = await export_service.create_export(db, video, payload.format, height=height)
 
     if payload.format in INSTANT_FORMATS:
@@ -148,9 +157,10 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
     are not stored — and probing is a few milliseconds against a local file,
     for a call the export panel makes once when it opens.
 
-    A source that cannot be probed still gets the standard ladder, with nothing
-    marked native or upscaled. Refusing to answer would disable the whole picker
-    over a detail it only needs for labelling.
+    Only heights up to the source's own are offered (v1.1.0: never an
+    upscale). A source that cannot be probed still gets the standard ladder,
+    with nothing marked native. Refusing to answer would disable the whole
+    picker over a detail it only needs for labelling.
     """
     video = await _require_owned_video(db, video_id, user.id)
 
@@ -170,21 +180,12 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
                 else 0
             ),
             label=f"{height}p",
-            upscaled=bool(source_height and height > source_height),
             native=bool(source_height and height == source_height),
         )
         for height in heights
     ]
 
-    # Computed here rather than in the client because it depends on the caption
-    # size, which is the style's business and not something the export panel
-    # should have to know about.
-    style = await export_service.style_for(db, video_id)
-    recommended = (
-        rendering.recommended_height(source_height, style.font_size, REFERENCE_HEIGHT)
-        if source_height
-        else None
-    )
+    recommended = rendering.recommended_height(source_height) if source_height else None
 
     return ExportOptions(
         source_width=source_width,
