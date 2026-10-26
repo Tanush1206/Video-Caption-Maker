@@ -23,6 +23,8 @@ export interface SystemInfo {
   whisper: WhisperInfo | null;
   whisper_choice: string;
   whisper_choices: { value: string; label: string }[];
+  /** The Hinglish speech model (Apex): on this machine yet, and its size. */
+  hinglish_model: { downloaded: boolean; size_bytes: number };
   translation_engine: "gemini" | "local";
   translator_model: string | null;
   gemini_configured: boolean;

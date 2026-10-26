@@ -180,6 +180,27 @@ function ModelSection({ info }: { info: SystemInfo }) {
           );
         })}
       </div>
+      {/* Not a choice: Hindi in Roman script always uses its own model. The
+          hairline is drawn here because the row follows the radio group, not
+          another row. */}
+      <div className="group-row border-t border-border">
+        <span className="min-w-0">
+          <span className="block text-[15px]">Hinglish (Apex)</span>
+          <span className="block text-[13px] text-muted-foreground">
+            For Hindi in English letters, whatever the model above
+          </span>
+        </span>
+        <span className="shrink-0 text-right text-[15px] text-muted-foreground">
+          {info.hinglish_model.downloaded ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-success" aria-hidden="true" />
+              Downloaded · {formatFileSize(info.hinglish_model.size_bytes)}
+            </span>
+          ) : (
+            `Not downloaded · ${formatFileSize(info.hinglish_model.size_bytes)}`
+          )}
+        </span>
+      </div>
     </SettingsSection>
   );
 }
