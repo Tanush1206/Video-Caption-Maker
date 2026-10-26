@@ -54,7 +54,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   // Split in two so the workspace can call hooks unconditionally: a bad id has
   // to be rejected before any query is allowed to fire.
   if (Number.isNaN(videoId)) {
-    return <p className="p-8 text-sm text-muted-foreground">This link doesn&apos;t point to a video.</p>;
+    return <p className="p-8 text-[15px] text-muted-foreground">This link doesn&apos;t point to a video.</p>;
   }
 
   return <EditorWorkspace videoId={videoId} />;
@@ -135,11 +135,9 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
   if (isError || !video) {
     return (
       <main className="mx-auto max-w-md px-6 py-24 text-center">
-        <span className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <AlertCircle className="size-5" />
-        </span>
-        <h1 className="text-lg font-semibold">Couldn&apos;t load this video</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <AlertCircle className="mx-auto mb-4 size-8 text-muted-foreground" aria-hidden="true" />
+        <h1 className="text-2xl font-semibold">Couldn&apos;t load this video</h1>
+        <p className="mt-2 text-[15px] text-muted-foreground">
           It may have been deleted, or the link may be wrong.
         </p>
         <Link href="/dashboard" className={`mt-6 ${buttonVariants()}`}>

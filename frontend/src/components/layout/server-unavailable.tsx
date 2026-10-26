@@ -23,19 +23,17 @@ export function ServerUnavailable({ onRetry }: { onRetry: () => void }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 text-center shadow-sm">
-        <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <ServerCrash className="size-5" aria-hidden="true" />
-        </span>
-        <h1 className="mt-4 text-base font-semibold">Can&apos;t reach the app yet</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground" role="status" aria-live="polite">
+      <div className="w-full max-w-sm text-center">
+        <ServerCrash className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+        <h1 className="mt-4 text-2xl font-semibold">Can&apos;t reach the app yet</h1>
+        <p className="mt-2 text-[15px] text-muted-foreground" role="status" aria-live="polite">
           It may still be starting up. Retrying every few seconds…
         </p>
-        <Button className="mt-5" variant="secondary" onClick={onRetry}>
+        <Button className="mt-6" onClick={onRetry}>
           Try now
         </Button>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Still stuck? Run <code className="rounded bg-muted px-1 py-0.5">vcm start</code> in a
+        <p className="mt-4 text-[13px] text-muted-foreground">
+          Still stuck? Run <code className="font-sans font-medium text-foreground">vcm start</code> in a
           terminal, or see Troubleshooting in the README.
         </p>
       </div>

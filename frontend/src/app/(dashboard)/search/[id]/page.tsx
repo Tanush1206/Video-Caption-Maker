@@ -12,7 +12,7 @@ export default function VideoSearchPage({ params }: { params: { id: string } }) 
   const videoId = Number(params.id);
 
   if (Number.isNaN(videoId)) {
-    return <p className="p-8 text-sm text-muted-foreground">Invalid video id.</p>;
+    return <p className="p-8 text-[15px] text-muted-foreground">Invalid video id.</p>;
   }
 
   return <VideoSearch videoId={videoId} />;

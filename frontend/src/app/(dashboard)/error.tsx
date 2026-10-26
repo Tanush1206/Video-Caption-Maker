@@ -33,11 +33,9 @@ export default function DashboardError({
 
   return (
     <main className="mx-auto flex max-w-md flex-col items-center px-6 py-24 text-center">
-      <span className="mb-5 flex size-12 items-center justify-center rounded-full bg-warning/10 text-warning">
-        <AlertTriangle className="size-5" />
-      </span>
-      <h1 className="text-lg font-semibold">Something went wrong</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <AlertTriangle className="mb-4 size-8 text-warning" aria-hidden="true" />
+      <h1 className="text-2xl font-semibold">Something went wrong</h1>
+      <p className="mt-2 text-[15px] text-muted-foreground">
         This page hit an error it couldn&apos;t recover from on its own. Your
         videos and captions are unaffected.
       </p>
@@ -46,7 +44,7 @@ export default function DashboardError({
           Next deliberately withholds from the browser in production. Without
           showing it there is no way to connect a user's report to a log line. */}
       {error.digest && (
-        <p className="mt-3 rounded-md bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
+        <p className="mt-3 text-[13px] text-muted-foreground">
           Reference: {error.digest}
         </p>
       )}
