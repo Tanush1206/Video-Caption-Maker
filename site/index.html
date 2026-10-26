@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Nothing leaves this page: no trackers, fonts or scripts from anywhere else. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>VideoCaptionMaker: private, offline AI captions</title>
+  <meta name="description" content="Captions for your videos, made on your own computer. Speech recognition and translation run locally on your CPU or NVIDIA GPU; no account, no cloud.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="main.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="bar">
+    <div class="wrap bar-inner">
+      <a class="brand" href="#top">VideoCaptionMaker</a>
+      <nav aria-label="Sections">
+        <a class="hide-sm" href="#features">Features</a>
+        <a class="hide-sm" href="#how">How it works</a>
+        <a class="hide-sm" href="#requirements">Requirements</a>
+        <a href="https://github.com/Tanush1206/Video-Caption-Maker">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" id="top" aria-labelledby="hero-title">
+      <h1 id="hero-title">Private, offline AI captions for your videos</h1>
+      <p class="lede">
+        Upload a video, choose the caption language and export it with the captions burned in, or as
+        subtitle files. Speech recognition and translation run on your own CPU or NVIDIA GPU: no account,
+        no cloud service, and your video never leaves the machine.
+      </p>
+
+      <div class="install">
+        <h2 id="install-title" class="label">Install with one command</h2>
+        <!-- Real radio buttons, so the toggle works without JavaScript. -->
+        <fieldset class="segmented">
+          <legend class="sr-only">Your operating system</legend>
+          <label><input type="radio" name="os" value="windows" checked> Windows</label>
+          <label><input type="radio" name="os" value="linux"> Linux</label>
+        </fieldset>
+
+        <div class="command os-windows" id="cmd-windows">
+          <code>irm https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.ps1 | iex</code>
+          <button type="button" class="button primary copy" data-copy="cmd-windows" aria-label="Copy the Windows command">Copy</button>
+        </div>
+        <div class="command os-linux" id="cmd-linux">
+          <code>curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash</code>
+          <button type="button" class="button primary copy" data-copy="cmd-linux" aria-label="Copy the Linux command">Copy</button>
+        </div>
+
+        <p class="note os-windows">Paste it into PowerShell. You need <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>, which is free, running first.</p>
+        <p class="note os-linux">Paste it into a terminal. You need <a href="https://docs.docker.com/get-docker/">Docker Engine</a>, which is free, running first. On macOS it's the same command, but macOS is untested.</p>
+        <p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
+      </div>
+
+      <figure class="shot shot-hero">
+        <img src="images/editor.webp" width="1707" height="1354"
+             alt="The caption editor: the video large in the centre, the timed captions in a list on the right, and the timeline across the bottom.">
+      </figure>
+    </section>
+
+    <section class="wrap section" id="features" aria-labelledby="features-title">
+      <h2 id="features-title">Everything on your own computer</h2>
+      <ul class="features">
+        <li>
+          <h3>Local transcription</h3>
+          <p>faster-whisper, with the model chosen for your hardware: large-v3 on NVIDIA GPUs, large-v3-turbo or small on the CPU.</p>
+        </li>
+        <li>
+          <h3>Hinglish, in Roman script</h3>
+          <p>Hindi in Latin letters with English words in English spelling, from its own speech model (Oriserve's Apex). On a Hinglish tutorial it got 65 of 73 English words right, against 12.</p>
+        </li>
+        <li>
+          <h3>Translation into 9 languages</h3>
+          <p>English, Hindi, French, German, Dutch, Spanish, Portuguese, Italian and Russian, with M2M100 on your machine. Add a Gemini key for more natural wording, with the local model as the fallback.</p>
+        </li>
+        <li>
+          <h3>Caption editor and line styles</h3>
+          <p>Edit the text, retime captions on the waveform, drag them on the video and style them from a large font catalogue. Line style Balanced, Auto or Stacked, with max lines and words per line.</p>
+        </li>
+        <li>
+          <h3>Burned-in MP4, SRT or VTT</h3>
+          <p>Download the video with the captions drawn into the frames, in the style you set, or the subtitles as files for editors and players.</p>
+        </li>
+        <li>
+          <h3>Search by meaning</h3>
+          <p>Find what was said across all your videos, even when the words you type aren't the words spoken, and jump straight to the moment.</p>
+        </li>
+        <li>
+          <h3>Small updates</h3>
+          <p><code>vcm update</code> downloads only what changed: about 7 MB for a typical release.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="wrap section" aria-labelledby="screens-title">
+      <h2 id="screens-title">A calm, focused app</h2>
+      <div class="gallery">
+        <figure class="shot">
+          <img src="images/dashboard.webp" width="1703" height="1352" loading="lazy"
+               alt="The video library: an upload area, then each video as a thumbnail with its language, length and status.">
+          <figcaption>Your videos, and one place to drop a new one.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="images/search.webp" width="1706" height="1354" loading="lazy"
+               alt="Search: a query, the matching passages with their timestamps, and a preview of the chosen one.">
+          <figcaption>Search every transcript by meaning.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="images/settings.webp" width="1357" height="1353" loading="lazy"
+               alt="Settings: the computer's graphics and memory, the speech models, translation, storage and the theme.">
+          <figcaption>Settings shows what your computer runs.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="wrap section" id="how" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+      <ol class="steps">
+        <li>
+          <h3>Install</h3>
+          <p>One command checks that Docker is running and there's enough disk space, looks for an NVIDIA GPU, downloads the app (each file checked against the release's checksums) and opens it at <code>localhost:3000</code>.</p>
+        </li>
+        <li>
+          <h3>Upload</h3>
+          <p>Drop a video (.mp4, .mov, .mkv, .webm, .avi or .m4v). The spoken language is detected; keep "Same as spoken" or choose a caption language.</p>
+        </li>
+        <li>
+          <h3>Export</h3>
+          <p>Download the video with the captions burned in, or the subtitles as .srt or .vtt. Editing and styling are there when you want them.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="wrap section" id="requirements" aria-labelledby="req-title">
+      <h2 id="req-title">Requirements</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col"><span class="sr-only">Part</span></th><th scope="col">Minimum</th><th scope="col">Recommended</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">OS</th><td data-label="Minimum">Windows 10/11 (WSL 2), macOS 12+, any 64-bit Linux</td><td data-label="Recommended"></td></tr>
+            <tr><th scope="row">Memory</th><td data-label="Minimum">8 GB RAM</td><td data-label="Recommended">16 GB RAM</td></tr>
+            <tr><th scope="row">Disk</th><td data-label="Minimum">8 GB free</td><td data-label="Recommended">20 GB free, plus room for your videos</td></tr>
+            <tr><th scope="row">GPU</th><td data-label="Minimum">None, the CPU works</td><td data-label="Recommended">NVIDIA with 6 GB+ VRAM and a current driver</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Models download once, the first time they're needed: the speech model is 0.5 GB (small) to 3 GB (large-v3).</p>
+    </section>
+
+    <section class="wrap section" id="limitations" aria-labelledby="lim-title">
+      <h2 id="lim-title">Known limitations</h2>
+      <ul class="limits">
+        <li><strong>macOS is untested.</strong> The installer and images are built for Docker Desktop for Mac, but nobody has run them there yet. On a Mac everything runs on the CPU, and Apple Silicon runs the images under emulation, which is slow.</li>
+        <li><strong>Nine languages.</strong> Measured on Google's FLEURS speech set, the European languages are heard almost word for word (3–7% of words wrong on the large model), Hindi with more misspellings (26%). Speech in any other language gets a warning before anything is made.</li>
+        <li><strong>Translation into Hindi</strong> is weaker than into the European languages with the local model; a Gemini key does much better.</li>
+        <li><strong>The small speech model</strong>, chosen on machines under 12 GB of RAM, is rough on fast speech outside English. A larger model in Settings is much better, if the machine has the memory.</li>
+      </ul>
+    </section>
+
+    <section class="wrap section links" aria-labelledby="links-title">
+      <h2 id="links-title">Get it</h2>
+      <p class="link-row">
+        <a class="button primary" href="https://github.com/Tanush1206/Video-Caption-Maker/releases/latest">Latest release</a>
+        <a class="button secondary" href="https://github.com/Tanush1206/Video-Caption-Maker">Source on GitHub</a>
+        <a class="button plain" href="https://github.com/Tanush1206/Video-Caption-Maker/tree/main/docs">Documentation</a>
+      </p>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>
+      <a href="https://github.com/Tanush1206/Video-Caption-Maker">GitHub</a>
+      · Models: Whisper and M2M100 (MIT), all-MiniLM-L6-v2 (Apache-2.0)
+    </p>
+    <p>Made by Tanush Thakran</p>
+  </footer>
+</body>
+</html>
