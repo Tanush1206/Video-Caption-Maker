@@ -15,6 +15,8 @@ export interface WhisperInfo {
 }
 
 export interface SystemInfo {
+  /** The release this install runs, e.g. "1.1.0"; "dev" for a local build. */
+  version: string;
   auth_mode: "local" | "accounts";
   /** Null until the worker has started once and reported what it runs on. */
   hardware: HardwareInfo | null;

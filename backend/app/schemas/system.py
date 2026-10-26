@@ -25,6 +25,8 @@ class Choice(BaseModel):
 
 
 class SystemInfo(BaseModel):
+    #: The release this install runs (`VCM_VERSION`), "dev" for a local build.
+    version: str
     auth_mode: str
     # None until the worker has started once and reported in.
     hardware: HardwareInfo | None

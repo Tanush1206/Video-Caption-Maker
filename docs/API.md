@@ -598,6 +598,7 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 
 | Field | Type | Required | Constraints / default |
 |---|---|---|---|
+| `version` | string | yes | the release (`VCM_VERSION`), `dev` for a local build (v1.1.0) |
 | `auth_mode` | string | yes |  |
 | `hardware` | [HardwareInfo](#hardwareinfo) \| null | yes |  |
 | `whisper` | [WhisperInfo](#whisperinfo) \| null | yes |  |

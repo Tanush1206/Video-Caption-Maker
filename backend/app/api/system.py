@@ -39,6 +39,7 @@ async def _info(db) -> SystemInfo:
         translator = hardware.translator_profile(detected).model
 
     return SystemInfo(
+        version=settings.vcm_version,
         auth_mode="local" if settings.is_local_mode else "accounts",
         hardware=hw,
         whisper=whisper,

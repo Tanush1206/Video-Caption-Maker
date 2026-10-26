@@ -264,3 +264,12 @@ async def test_the_gemini_key_is_never_logged_or_returned_anywhere(
 
     assert not any(secret in text for text in responses)
     assert secret not in caplog.text
+
+
+async def test_the_system_reports_its_release(client, auth_headers, monkeypatch):
+    """The footer reads the version from here (v1.1.0), as the API spec does."""
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "vcm_version", "1.1.0")
+    body = (await client.get("/api/system", headers=auth_headers)).json()
+    assert body["version"] == "1.1.0"
