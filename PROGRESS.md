@@ -747,6 +747,71 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
+## v1.1.1: security, safety and legal (ready to tag, 2026-10-27)
+Brief (Tanush, 2026-10-27): phase 2 of docs/LAUNCH_AUDIT.md, first release.
+Then v1.2.0 (Next 15.5, long videos, virtual caption list, CLS, weekly
+check, `vcm doctor`, model mirror). Published contact: GitHub only (issues,
+private security reporting), no email.
+
+- [x] **S2 FFmpeg allow-list** (8534237, 4960af1): protocol, format and codec
+      whitelists on every run on a user's file, streams mapped by index,
+      listed from headers only (`ffprobe -nofind_stream_info`). Tanush's
+      decision for cover art / picture subtitles: never decode them, accept
+      the video with the note "This file's cover image / picture subtitles
+      were ignored.", thumbnail from the main stream, refuse a file whose
+      only picture is a cover image. Duration from headers, or a packet scan
+      (no decoding) when headers have none (browser WebM). 21 tests.
+- [x] **S1 quick part + headers** (e851ed9, 1bcde28, ff82f8e):
+      `images.unoptimized`, `/_next/image` 404; middleware guard (Host, and
+      cross-site/same-site only as a top-level GET navigation); CSP with
+      `frame-ancestors 'none'`, XFO, nosniff (frontend and API),
+      `Referrer-Policy: same-origin` (no-referrer makes the app's own writes
+      send `Origin: null`, which the guard refuses; checked in a browser:
+      PATCH and DELETE pass), Permissions-Policy. ui-check `framing`,
+      `frontend-guard`, `csp` pass on dev and on the production build.
+- [x] **Non-root** (59458b3): `vcm` uid 10001, entrypoint hands the volumes
+      over and `setpriv`s; compose `no-new-privileges`, `cap_drop: ALL` +
+      5 caps for the root step. Upgrade test on throwaway project `vcmupg`
+      (port 3005, 1.1.0 → local 1.1.1 CUDA build): 84 root-owned files
+      handed to vcm, `CapEff 0`, old video streams and its export downloads,
+      models not re-downloaded (552 MB), test CA trusted in both bundles, new
+      GPU transcription, new Google font and NVENC export as vcm, search
+      offline. Test videos 1 and 2 deleted by id, project removed with
+      `down -v`.
+- [x] **Pruning** (545b706): label-filtered `docker image prune` in `vcm` and
+      `vcm.ps1`; checked read-only that the filter selects only images with
+      this repo's label (a host-wide prune test was rightly refused). It also
+      selects dangling *dev* builds of this app (same label).
+- [x] **Search offline** (2a47fe1): MiniLM through `model_store`, pinned
+      `1110a243`, falling back to an older version's cached copy; loads with
+      `--network none`.
+- [x] **emSign** (59458b3): disabled in `/etc/ca-certificates.conf`, certifi
+      linked to the system bundle; 0 emSign certs in either. No Python layer
+      rebuild.
+- [x] **Actions pinned** (56f0d87): 16 `uses:` at full SHAs, `# vX.Y.Z`.
+      Workflow `permissions:` were not changed (not in the brief; audit S7).
+- [x] **L1** (8f33e0f, c63a1b2): `THIRD_PARTY_NOTICES.md` from
+      `scripts/third_party_notices.py`; `/licenses` in both images (Python
+      138, npm 38, Node, fonts, Python runtime, `SOURCES-debian.txt` with 219
+      source packages and snapshot.debian.org links, all sampled links 200;
+      `SOURCES-alpine.txt`). Frontend needs `--build-context repo=.`.
+- [x] **L2/L3/L4 + SEO** (8688654, a03a61f, 7a4f06a, 7fc110b): PRIVACY.md,
+      `site/privacy.html`, Gemini terms in Settings and README, warranty and
+      rights lines, `og.png`, apple-touch-icon, canonical/OG/Twitter, JSON-LD,
+      sitemap. Site checks: axe 0, no overflow, no outside requests, no CSP
+      errors, both pages, 375/1440, light/dark. robots.txt still needs the
+      root repo (audit SEO3, Tanush's call).
+- [x] **Error messages** (9cb270c, ff1c97a, 99f9d0b).
+- [x] Docs (af893e1, 4ec9f0e): SECURITY §3a/§5a/§6/§7/§8, API, PRD,
+      ARCHITECTURE, TESTING, DATABASE, CHANGELOG 1.1.1.
+- [x] Checks: ruff; backend 563 passed, 1 skipped; frontend lint, types,
+      7 tests; images built (CUDA backend, frontend runtime); axe 0 on
+      dashboard, search, settings, editor; shoot.js ok; E2E on the dev stack
+      (GPU) all six languages passed: dev videos 7617-7622 deleted by id,
+      7426 (not ours) left.
+- [ ] After push: CI green; tag v1.1.1; release workflow (4 jobs); `vcm update`
+      the install; the release checklist's after-release steps.
+
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
 facts in README, PRD and LANGUAGE_QUALITY.md only; the app's design system;
