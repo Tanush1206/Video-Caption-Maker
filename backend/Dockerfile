@@ -106,6 +106,22 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 COPY frontend/public/fonts/ /usr/share/fonts/truetype/vcm/
 RUN fc-cache -f
 
+# After the large layers on purpose, so this changes none of them.
+#
+# The app runs as `vcm`, not root (docker-entrypoint.sh drops to it). HF_HOME
+# stays under /root, where the compose files of every version mount the models
+# volume, so /root only needs to be passable.
+#
+# The four emSign roots are distrusted: their intermediate CA keys were
+# compromised (GHSA-6q48-6c7w-9gw2). They're switched off in Debian's store,
+# and certifi's bundle becomes that store, so every client trusts the same
+# list (and the certs/ extra CAs) without rebuilding the Python layer.
+RUN useradd --system --uid 10001 --user-group --create-home --home-dir /home/vcm vcm \
+    && chmod 0711 /root \
+    && sed -i -E 's|^(mozilla/emSign_.*\.crt)$|!\1|' /etc/ca-certificates.conf \
+    && update-ca-certificates --fresh >/dev/null \
+    && ln -sf /etc/ssl/certs/ca-certificates.crt /opt/venv/lib/python3.11/site-packages/certifi/cacert.pem
+
 WORKDIR /app
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic

@@ -13,6 +13,12 @@ name: vcm
 x-backend: &backend
   image: ${VCM_REGISTRY:-ghcr.io/tanush1206}/video-caption-maker-backend:${VCM_VERSION:-latest}-${VCM_VARIANT:-cpu}
   restart: unless-stopped
+  # The app runs as the user `vcm`. The entrypoint starts as root only to
+  # trust extra CAs and hand the volumes over, so it keeps just what that
+  # takes; after the switch to `vcm` none of these are in effect.
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
   environment: &backend-env
     ENVIRONMENT: production
     AUTH_MODE: local
@@ -110,6 +116,9 @@ services:
   frontend:
     image: ${VCM_REGISTRY:-ghcr.io/tanush1206}/video-caption-maker-frontend:${VCM_VERSION:-latest}
     restart: unless-stopped
+    # Runs as the image's `app` user and needs no privileges at all.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     ports:
       - "127.0.0.1:${VCM_PORT:-3000}:3000"
     depends_on:
