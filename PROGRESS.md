@@ -778,6 +778,19 @@ change `site/`.
       adds Oriserve/Whisper-Hindi2Hinglish-Apex (Apache-2.0) and IndicXlit
       (MIT), both downloaded for Hinglish (licences checked on their
       Hugging Face pages).
+- [x] GoatCounter (Tanush's request; it replaces the brief's "no trackers"
+      on the site only, never the app): page views, plus events for Copy
+      (`copy-windows`, `copy-linux`) and the toggle (`os-windows`,
+      `os-linux`) from `data-goatcounter-click` attributes, so main.js is
+      unchanged. count.v5.js pinned with an SRI hash. CSP adds only
+      `script-src https://gc.zgo.at`, `connect-src` and `img-src
+      https://vcm.goatcounter.com` (sendBeacon, image fallback). Footer:
+      "Anonymous visit counts via GoatCounter; no cookies."
+- [x] Checked as before, plus: no CSP violations; one view per load; the
+      four events on click (an arrow key on the toggle counts too; the
+      Linux preselect doesn't). Run on a test host name with
+      vcm.goatcounter.com mapped to this machine and answered locally, so
+      no test hit reached the real stats.
 - Decisions: Search shown instead of an Export screenshot (docs/images has
   none; Tanush: keep it); the command is in monospace (code, not UI text).
 

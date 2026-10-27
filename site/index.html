@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Nothing leaves this page: no trackers, fonts or scripts from anywhere else. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <!-- Only the site's own files, plus GoatCounter: its script from gc.zgo.at, the counts to vcm.goatcounter.com. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self' https://gc.zgo.at; connect-src https://vcm.goatcounter.com; img-src 'self' https://vcm.goatcounter.com; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>VideoCaptionMaker: private, offline AI captions</title>
   <meta name="description" content="Captions for your videos, made on your own computer. Speech recognition and translation run locally on your CPU or NVIDIA GPU; no account, no cloud.">
@@ -12,6 +12,9 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <script src="main.js" defer></script>
+  <!-- Page views, and the data-goatcounter-click elements as events. A pinned version, checked by its hash. -->
+  <script data-goatcounter="https://vcm.goatcounter.com/count" async src="https://gc.zgo.at/count.v5.js"
+          crossorigin="anonymous" integrity="sha384-atnOLvQb9t+jTSipvd75X2yginT4PjVbqDdlJAmxMm+wYElFmeR6EmLP5bYeoRVQ"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -42,17 +45,19 @@
         <!-- Real radio buttons, so the toggle works without JavaScript. -->
         <fieldset class="segmented">
           <legend class="sr-only">Your operating system</legend>
-          <label><input type="radio" name="os" value="windows" checked> Windows</label>
-          <label><input type="radio" name="os" value="linux"> Linux</label>
+          <label><input type="radio" name="os" value="windows" checked data-goatcounter-click="os-windows" data-goatcounter-title="Toggle: Windows"> Windows</label>
+          <label><input type="radio" name="os" value="linux" data-goatcounter-click="os-linux" data-goatcounter-title="Toggle: Linux"> Linux</label>
         </fieldset>
 
         <div class="command os-windows" id="cmd-windows">
           <code>irm https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.ps1 | iex</code>
-          <button type="button" class="button primary copy" data-copy="cmd-windows" aria-label="Copy the Windows command">Copy</button>
+          <button type="button" class="button primary copy" data-copy="cmd-windows" aria-label="Copy the Windows command"
+                  data-goatcounter-click="copy-windows" data-goatcounter-title="Copy: Windows command">Copy</button>
         </div>
         <div class="command os-linux" id="cmd-linux">
           <code>curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash</code>
-          <button type="button" class="button primary copy" data-copy="cmd-linux" aria-label="Copy the Linux command">Copy</button>
+          <button type="button" class="button primary copy" data-copy="cmd-linux" aria-label="Copy the Linux command"
+                  data-goatcounter-click="copy-linux" data-goatcounter-title="Copy: Linux command">Copy</button>
         </div>
 
         <p class="note os-windows">Paste it into PowerShell. You need <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>, which is free, running first.</p>
@@ -178,11 +183,14 @@
   </main>
 
   <footer class="wrap footer">
-    <p>
-      <a href="https://github.com/Tanush1206/Video-Caption-Maker">GitHub</a>
-      · Code: <a href="https://github.com/Tanush1206/Video-Caption-Maker/blob/main/LICENSE">MIT</a>
-      · Models: Whisper, IndicXlit and M2M100 (MIT); Whisper-Hindi2Hinglish-Apex and all-MiniLM-L6-v2 (Apache-2.0)
-    </p>
+    <div class="footer-notes">
+      <p>
+        <a href="https://github.com/Tanush1206/Video-Caption-Maker">GitHub</a>
+        · Code: <a href="https://github.com/Tanush1206/Video-Caption-Maker/blob/main/LICENSE">MIT</a>
+        · Models: Whisper, IndicXlit and M2M100 (MIT); Whisper-Hindi2Hinglish-Apex and all-MiniLM-L6-v2 (Apache-2.0)
+      </p>
+      <p>Anonymous visit counts via GoatCounter; no cookies.</p>
+    </div>
     <p>Made by Tanush Thakran</p>
   </footer>
 </body>
