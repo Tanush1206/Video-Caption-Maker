@@ -314,10 +314,16 @@ Please report vulnerabilities privately through GitHub's **Security** tab →
 **Report a vulnerability**, not in a public issue. See
 [docs/SECURITY.md](docs/SECURITY.md#9-reporting-a-vulnerability).
 
-## Licences of the models
+## Licence
+
+The code is MIT-licensed: see [LICENSE](LICENSE).
+
+The models the app downloads have their own licences:
 
 | Model | Licence |
 |---|---|
 | Whisper (OpenAI), via faster-whisper | MIT |
+| Oriserve/Whisper-Hindi2Hinglish-Apex (Hinglish speech) | Apache-2.0 |
+| IndicXlit (AI4Bharat, Hinglish to Devanagari) | MIT |
 | M2M100 (Meta) | MIT |
 | all-MiniLM-L6-v2 | Apache-2.0 |
