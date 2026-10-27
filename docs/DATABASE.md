@@ -444,6 +444,10 @@ docker run --rm -v vcm_media:/data -v "$PWD":/backup busybox \
 docker start vcm-backend-1 vcm-worker-1 vcm-frontend-1   # the API runs newer migrations on start
 ```
 
+The restored files belong to root (busybox runs as root). Since v1.1.1 the
+app runs as `vcm`, and the backend's entrypoint hands anything in the
+volumes that isn't `vcm`'s back to it on start, so nothing else is needed.
+
 After a restore into a fresh install the search index is empty. Use **Redo**
 on a video, or edit a caption, to queue its re-index (a library-wide re-index
 command is on the [ROADMAP](ROADMAP.md)).

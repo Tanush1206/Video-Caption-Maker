@@ -6,6 +6,57 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] - 2026-10-27
+
+Security, safety and legal fixes from the launch-readiness audit
+(docs/LAUNCH_AUDIT.md). No migration. The update downloads the app layers
+and a small new layer; the large Python and system layers are unchanged.
+
+### Security
+- **FFmpeg opens only what the app needs.** Every run on an upload reads
+  local files only, in the six accepted containers, with common video and
+  audio codecs, and names the main picture and sound. Playlists, concat
+  lists, CAF and the PNG, Dirac, CFHD, VobSub, PGS and DVB parsers (where
+  Debian's FFmpeg has unfixed code-execution CVEs) are never reached. A cover
+  image or picture subtitles next to a real video are skipped and noted on
+  the video; a file whose only picture is a cover image, or whose picture is
+  in another codec, is refused at upload.
+- **The backend and worker run as an unprivileged user** (`vcm`), with no
+  capabilities and `no-new-privileges`; the frontend drops all capabilities.
+  An update from 1.1.0 hands the existing videos, models and fonts to the new
+  user on the first start.
+- **The app can't be framed by another site** (clickjacking), and every
+  response carries a Content-Security-Policy, `X-Frame-Options`,
+  `nosniff`, `Referrer-Policy` and `Permissions-Policy`.
+- **The frontend refuses requests from other sites** other than a link, and
+  a Host that isn't this computer; the unused image optimiser is gone. This
+  mitigates the Next.js 14 advisories a web page could reach until the Next
+  upgrade (v1.2.0).
+- **Search no longer contacts Hugging Face on every start**: the model loads
+  from the local copy, pinned to a commit, as SECURITY.md always said.
+- **The distrusted emSign root certificates** are removed from the system
+  store and from certifi.
+- **`vcm update` removes only this app's old images**, never another
+  project's; the installers no longer suggest `docker system prune`.
+- Every GitHub Action is pinned to a commit.
+
+### Added
+- **THIRD_PARTY_NOTICES.md**, and `/licenses` in every image: each
+  package's licence files, the fonts' OFL, and a GPL source offer listing
+  every Debian (or Alpine) source package at its exact version with a link to
+  that source.
+- **PRIVACY.md** and a privacy page on the website: what leaves the computer
+  and when, Gemini's terms for free keys, age and region, and the site's
+  analytics. Settings says the same under the Gemini key.
+- "No warranty" and "only caption videos you have the right to use" in the
+  README and on the website; the site's link-preview image, canonical URL,
+  structured data, sitemap and apple-touch-icon.
+
+### Changed
+- **Plain error messages with a next step**, e.g. "This file type isn't
+  supported. Try MP4, MOV, MKV or WebM (AVI and M4V work too)." instead of
+  "Unsupported content type: video/x-ms-wmv".
+
 ## [1.1.0] - 2026-10-26
 
 A new look: minimal and calm, like Apple's own apps. Nothing about how the
