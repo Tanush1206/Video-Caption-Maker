@@ -46,6 +46,8 @@ jobs:
             context: frontend
             file: frontend/Dockerfile
             suffix: ""
+            # LICENSE and THIRD_PARTY_NOTICES.md live at the repository root.
+            build_contexts: repo=.
     steps:
       # The CUDA image carries ~3 GB of cuBLAS/cuDNN on top of the CPU stack,
       # and its build layers do not fit in a stock runner's ~14 GB of free
@@ -81,6 +83,7 @@ jobs:
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
+          build-contexts: ${{ matrix.build_contexts }}
           file: ${{ matrix.file }}
           target: runtime
           push: true

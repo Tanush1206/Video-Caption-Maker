@@ -33,6 +33,16 @@ RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
     && npm run build
 
+# The licence files of every production dependency (their code is in the
+# pages' JavaScript), and Node's own licence for the runtime's Node version.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
+    && node scripts/collect-licenses.js /licenses/npm \
+    && mkdir -p /licenses/node \
+    && node -e "fetch('https://raw.githubusercontent.com/nodejs/node/' + process.version + '/LICENSE') \
+        .then((r) => { if (!r.ok) throw new Error('Node licence: HTTP ' + r.status); return r.text(); }) \
+        .then((text) => require('fs').writeFileSync('/licenses/node/LICENSE', text))"
+
 FROM ${NODE_IMAGE} AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Caption-Maker" \
       org.opencontainers.image.title="VideoCaptionMaker frontend"
@@ -46,6 +56,19 @@ COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/forwarded-for.js ./
+# Third-party notices (THIRD_PARTY_NOTICES.md): the app's licence and the
+# notices come from the repository root, a second build context
+# (`--build-context repo=.`); the package licences from the build; Alpine's
+# own packages are listed with where their sources are.
+COPY --from=build /licenses /licenses
+COPY --from=repo LICENSE THIRD_PARTY_NOTICES.md /licenses/
+RUN . /etc/os-release \
+    && branch="$(echo "$VERSION_ID" | cut -d. -f1,2)" \
+    && { echo "Alpine Linux $VERSION_ID packages in this image: package-version, arch, {source package} and (licence)."; \
+         echo "Each source package's build recipe: https://gitlab.alpinelinux.org/alpine/aports/-/tree/$branch-stable/main/<source package>"; \
+         echo "The upstream sources those recipes name: https://distfiles.alpinelinux.org/distfiles/v$branch/"; \
+         echo "If a link stops working, ask for the source in a GitHub issue: https://github.com/Tanush1206/Video-Caption-Maker/issues"; \
+         echo; apk list --installed 2>/dev/null | sed 's/ \[installed\]//'; } > /licenses/SOURCES-alpine.txt
 USER app
 # Last, so a new version number is metadata only and does not invalidate the
 # layers above it (see backend/Dockerfile).
