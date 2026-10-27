@@ -275,6 +275,11 @@ function TranslationSection({ info }: { info: SystemInfo }) {
               Create one at aistudio.google.com/apikey. With a key, caption text (never the video or audio) is
               sent to Google.
             </p>
+            <p className="mt-1">
+              With a free key, Google may use that text to improve its products, and people at Google may read it:
+              for anything private, use a paid key or none. Gemini requires you to be 18 or over, and in the EEA,
+              Switzerland and the UK only paid keys may be used.
+            </p>
             {(update.isSuccess || update.isError) && (
               <div className="mt-1 flex min-h-5 items-center gap-3">
                 {update.isSuccess && <Saved />}
