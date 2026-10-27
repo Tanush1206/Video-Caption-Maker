@@ -35,7 +35,7 @@ class CaptionCreate(BaseModel):
     @model_validator(mode="after")
     def check_timing(self) -> "CaptionCreate":
         if self.start_ms >= self.end_ms:
-            raise ValueError("start_ms must be less than end_ms")
+            raise ValueError("A caption has to end after it starts.")
         return self
 
 
@@ -69,7 +69,7 @@ class CaptionUpdate(BaseModel):
         # against the stored value in the route.
         if self.start_ms is not None and self.end_ms is not None:
             if self.start_ms >= self.end_ms:
-                raise ValueError("start_ms must be less than end_ms")
+                raise ValueError("A caption has to end after it starts.")
         return self
 
 

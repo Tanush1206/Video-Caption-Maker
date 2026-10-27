@@ -134,7 +134,10 @@ def friendly_error(exc: BaseException) -> str:
         return "The uploaded file is missing. Upload the video again."
     if "invalid data" in message or "ffmpeg" in message or "decod" in message:
         return "This file couldn't be read as a video. Try converting it to MP4 and upload it again."
-    return "Transcription failed unexpectedly. Try again; if it keeps failing, check the logs."
+    return (
+        "Transcription failed unexpectedly. Try again; if it keeps failing, run vcm logs worker "
+        "and include what it shows in a bug report."
+    )
 
 
 async def _run(video_id: int, keep_breaks: bool = False) -> dict:

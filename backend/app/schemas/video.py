@@ -114,7 +114,7 @@ class TranscribeRequest(BaseModel):
     @classmethod
     def known_caption(cls, value: str | None) -> str | None:
         if value is not None and not languages.is_caption_language(value):
-            raise ValueError(f"Unsupported caption language: {value}")
+            raise ValueError("That caption language isn't available. Choose one from the list.")
         return value
 
 
