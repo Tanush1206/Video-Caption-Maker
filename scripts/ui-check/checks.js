@@ -267,6 +267,70 @@ async function mockHeldUpload(page, base, heard) {
 const REMOVED_NAMES = ["தமிழ்", "मराठी", "বাংলা", "മലയാളം", "Tamil", "Marathi", "Bengali", "Malayalam"];
 
 const CHECKS = {
+  // Another origin can't show the app in a frame (clickjacking): a page served
+  // from 127.0.0.1 on a spare port frames <base>/dashboard, and the frame must
+  // not render the app. Reads only.
+  async framing(browser, base) {
+    const http = require("node:http");
+    const server = http.createServer((_, res) => {
+      res.setHeader("Content-Type", "text/html");
+      res.end(`<!doctype html><iframe src="${base}/dashboard" style="width:900px;height:600px"></iframe>`);
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const page = await browser.newPage();
+    const refused = [];
+    page.on("console", (m) => /frame-ancestors|X-Frame-Options/i.test(m.text()) && refused.push(m.text()));
+    await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: "load" });
+    await page.waitForTimeout(2500);
+    const rendered = [];
+    for (const frame of page.frames().slice(1)) {
+      const text = await frame.evaluate(() => document.body?.innerText ?? "").catch(() => "");
+      if (/Videos|Settings|VideoCaptionMaker/.test(text)) rendered.push(frame.url());
+    }
+    ok("framing: another origin can't render the app in a frame", rendered.length === 0, rendered.join(", "));
+    ok("framing: the browser says why", refused.length > 0, refused[0]?.slice(0, 90));
+    await page.close();
+    server.close();
+  },
+
+  // The frontend's own guard (src/middleware.ts): another site may link here
+  // but not send anything else, the Host must be this computer, and the image
+  // optimiser is gone. Requests are sent with the headers a browser would set.
+  // Reads only.
+  async "frontend-guard"(browser, base) {
+    const page = await browser.newPage();
+    const status = async (path, headers = {}, method = "GET") =>
+      (await page.request.fetch(`${base}${path}`, { method, headers, maxRedirects: 0 })).status();
+    const crossSite = { "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" };
+    const sameSite = { "sec-fetch-site": "same-site", "sec-fetch-mode": "no-cors", "sec-fetch-dest": "script" };
+    const linked = { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" };
+    ok("frontend-guard: a cross-site fetch of a page is refused", (await status("/dashboard", crossSite)) === 403);
+    ok("frontend-guard: another localhost port's request is refused", (await status("/settings", sameSite)) === 403);
+    ok("frontend-guard: a cross-site form post is refused", (await status("/dashboard", linked, "POST")) === 403);
+    ok("frontend-guard: a link from another site still opens the app", (await status("/dashboard", linked)) === 200);
+    ok("frontend-guard: a script without browser headers passes", (await status("/healthz")) === 200);
+    ok("frontend-guard: a rebinding Host is refused", (await status("/dashboard", { host: "attacker.example" })) === 403);
+    ok("frontend-guard: /_next/image is gone", (await status("/_next/image?url=%2Ffavicon.ico&w=64&q=75")) === 404);
+    await page.close();
+  },
+
+  // No Content-Security-Policy violation on the main pages: the policy lets
+  // through everything the app really loads. Reads only.
+  async csp(browser, base) {
+    const page = await browser.newPage();
+    const violations = [];
+    page.on("console", (m) => /Content Security Policy|Refused to (load|execute|connect|apply)/i.test(m.text()) && violations.push(m.text()));
+    const listing = await (await page.request.get(`${base}/api/videos?limit=50`)).json();
+    const video = listing.items.find((v) => v.status === "completed");
+    const paths = ["/dashboard", "/search", "/settings", ...(video ? [`/editor/${video.id}`] : [])];
+    for (const path of paths) {
+      await page.goto(`${base}${path}`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(1000);
+    }
+    ok(`csp: no violations on ${paths.join(", ")}`, violations.length === 0, violations.slice(0, 2).join(" | ").slice(0, 200));
+    await page.close();
+  },
+
   // While the video plays, the overlay shows the caption under the playhead
   // within one frame: on every presented frame (requestVideoFrameCallback),
   // its text against the caption the API says covers that frame's time. A
