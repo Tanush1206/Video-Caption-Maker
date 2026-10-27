@@ -18,7 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.config import get_settings
-from app.services import model_store
+from app.services import media, model_store
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -150,46 +150,31 @@ def unload_model() -> None:
     logger.info("Unloaded Whisper")
 
 
+def main_streams(path: Path) -> media.Streams:
+    """
+    The file's main picture and sound (`media.inspect`), or an error.
+
+    A *failed* probe is never read as "no audio". Returning False on a non-zero
+    exit once conflated "ffprobe could not parse this" with "there is nothing
+    to transcribe", so a container FFmpeg disliked was reported to the user as
+    a fact about their audio.
+
+    The streams come from the container's headers, which list every track up
+    front, so a long download whose audio packets start late is still seen to
+    have audio (the reason this once raised ffprobe's probe window to 200 MB).
+    """
+    streams = media.inspect(path)
+    if streams is None:
+        raise RuntimeError("Could not read this video's streams")
+    return streams
+
+
 def has_audio_stream(path: Path) -> bool:
-    """
-    Whether the file contains at least one audio stream.
-
-    Two things here are not the obvious version, and both were producing "this
-    video has no audio track" for videos that plainly had one.
-
-    The probe window is raised well above FFmpeg's default. ffprobe decides
-    what streams exist after reading a few seconds and a few megabytes, and a
-    long download whose audio packets do not appear early — a silent intro, an
-    unusual interleave, a stream ordered after a large video keyframe — reports
-    no audio at all. 200MB / 200s costs nothing on a local file and removes the
-    entire class of false negatives.
-
-    And a *failed* probe is no longer read as "no audio". Returning False on a
-    non-zero exit conflated "ffprobe could not parse this" with "there is
-    nothing to transcribe", so a container FFmpeg disliked was reported to the
-    user as a fact about their audio. Now the error propagates and says what
-    actually happened.
-    """
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error",
-            # Before -i, so they apply to opening the input.
-            "-analyzeduration", "200M",
-            "-probesize", "200M",
-            "-select_streams", "a",
-            "-show_entries", "stream=index",
-            "-of", "csv=p=0",
-            str(path),
-        ],
-        capture_output=True,
-        timeout=PROBE_TIMEOUT_SECONDS,
-    )
-
-    if result.returncode != 0:
-        tail = result.stderr.decode("utf-8", "replace").strip()[-300:]
-        raise RuntimeError(f"Could not read this video's streams: {tail}")
-
-    return bool(result.stdout.strip())
+    """Whether the file has a main sound stream in a codec we decode."""
+    streams = main_streams(path)
+    if streams.audio is None and streams.unsupported_audio:
+        raise RuntimeError(f"Unsupported audio format: {streams.unsupported_audio}")
+    return streams.audio is not None
 
 
 # What counts as silence when deciding a caption was invented: quieter than
@@ -682,14 +667,16 @@ def extract_audio(source: Path, destination: Path, seconds: float | None = None)
     # their file.
     if not has_audio_stream(source):
         raise RuntimeError("This video has no audio track, so there is nothing to transcribe")
+    streams = main_streams(source)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     result = subprocess.run(
         [
             "ffmpeg", "-y",
+            *media.input_options(),
             "-i", str(source),
-            "-vn",              # drop the video stream
+            *streams.map_audio(),  # the main sound only; nothing else is decoded
             "-acodec", "pcm_s16le",
             "-ar", "16000",     # 16kHz, what Whisper expects
             "-ac", "1",         # mono

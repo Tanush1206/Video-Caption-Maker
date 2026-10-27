@@ -25,6 +25,7 @@ from app.services import (
     hardware,
     hinglish,
     languages,
+    media,
     model_store,
     phrasing,
     storage,
@@ -120,6 +121,13 @@ def friendly_error(exc: BaseException) -> str:
         )
     if "no space left" in message or "errno 28" in message:
         return "The disk is full. Free some space, then try again."
+    if "unsupported audio format" in message:
+        return (
+            "This video's sound is in a format VideoCaptionMaker doesn't open. "
+            "Convert it to MP4 (H.264 with AAC sound) and upload it again."
+        )
+    if "could not read this video's streams" in message:
+        return "This file couldn't be read as a video. Try converting it to MP4 and upload it again."
     if "no audio" in message or "audio stream" in message:
         return "This video has no audio track, so there is nothing to caption."
     if "source video file is missing" in message:
@@ -166,6 +174,11 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
 
     loop = asyncio.get_running_loop()
     notices: list[str] = []
+    # A cover image or picture subtitles in the file are skipped, never
+    # decoded (services/media.py); say so on the video.
+    streams = await media.probe(source)
+    if streams is not None and streams.ignored_note:
+        notices.append(streams.ignored_note)
 
     # ── 0. Model ────────────────────────────────────────────────────────
     # First, so a download shows as a download rather than as a transcription

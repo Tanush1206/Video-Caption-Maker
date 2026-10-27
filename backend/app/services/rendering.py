@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.config import get_settings
+from app.services import media
 
 logger = logging.getLogger(__name__)
 
@@ -219,11 +220,20 @@ def burn_captions(
     Raises RuntimeError on failure. Progress is reported 0-100 when the
     duration is known.
     """
+    streams = media.inspect(source)
+    if streams is None or streams.video is None:
+        raise RuntimeError("Could not read this video's streams")
+
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     command = [
         "ffmpeg", "-y",
+        *media.input_options(),
         "-i", str(source),
+        # The main picture and the main sound, named: a cover image or a
+        # subtitle track is never decoded, and never ends up in the export.
+        *streams.map_video(),
+        *streams.map_audio(),
         # libass draws onto the decoded frames. There is no way to burn text in
         # without re-encoding the video — the pixels themselves change.
         #
