@@ -70,7 +70,7 @@ async def update_caption(
     if start >= end:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="start_ms must be less than end_ms",
+            detail="A caption has to end after it starts.",
         )
 
     updated = await caption_service.update_caption(db, caption, changes)

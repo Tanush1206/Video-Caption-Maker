@@ -42,6 +42,16 @@ router = APIRouter()
 
 MAX_UPLOAD_BYTES = settings.max_upload_size_mb * 1024 * 1024
 
+# Both checks below (declared type, extension) refuse with the same sentence:
+# which one failed means nothing to the person choosing the file.
+UNSUPPORTED_TYPE = "This file type isn't supported. Try MP4, MOV, MKV or WebM (AVI and M4V work too)."
+
+
+def _size_limit() -> str:
+    """The upload limit as a person would say it: "4 GB", or "500 MB"."""
+    mb = settings.max_upload_size_mb
+    return f"{mb // 1024} GB" if mb >= 1024 and mb % 1024 == 0 else f"{mb} MB"
+
 
 def _to_read(video) -> VideoRead:
     """has_thumbnail is derived, so the client never sees a filesystem path."""
@@ -134,7 +144,10 @@ async def _stream_to_disk(upload: UploadFile, destination: Path) -> int:
                 if total > MAX_UPLOAD_BYTES:
                     raise HTTPException(
                         status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail=f"File exceeds the {settings.max_upload_size_mb}MB limit",
+                        detail=(
+                            f"This video is larger than {_size_limit()}, the most the app accepts. "
+                            "Trim it, or save it at a lower quality, then upload it again."
+                        ),
                     )
                 out.write(chunk)
     except OSError as exc:
@@ -175,11 +188,11 @@ async def upload_video(
     if not languages.is_caption_language(caption_language):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Unsupported caption language: {caption_language}",
+            detail="That caption language isn't available. Choose one from the list.",
         )
     if not file.filename:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="No filename provided"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="This file has no name. Choose it again."
         )
 
     suffix = Path(file.filename).suffix.lower()
@@ -191,12 +204,12 @@ async def upload_video(
     if file.content_type not in storage.ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported content type: {file.content_type}",
+            detail=UNSUPPORTED_TYPE,
         )
     if suffix not in storage.ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported file extension: {suffix or '(none)'}",
+            detail=UNSUPPORTED_TYPE,
         )
 
     # Uploads a closed language step left behind, if the page couldn't delete them.
@@ -208,7 +221,7 @@ async def upload_video(
     if size == 0:
         absolute.unlink(missing_ok=True)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="This file is empty. Choose the video again."
         )
 
     # What FFmpeg will use, from the headers alone (services/media.py). A file
@@ -408,7 +421,7 @@ async def retranscribe(
     if not _enqueue_transcription(video.id, keep_breaks):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not reach the processing queue. Please try again.",
+            detail="The app's background service isn't responding. Run vcm restart, then try again.",
         )
 
     return _to_read(video)
@@ -471,7 +484,7 @@ async def get_thumbnail(video_id: int, user: CurrentUser, db: DbSession) -> File
     path = storage.resolve(video.thumbnail_path)
     if not path.exists():
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail file is missing"
+            status_code=status.HTTP_404_NOT_FOUND, detail="This video's thumbnail is no longer in the app's storage."
         )
 
     return FileResponse(path, media_type="image/jpeg")
@@ -528,7 +541,7 @@ async def stream_video(
         payload = decode_token(token, expected_type="stream")
     except TokenError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired stream token"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="This video's link has expired. Reload the page to keep playing."
         ) from None
 
     # Without this the token would be a key to the whole library rather than to
@@ -544,7 +557,7 @@ async def stream_video(
     path = storage.resolve(video.storage_path)
     if not path.exists():
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Video file is missing"
+            status_code=status.HTTP_404_NOT_FOUND, detail="This video's file is no longer in the app's storage. Delete it here and upload it again."
         )
 
     # FileResponse answers a Range header with 206 and just that slice of the
@@ -585,7 +598,7 @@ async def get_waveform(video_id: int, user: CurrentUser, db: DbSession) -> Wavef
     source = storage.resolve(video.storage_path)
     if not source.exists():
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Video file is missing"
+            status_code=status.HTTP_404_NOT_FOUND, detail="This video's file is no longer in the app's storage. Delete it here and upload it again."
         )
 
     cache = storage.resolve(storage.waveform_cache_path(video.storage_path))

@@ -54,6 +54,10 @@ async def test_rejects_unsupported_content_type(client, auth_headers):
         client, auth_headers, b"not a video", filename="x.mp4", content_type="text/plain"
     )
     assert response.status_code == 415
+    # Plain words and what to do instead, not "Unsupported content type: text/plain".
+    assert response.json()["detail"] == (
+        "This file type isn't supported. Try MP4, MOV, MKV or WebM (AVI and M4V work too)."
+    )
 
 
 @pytest.mark.asyncio
@@ -62,12 +66,28 @@ async def test_rejects_unsupported_extension(client, auth_headers, sample_video_
         client, auth_headers, sample_video_bytes, filename="clip.exe"
     )
     assert response.status_code == 415
+    assert response.json()["detail"].startswith("This file type isn't supported.")
 
 
 @pytest.mark.asyncio
 async def test_rejects_empty_file(client, auth_headers):
     response = await upload(client, auth_headers, b"")
     assert response.status_code == 400
+    assert response.json()["detail"] == "This file is empty. Choose the video again."
+
+
+@pytest.mark.asyncio
+async def test_an_upload_over_the_limit_says_the_limit_in_plain_words(
+    client, auth_headers, monkeypatch
+):
+    from app.api import videos as videos_api
+
+    monkeypatch.setattr(videos_api, "MAX_UPLOAD_BYTES", 1024)
+    monkeypatch.setattr(videos_api.settings, "max_upload_size_mb", 4096)
+    response = await upload(client, auth_headers, b"x" * 4096)
+
+    assert response.status_code == 413
+    assert response.json()["detail"].startswith("This video is larger than 4 GB, the most the app accepts.")
 
 
 @pytest.mark.asyncio

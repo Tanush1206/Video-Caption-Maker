@@ -133,7 +133,7 @@ async def create_export(
         await export_service.delete_export(db, export)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not reach the rendering queue. Please try again.",
+            detail="The app's background service isn't responding. Run vcm restart, then try again.",
         )
 
     return _read(export, video, export.captions_from)
@@ -232,7 +232,11 @@ async def issue_download_token(
     if export.status is not ExportStatus.COMPLETED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"This export is {export.status.value}, not ready to download",
+            detail=(
+                "This export failed. Make it again from Export."
+                if export.status is ExportStatus.FAILED
+                else "This export is still being made. Download it when it's ready."
+            ),
         )
 
     return DownloadTicket(
@@ -264,7 +268,7 @@ async def download_export(
     except TokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired download token",
+            detail="This download link has expired. Click Download again.",
         ) from None
 
     # Without this the token would open any export the owner has, not this one.
@@ -278,13 +282,13 @@ async def download_export(
 
     if not export.storage_path:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="This export has no file"
+            status_code=status.HTTP_409_CONFLICT, detail="This export has no file. Make it again from Export."
         )
 
     path = storage.resolve(export.storage_path)
     if not path.exists():
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Export file is missing"
+            status_code=status.HTTP_404_NOT_FOUND, detail="The file for this export is no longer in the app's storage. Make the export again."
         )
 
     video = await video_service.get_owned_video(db, export.video_id, int(payload["sub"]))
