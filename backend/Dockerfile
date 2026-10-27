@@ -122,6 +122,32 @@ RUN useradd --system --uid 10001 --user-group --create-home --home-dir /home/vcm
     && update-ca-certificates --fresh >/dev/null \
     && ln -sf /etc/ssl/certs/ca-certificates.crt /opt/venv/lib/python3.11/site-packages/certifi/cacert.pem
 
+# Third-party notices (THIRD_PARTY_NOTICES.md), generated from what is
+# actually installed: every Python package's own licence files, Python's,
+# the bundled fonts' OFL, and the GPL source offer: each Debian source package
+# in this image at its exact version, with where that source is. Debian's
+# per-package licence texts are already in /usr/share/doc/*/copyright.
+COPY THIRD_PARTY_NOTICES.md LICENSE /licenses/
+RUN set -e \
+    && for info in /opt/venv/lib/python3.11/site-packages/*.dist-info /usr/local/lib/python3.11/site-packages/*.dist-info; do \
+        dir="/licenses/python/$(basename "$info" .dist-info)"; \
+        mkdir -p "$dir"; \
+        find "$info" -type f \( -iname 'licen[cs]e*' -o -iname 'copying*' -o -iname 'notice*' -o -iname 'authors*' \) \
+            -exec cp --backup=numbered -t "$dir" {} +; \
+        rmdir "$dir" 2>/dev/null || true; \
+    done \
+    && mkdir -p /licenses/python-runtime /licenses/fonts \
+    && cp /usr/local/lib/python3.11/LICENSE.txt /licenses/python-runtime/ \
+    && cp /usr/share/fonts/truetype/vcm/OFL-*.txt /licenses/fonts/ \
+    && { echo "Debian $(cat /etc/debian_version) packages in this image: source package, exact version, and where that source is."; \
+         echo "Licence texts: /usr/share/doc/<binary package>/copyright"; \
+         echo "If a link stops working, ask for the source in a GitHub issue: https://github.com/Tanush1206/Video-Caption-Maker/issues"; \
+         echo; \
+         dpkg-query -W -f='${source:Package}\t${source:Version}\n' | sort -u | while IFS="$(printf '\t')" read -r pkg ver; do \
+             enc="$(printf '%s' "$ver" | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/+/%2B/g' -e 's/~/%7E/g')"; \
+             printf '%s\t%s\thttps://snapshot.debian.org/package/%s/%s/\n' "$pkg" "$ver" "$pkg" "$enc"; \
+         done; } > /licenses/SOURCES-debian.txt
+
 WORKDIR /app
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic

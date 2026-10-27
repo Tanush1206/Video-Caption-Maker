@@ -11,6 +11,8 @@
 !backend/tests
 !backend/pytest.ini
 !frontend/public/fonts
+!LICENSE
+!THIRD_PARTY_NOTICES.md
 **/__pycache__
 **/*.pyc
 **/certs
