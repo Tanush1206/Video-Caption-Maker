@@ -6,7 +6,7 @@
  * For a 4 GB video, a progress bar isn't a nicety, so XHR it is.
  */
 
-import { refreshSession } from "@/lib/api";
+import { refreshSession, validationMessage } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import type { Video } from "@/types/video";
 
@@ -18,20 +18,20 @@ export interface UploadHandle {
   cancel: () => void;
 }
 
+const INTERRUPTED = "The upload was interrupted. Check that the app is running (vcm status) and try again.";
+
 function parseError(xhr: XMLHttpRequest): string {
   try {
     const detail = JSON.parse(xhr.responseText)?.detail;
     if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      return detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ");
-    }
+    if (Array.isArray(detail)) return validationMessage(detail);
   } catch {
     // not JSON
   }
-  if (xhr.status === 0) return "The upload was interrupted. Check that the app is running and try again.";
+  if (xhr.status === 0) return INTERRUPTED;
   return xhr.status >= 500
     ? "The app's server couldn't take the upload. Try again in a moment."
-    : `Upload failed (${xhr.status})`;
+    : `The upload failed (error ${xhr.status}). Try again.`;
 }
 
 function send(
@@ -61,7 +61,7 @@ function send(
         try {
           resolve(JSON.parse(xhr.responseText) as Video);
         } catch {
-          reject(new Error("Server returned an unreadable response"));
+          reject(new Error("The app's server sent an answer the page couldn't read. Reload the page and try again."));
         }
       } else {
         const error = new Error(parseError(xhr));
@@ -70,7 +70,7 @@ function send(
       }
     };
 
-    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onerror = () => reject(new Error(INTERRUPTED));
     xhr.onabort = () => reject(new Error("Upload cancelled"));
 
     const form = new FormData();

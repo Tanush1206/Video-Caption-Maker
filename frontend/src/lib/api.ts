@@ -27,6 +27,23 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   _retrying?: boolean;
 }
 
+/**
+ * A 422 from validation, as one sentence.
+ *
+ * The app's own rules ("A caption has to end after it starts.") reach here
+ * as Pydantic's "Value error, …" and are shown without that prefix. Anything
+ * else (a missing or mistyped field) means the page sent something it
+ * shouldn't have, which the person can't fix by reading Pydantic's wording.
+ */
+export function validationMessage(detail: { msg?: string }[]): string {
+  const ours = detail
+    .map((e) => e.msg ?? "")
+    .filter((msg) => msg.startsWith("Value error, "))
+    .map((msg) => msg.slice("Value error, ".length));
+  if (ours.length === detail.length && ours.length > 0) return [...new Set(ours)].join(" ");
+  return "Something in that request wasn't valid. Reload the page and try again.";
+}
+
 /** Pull a readable message out of FastAPI's {"detail": ...} envelope. */
 async function extractError(response: Response): Promise<string> {
   // A 5xx says nothing useful to the person reading it ("Internal Server
@@ -41,12 +58,7 @@ async function extractError(response: Response): Promise<string> {
     const data = await response.json();
     if (typeof data?.detail === "string") return data.detail;
     // 422 from Pydantic: detail is an array of per-field errors.
-    if (Array.isArray(data?.detail)) {
-      return data.detail
-        .map((e: { msg?: string }) => e.msg)
-        .filter(Boolean)
-        .join(", ");
-    }
+    if (Array.isArray(data?.detail)) return validationMessage(data.detail);
   } catch {
     // Not JSON — fall through to the status text.
   }
