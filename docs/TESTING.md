@@ -74,7 +74,9 @@ postgres redis chromadb backend` is enough, and leaves port 3000 to an install.
 `--target dev` with `VARIANT=cpu` (cache from the release's
 `buildcache-cpu`), then runs ruff and pytest in it with `--network host`
 against `postgres:16.14-alpine`, `redis:7.4.10-alpine` and
-`chromadb/chroma:1.0.0` service containers.
+`chromadb/chroma:1.0.0` service containers. Both run as the image's `vcm`
+user, which can't write the runner's checkout: ruff runs with `--no-cache`,
+pytest with `-p no:cacheprovider`.
 
 **The dev stack and an install both use port 3000.** Run `vcm stop` first
 if you need the dev frontend.

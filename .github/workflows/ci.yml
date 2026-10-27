@@ -84,7 +84,9 @@ jobs:
           # Reuses the release's layers when nothing below the app changed.
           cache-from: type=registry,ref=ghcr.io/tanush1206/video-caption-maker-backend:buildcache-cpu
       - name: Lint (ruff)
-        run: docker run --rm -v "$PWD/backend:/app" vcm-backend-dev:ci ruff check app tests alembic scripts
+        # The entrypoint drops to the image's `vcm` user, which can't write
+        # the runner's checkout, so ruff runs without its cache directory.
+        run: docker run --rm -v "$PWD/backend:/app" vcm-backend-dev:ci ruff check --no-cache app tests alembic scripts
       - name: Tests (pytest)
         # conftest.py redirects to vcm_test, Redis db 14 and a temp dir;
         # the URLs here only say where the services are.
