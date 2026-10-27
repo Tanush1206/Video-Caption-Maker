@@ -211,6 +211,16 @@ async def upload_video(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
         )
 
+    # What FFmpeg will use, from the headers alone (services/media.py). A file
+    # whose only picture is a cover image, or whose picture is in a codec we
+    # don't decode, is refused now rather than failing later.
+    streams = await media.probe(absolute)
+    if streams is not None and streams.refusal:
+        absolute.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=streams.refusal
+        )
+
     video = await video_service.create_video(
         db,
         owner_id=user.id,
@@ -228,7 +238,7 @@ async def upload_video(
     # Probing also confirms the bytes really are video, whatever the client
     # claimed. Failures are non-fatal: the upload is kept, just without
     # metadata, rather than thrown away over a cosmetic feature.
-    duration_ms = await media.probe_duration_ms(absolute)
+    duration_ms = streams.duration_ms if streams else None
 
     thumbnail_relative = None
     thumb_absolute = storage.storage_root() / f"user_{user.id}" / f"{absolute.stem}.jpg"
