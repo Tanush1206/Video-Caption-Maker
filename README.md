@@ -139,6 +139,13 @@ key, caption text (never the video or audio) is sent to Google. If Gemini
 fails (no network, quota, a bad key), translation falls back to the local
 model automatically and the video says so.
 
+The key is yours, so Google's [Gemini API terms](https://ai.google.dev/gemini-api/terms)
+apply to you: with a **free** key, Google may use the caption text to improve
+its products and people at Google may read it; you must be 18 or over; and in
+the EEA, Switzerland and the UK only paid keys may be used. For anything
+private, use a paid key or none. Everything the app sends anywhere is listed
+in [PRIVACY.md](PRIVACY.md).
+
 ## Troubleshooting
 
 **"Docker is not running".** Start Docker Desktop and wait for "Engine
@@ -303,7 +310,9 @@ Backend tests run against an isolated test database; see
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | Python and TypeScript conventions, error handling, logging, lint commands, commit format |
 | [docs/TESTING.md](docs/TESTING.md) | Test layout and commands, `e2e.py`, `update_layers.py`, CPU/GPU tiers, clean-machine tests, release checklist |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Key decisions with context, alternatives and trade-offs |
-| [CHANGELOG.md](CHANGELOG.md) | Changes in each release, v1.0.0–v1.0.6 |
+| [CHANGELOG.md](CHANGELOG.md) | Changes in each release |
+| [PRIVACY.md](PRIVACY.md) | What leaves your computer, and when; Gemini's terms; the website's analytics |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Third-party licences, and the source offer for the GPL components |
 | [AGENTS.md](AGENTS.md) | Rules for anyone (or any agent) changing the code |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Planned later work, not yet built |
 | [docs/MILESTONES.md](docs/MILESTONES.md) | The original 10-milestone plan (historical) |
@@ -316,7 +325,14 @@ Please report vulnerabilities privately through GitHub's **Security** tab →
 
 ## Licence
 
-The code is MIT-licensed: see [LICENSE](LICENSE).
+The code is MIT-licensed: see [LICENSE](LICENSE). It is provided as is,
+with no warranty. Only caption videos you have the right to use, and check
+captions and translations before you publish them: they can be wrong.
+
+Everything the images contain or the app downloads, and under which licence,
+is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), including how to get
+the source of the GPL components (FFmpeg among them). What the app sends
+anywhere is in [PRIVACY.md](PRIVACY.md).
 
 The models the app downloads have their own licences:
 
