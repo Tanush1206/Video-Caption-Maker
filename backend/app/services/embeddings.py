@@ -13,13 +13,48 @@ import logging
 import chromadb
 
 from app.config import get_settings
+from app.services import model_store
 from app.services.transcription import Segment
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# all-MiniLM-L6-v2 at a fixed commit, and only the files sentence-transformers
+# reads (the repo also holds ONNX, OpenVINO, TensorFlow and Rust copies).
+EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+EMBEDDING_FILES = [
+    "modules.json",
+    "config_sentence_transformers.json",
+    "sentence_bert_config.json",
+    "config.json",
+    "model.safetensors",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+    "vocab.txt",
+    "1_Pooling/config.json",
+]
+
 _encoder = None
 _client = None
+
+
+def encoder_path() -> str:
+    """
+    A local folder holding the encoder, downloading it only if there's none.
+
+    Loading by repo name made sentence-transformers ask Hugging Face for the
+    newest files on every start, even with the model cached, so search went
+    online after each restart (docs/LAUNCH_AUDIT.md P3). Now a cached copy is
+    used as it is: the pinned commit, or the one an earlier version
+    downloaded under the repo's main ref.
+    """
+    repo = settings.embedding_model
+    return (
+        model_store.cached_path(repo, EMBEDDING_REVISION, EMBEDDING_FILES)
+        or model_store.cached_path(repo, None, EMBEDDING_FILES)
+        or model_store.ensure(repo, revision=EMBEDDING_REVISION, allow_patterns=EMBEDDING_FILES)
+    )
 
 
 def get_encoder():
@@ -27,8 +62,9 @@ def get_encoder():
     if _encoder is None:
         from sentence_transformers import SentenceTransformer
 
-        logger.info("Loading embedding model %s", settings.embedding_model)
-        _encoder = SentenceTransformer(settings.embedding_model)
+        path = encoder_path()
+        logger.info("Loading embedding model %s from %s", settings.embedding_model, path)
+        _encoder = SentenceTransformer(path, local_files_only=True)
     return _encoder
 
 
