@@ -95,7 +95,7 @@ free_gb="$(df -Pk "$check_dir" 2>/dev/null | awk 'NR==2 {printf "%d", $4/1024/10
 if [ -n "$free_gb" ]; then
     if [ "$free_gb" -lt "$need" ]; then
         die "Not enough disk space: ${free_gb} GB free, about ${need} GB needed." \
-            "Free some space (or prune old Docker data with: docker system prune) and try again."
+            "Free some space on this disk (for example, delete large files you no longer need) and try again."
     fi
     ok "${free_gb} GB free (about ${need} GB needed, more for your videos)"
 fi

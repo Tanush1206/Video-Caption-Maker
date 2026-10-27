@@ -88,7 +88,9 @@ case "$cmd" in
         compose pull
         compose up -d --remove-orphans
         wait_ready
-        docker image prune -f >/dev/null 2>&1 || true
+        # Only this app's old images (the ones the update just replaced, now
+        # untagged), never anything else on the machine.
+        docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker" >/dev/null 2>&1 || true
         echo "Updated."
         ;;
     uninstall)

@@ -103,7 +103,9 @@ try {
             Invoke-Compose @('pull')
             Invoke-Compose @('up', '-d', '--remove-orphans')
             Wait-Ready | Out-Null
-            docker image prune -f *> $null
+            # Only this app's old images (the ones the update just replaced, now
+            # untagged), never anything else on the machine.
+            docker image prune -f --filter 'label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker' *> $null
             Write-Host 'Updated.'
         }
         'uninstall' {

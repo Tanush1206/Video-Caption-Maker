@@ -84,7 +84,7 @@ $ErrorActionPreference = 'Continue'
     $freeGb = [math]::Floor($drive.Free / 1GB)
     if ($freeGb -lt $need) {
         Fail "Not enough disk space on ${drive}: - $freeGb GB free, about $need GB needed." @(
-            'Free some space (or run: docker system prune) and try again.')
+            'Free some space on this drive (for example, empty the Recycle Bin or delete large files you no longer need) and try again.')
     }
     Ok "$freeGb GB free on ${drive}: (about $need GB needed, more for your videos)"
 
