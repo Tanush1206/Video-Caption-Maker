@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Only the site's own files, plus GoatCounter: its script from gc.zgo.at, the counts to vcm.goatcounter.com. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self' https://gc.zgo.at; connect-src https://vcm.goatcounter.com; img-src 'self' https://vcm.goatcounter.com; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Privacy · VideoCaptionMaker</title>
+  <meta name="description" content="What VideoCaptionMaker sends off your computer, and when: model downloads, and caption text to Gemini only if you add your own key. What the website records.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="https://tanush1206.github.io/Video-Caption-Maker/privacy.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <script data-goatcounter="https://vcm.goatcounter.com/count" async src="https://gc.zgo.at/count.v5.js"
+          crossorigin="anonymous" integrity="sha384-atnOLvQb9t+jTSipvd75X2yginT4PjVbqDdlJAmxMm+wYElFmeR6EmLP5bYeoRVQ"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="bar">
+    <div class="wrap bar-inner">
+      <a class="brand" href="./">VideoCaptionMaker</a>
+      <nav aria-label="Site">
+        <a href="./">Home</a>
+        <a href="https://github.com/Tanush1206/Video-Caption-Maker">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="wrap prose">
+    <h1>Privacy</h1>
+    <p class="lede-left">
+      VideoCaptionMaker runs on your own computer. It has no servers and no accounts, and it sends nothing to its
+      developer: no telemetry, no crash reports, no usage statistics. Your videos, captions and exports stay on
+      your computer.
+    </p>
+
+    <h2>What leaves your computer, and when</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">To</th><th scope="col">When</th><th scope="col">What is sent</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">GitHub</th><td data-label="When">Installing, and <code>vcm update</code></td><td data-label="What">Requests for the install scripts and release files</td></tr>
+          <tr><th scope="row">GitHub Container Registry and Docker Hub</th><td data-label="When">Installing, and <code>vcm update</code></td><td data-label="What">Requests for the app's images and the database, queue and search images it uses</td></tr>
+          <tr><th scope="row">Hugging Face</th><td data-label="When">The first time each model is needed</td><td data-label="What">Requests for the model files, with no account or token. Once a model is downloaded, it isn't contacted again for it</td></tr>
+          <tr><th scope="row">GitHub (fonts)</th><td data-label="When">The first time you pick a font from the Google Fonts library</td><td data-label="What">A request for that font file</td></tr>
+          <tr><th scope="row">Google, Gemini API</th><td data-label="When">Only if you add your own Gemini key in Settings</td><td data-label="What">Caption text only: up to 25 lines at a time for a translation, or your question and up to 6 matching captions. Never the video or its sound</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Each of these services sees your computer's IP address when it is contacted, under its own privacy policy.
+      Nothing else leaves your computer. Without a Gemini key, once the models are downloaded, captioning,
+      translation, editing, export and search work offline.
+    </p>
+
+    <h2>Gemini, if you add a key</h2>
+    <p>
+      The key is your own, so Google's
+      <a href="https://ai.google.dev/gemini-api/terms">Gemini API terms</a> apply to you directly. Among them:
+    </p>
+    <ul class="limits">
+      <li><strong>Free keys:</strong> Google may use what you send (here, caption text) to improve its products, and
+        people at Google may read it. With a paid key, it doesn't use it to improve its products.</li>
+      <li><strong>Age:</strong> you must be 18 or over to use the Gemini API.</li>
+      <li><strong>Europe:</strong> in the European Economic Area, Switzerland and the United Kingdom, only paid keys
+        may be used.</li>
+    </ul>
+    <p>For anything private, use a paid key, or none: the app then translates with its own model, on your computer.</p>
+
+    <h2>This website</h2>
+    <p>
+      The site is hosted on GitHub Pages; GitHub records visitors' IP addresses in its server logs under
+      <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">its privacy statement</a>.
+      It counts visits with <a href="https://www.goatcounter.com">GoatCounter</a>: which page was opened, and clicks
+      on the Copy button and the Windows/Linux switch, as totals. GoatCounter sets no cookies and, by its own
+      description, stores no IP addresses or other personal data. Nothing else on the page sends data anywhere.
+    </p>
+
+    <h2>Your videos</h2>
+    <p>
+      You need the right to use the videos you caption. If you caption videos of other people for work, you are
+      responsible for that use under the law that applies to you (in India, the Digital Personal Data Protection
+      Act). The app itself collects no personal data on any server, because it has none.
+    </p>
+    <p>
+      The app is provided as is, with no warranty. Captions and translations can be wrong; check them before you
+      publish them.
+    </p>
+
+    <h2>Questions</h2>
+    <p>
+      Ask in a <a href="https://github.com/Tanush1206/Video-Caption-Maker/issues">GitHub issue</a>. For anything you'd
+      rather not post publicly, use the repository's
+      <a href="https://github.com/Tanush1206/Video-Caption-Maker/security/advisories/new">private reporting</a>.
+    </p>
+  </main>
+
+  <footer class="wrap footer">
+    <div class="footer-notes">
+      <p>
+        <a href="https://github.com/Tanush1206/Video-Caption-Maker">GitHub</a>
+        · Code: <a href="https://github.com/Tanush1206/Video-Caption-Maker/blob/main/LICENSE">MIT</a>
+        · <a href="https://github.com/Tanush1206/Video-Caption-Maker/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+      </p>
+      <p>Anonymous visit counts via GoatCounter; no cookies.</p>
+    </div>
+    <p>Made by Tanush Thakran</p>
+  </footer>
+</body>
+</html>
