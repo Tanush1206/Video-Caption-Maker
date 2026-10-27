@@ -51,6 +51,21 @@ app.middleware("http")(request_guard.guard)
 # client address, taken from X-Forwarded-For only when the frontend sent it.
 app.add_middleware(TrustedProxyHeaders, proxies=settings.trusted_proxies_list)
 
+
+@app.middleware("http")
+async def no_sniffing(request, call_next):
+    """
+    Browsers take every response's declared type at its word.
+
+    The stream and thumbnail serve files users uploaded; without this, a
+    browser may "sniff" one into something it would run. Outermost, so the
+    guard's refusals carry it too (docs/SECURITY.md §3a).
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    return response
+
+
 app.include_router(api_router)
 
 

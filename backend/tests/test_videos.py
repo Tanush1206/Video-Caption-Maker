@@ -454,6 +454,8 @@ async def test_thumbnail_is_served(client, auth_headers, sample_video_bytes):
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
     assert len(response.content) > 0
+    # A user's file is never sniffed into something a browser would run.
+    assert response.headers["x-content-type-options"] == "nosniff"
 
 
 @pytest.mark.asyncio
