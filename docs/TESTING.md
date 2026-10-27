@@ -89,7 +89,10 @@ docker compose exec frontend npm test     # node:test, tests/*.test.js
 
 `npm test` uses Node's built-in runner, with no extra dependencies.
 `tests/forwarded-for.test.js` checks that a caller-supplied
-`X-Forwarded-For` never reaches the API (SECURITY.md §4a).
+`X-Forwarded-For` never reaches the API (SECURITY.md §4a), and
+`tests/security-headers.test.js` (v1.1.1) that every route refuses framing,
+is never sniffed, sends `Referrer-Policy: same-origin`, loads only from its
+own server in production, and has the image optimiser off (SECURITY.md §3a).
 
 **Never run `next build` inside the running dev container.** It overwrites
 `.next` and every dev route returns 500. Build the image target instead,
@@ -98,6 +101,10 @@ which leaves the dev server untouched:
 ```bash
 docker build --target build frontend
 ```
+
+The `runtime` target also copies `LICENSE` and `THIRD_PARTY_NOTICES.md` from
+the repository root, a second build context (v1.1.1):
+`docker build --target runtime --build-context repo=. frontend`.
 
 or on the host: `cd frontend && npm ci && npm run build` (what CI does, with
 `NEXT_PUBLIC_API_URL=""`).
@@ -156,6 +163,9 @@ what the 9:16 run is for.
 |---|---|
 | `shoot.js` | any console error, page error or horizontal overflow (on a 404 page it also reports the page's own 404 response) |
 | `axe.js` | any WCAG 2 A/AA violation, in either theme |
+| `checks.js framing` | a page served from another origin (127.0.0.1 on a spare port) can render the app in an iframe, or the browser doesn't report the frame-ancestors refusal. Read-only (v1.1.1) |
+| `checks.js frontend-guard` | a cross-site or another-localhost-port request for a page, a cross-site form post or a rebinding `Host` isn't 403; a link from another site or a script without browser headers doesn't pass; `/_next/image` isn't 404. Read-only (v1.1.1) |
+| `checks.js csp` | the dashboard, search, settings or editor log a Content-Security-Policy violation. Read-only (v1.1.1) |
 | `checks.js theme` | Settings lacks Light/Dark/System; System isn't the default, doesn't clear the stored choice, or doesn't follow an OS change live; an explicit choice doesn't stick |
 | `checks.js not-found` | an unknown address isn't a 404 with the app's own page and a working way back |
 | `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
@@ -505,6 +515,9 @@ else does.
 
 **Before tagging**
 1. All work committed in small commits; PROGRESS.md updated.
+   If dependencies, models, fonts or a base image changed, regenerate the
+   notices from a CUDA build and commit them:
+   `python scripts/third_party_notices.py --image <backend-cuda image>`.
 2. CI green: ruff and the backend suite (job `backend`), frontend lint,
    types and build, and the script checks.
 3. `npm run lint`, `type-check`, `test` and `build` pass.
@@ -536,12 +549,16 @@ else does.
    403; the app's own origin passes.
 6. Run the UI flow through the guard at `localhost` and `127.0.0.1`.
 7. Run E2E if the pipeline changed.
-8. Secrets check:
+8. Images (v1.1.1): `docker exec vcm-backend-1 grep -E 'Uid|CapEff|NoNewPrivs'
+   /proc/1/status` shows uid 10001, `CapEff 0` and `NoNewPrivs 1` (likewise
+   the worker); `/licenses` holds `THIRD_PARTY_NOTICES.md`, `LICENSE` and
+   `SOURCES-debian.txt` (backend) or `SOURCES-alpine.txt` (frontend).
+9. Secrets check:
    - no `.env`, key, cert, dump or storage file in git history;
    - none in the images (only distro CA bundles, an empty extra-CA dir);
    - release assets are only the 7 files plus `SHA256SUMS`.
-9. Remove named test resources only.
-10. Update PROGRESS.md and the CHANGELOG.
+10. Remove named test resources only.
+11. Update PROGRESS.md and the CHANGELOG.
 
 ## Decisions recorded
 

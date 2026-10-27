@@ -170,9 +170,12 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
 **Edge cases**
 | Case | Result |
 |---|---|
-| Unknown `caption_language` | 422 `Unsupported caption language: …` |
-| Content type or extension not allowed | 415 |
-| Empty file | 400 `Uploaded file is empty` |
+| Unknown `caption_language` | 422 `That caption language isn't available. Choose one from the list.` |
+| Content type or extension not allowed | 415 `This file type isn't supported. Try MP4, MOV, MKV or WebM (AVI and M4V work too).` |
+| The only picture is a still cover image | 415 `This file has only a still cover image, not a video. Upload the video itself.` (v1.1.1) |
+| The picture is in a codec FFmpeg isn't allowed to decode (PNG, Dirac…) | 415 `This video's picture is in a format VideoCaptionMaker doesn't open (…). Convert it to MP4 (H.264) and upload it again.` (v1.1.1) |
+| A cover image or picture subtitles next to a real video | Accepted; those streams are never decoded, and the video gets the note "This file's cover image / picture subtitles were ignored." (v1.1.1) |
+| Empty file | 400 `This file is empty. Choose the video again.` |
 | Over `MAX_UPLOAD_SIZE_MB` (4096 MB by default; counted while streaming, not from `Content-Length`) | 413, partial file deleted |
 | Disk full while writing | 507 `The disk is full…`, partial file deleted |
 | Queue unreachable after upload | Upload still succeeds; the user retries from the UI |

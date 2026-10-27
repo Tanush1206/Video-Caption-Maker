@@ -161,6 +161,34 @@ Verified live on both installs at `localhost` and `127.0.0.1`:
 The tests are in `backend/tests/test_request_guard.py` (8 tests; 6 fail with
 the guard removed).
 
+## 3a. Security headers and the frontend's own guard (v1.1.1)
+
+The API's guard (§3) only sees requests that reach the API. Two things now
+stand in front of the pages too (docs/LAUNCH_AUDIT.md S1, S4).
+
+**Headers on every response** (`frontend/next.config.js`, `headers()`):
+
+| Header | Value | Why |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'self'`; scripts `'self' 'unsafe-inline'`; styles `'self' 'unsafe-inline'`; images `'self' blob: data:`; media `'self' blob:`; fonts `'self' data:`; `connect-src 'self'`; `object-src 'none'`; `base-uri 'none'`; `form-action 'self'`; **`frame-ancestors 'none'`** | Nothing loads from anywhere else. Framed by another site, the app's own clicks would be same-origin and pass §3, so a hidden page could click Delete for you (clickjacking, shown in the audit); no site may frame it. Inline scripts are Next 14's bootstrap (no nonces). Development adds the API's port, `'unsafe-eval'` and `ws:` |
+| `X-Frame-Options` | `DENY` | the same, for browsers that predate `frame-ancestors` |
+| `X-Content-Type-Options` | `nosniff` | also set by the API on every response (`no_sniffing` in `backend/app/main.py`), so a user's file is never sniffed into something a browser runs |
+| `Referrer-Policy` | `same-origin` | **not `no-referrer`**: under that, browsers send `Origin: null` with the app's own POST/PATCH/DELETE, which §3 refuses |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | nothing here uses them |
+
+**The frontend guard** (`frontend/src/middleware.ts`, local mode only):
+- the `Host` must be `localhost`, `127.0.0.1` or `[::1]` (DNS rebinding);
+- a request with `Sec-Fetch-Site` other than `same-origin` or `none` is
+  refused unless it is a top-level `GET` navigation: another site may link to
+  the app, but may not fetch pages, server-component payloads or post forms;
+- requests without browser headers (scripts, `vcm`, the health check) pass;
+- `/_next/image` answers 404, and `images.unoptimized` removes the optimiser
+  the app never used (Next 14's image-optimiser advisories).
+
+Refusals are 403 with the same sentence as §3. Checked by
+`frontend/tests/security-headers.test.js` and, in a real browser, by
+`scripts/ui-check` `framing`, `frontend-guard` and `csp`.
+
 ## 4. `audit.log`
 
 Written by `audit()` in `backend/app/request_guard.py`.
@@ -283,11 +311,30 @@ which the guard already lets through.
   - it is mounted only for the `RUN` that needs it and never written to a
     layer;
   - CI builds without one.
+- **No root in the containers** (v1.1.1, §5a below).
 - **Release assets** are exactly: `install.sh`, `install.ps1`, `vcm`,
   `vcm.ps1`, `vcm.cmd`, `docker-compose.prod.yml`, `docker-compose.gpu.yml`
   and `SHA256SUMS`.
 - **Never** read, print or log the values in a `.env`. Tools and docs refer to
   variables by name only.
+
+### 5a. Containers run without root (v1.1.1)
+
+- **backend and worker** run as `vcm` (uid 10001). `docker-entrypoint.sh`
+  starts as root only to trust extra CAs (`update-ca-certificates`) and to
+  hand the `media`, `models` and `fonts` volumes to `vcm` (versions up to
+  1.1.0 wrote them as root; every start re-owns anything that isn't
+  `vcm`'s), then runs everything through `setpriv` as `vcm`.
+- **The prod compose** sets `no-new-privileges` and `cap_drop: [ALL]`, adding
+  back only `CHOWN DAC_OVERRIDE FOWNER SETUID SETGID` for that root step; the
+  running processes have no effective capabilities (checked on an upgraded
+  install: `CapEff 0`, `NoNewPrivs 1`). The frontend runs as `app` with no
+  capabilities at all.
+- **Upgrade from 1.1.0, tested** on a throwaway install with videos, an
+  export, models and a downloaded font, all root-owned: after the update every
+  file belonged to `vcm`, the old video streamed and its export downloaded,
+  no model was downloaded again, and a new GPU transcription, a new font and
+  an NVENC export all worked.
 
 ## 6. What goes over the network
 
@@ -298,7 +345,8 @@ transcribe, translate, export, search) makes **no outbound requests**.
 |---|---|---|---|
 | `github.com` (release assets) | install, `vcm update` | nothing about the user | `install/*`, `vcm` |
 | `ghcr.io` | install, `vcm update` (image pulls) | nothing about the user | compose |
-| `huggingface.co` | first use of each model (Whisper size, M2M100 size, MiniLM; v1.0.9: the Hinglish speech model and IndicXlit) | model repo requests | `services/model_store.py`, `transcription.py`, `translation.py`, `embeddings.py`, `hinglish.py` |
+| Docker Hub | install, `vcm update` (the `postgres`, `redis` and `chromadb` images; the installer's `busybox` GPU check) | nothing about the user | compose, `install/*` |
+| `huggingface.co` | first use of each model (Whisper size, M2M100 size, MiniLM; v1.0.9: the Hinglish speech model and IndicXlit). Never again once a model is cached: until v1.1.1 MiniLM was loaded by name, which asked Hugging Face for its newest files at every start; it is now loaded from the local snapshot (pinned commit, or an older version's copy) | model repo requests | `services/model_store.py`, `transcription.py`, `translation.py`, `embeddings.py`, `hinglish.py` |
 | `raw.githubusercontent.com/google/fonts/<commit>/` | the first time a Google Font from the library is used | the font path, at the commit pinned in `app/data/google_fonts.json` | `services/font_library.py` |
 | Gemini API (`google-genai`) | **only with a key**: translating to hi/fr/de/nl, and `POST /api/ask` | **caption text only**: up to 25 lines per translation batch, up to 6 retrieved captions plus the question for answers. **Never the video or audio.** | `services/translation.py`, `services/rag.py` |
 | Google OAuth | accounts mode only | OAuth exchange | `api/auth.py` |
@@ -318,6 +366,10 @@ transcribe, translate, export, search) makes **no outbound requests**.
   browser to Google, so the user's IP isn't shared with a third party while
   they browse fonts (`api/fonts.py`).
 - `NEXT_TELEMETRY_DISABLED=1` is set in the frontend image.
+- **Distrusted roots are removed** (v1.1.1): the four emSign roots, whose
+  intermediate CA keys were compromised (GHSA-6q48-6c7w-9gw2), are switched
+  off in Debian's store, and certifi's bundle is a link to that store, so every
+  client trusts one list (and the install's extra CAs).
 - **TLS verification is never disabled.** On networks that re-sign HTTPS, the
   user puts the proxy's root `.crt` in the install's `certs/` folder. The
   entrypoint runs `update-ca-certificates`, and `SSL_CERT_FILE`/
@@ -344,9 +396,31 @@ transcribe, translate, export, search) makes **no outbound requests**.
    user's filename never reaches the filesystem; it is kept only as a label.
    `storage.resolve()` rejects any path outside the storage root, and
    recursive deletes check `is_relative_to` the root.
-6. **ffprobe reads the file** for its duration. If the file isn't really
-   video, probing fails, the upload is kept without metadata, and
-   transcription fails later with "This file couldn't be read as a video…".
+6. **FFmpeg opens only what the app needs** (v1.1.1, `services/media.py`;
+   docs/LAUNCH_AUDIT.md S2). An upload is whatever the user downloaded, and
+   FFmpeg's parsers are where a crafted file does its damage. Every run on a
+   user's file passes:
+   - `-protocol_whitelist file,pipe`: no URLs, so no playlist can fetch
+     anything;
+   - `-format_whitelist` of the six extensions' demuxers (mov/mp4 family,
+     matroska/webm, avi): no concat lists, HLS, CAF, WTV…;
+   - `-codec_whitelist` of common video and audio decoders (`DECODERS`):
+     no PNG, Dirac, CFHD, VobSub, PGS or DVB decoding;
+   - `-map` of the main picture and the main sound by index.
+
+   Which streams those are comes from the container's headers alone
+   (`ffprobe -nofind_stream_info`, the one run without the codec list: it
+   decodes nothing). A cover image or picture subtitles next to a real video
+   are skipped, never decoded, and the video gets the note "This file's cover
+   image / picture subtitles were ignored."; text subtitles are skipped
+   silently. A file whose only picture is a cover image, or whose picture is
+   in a codec not on the list, is refused at upload with 415 and deleted. A
+   file that isn't video at all is kept without metadata, as before, and
+   transcription fails with "This file couldn't be read as a video…".
+   Tested with the audit's hostile files (HLS playlists naming a local file
+   and an internal URL, a concat list, corrupt, text and empty files), a CAF
+   renamed `.mov`, PNG and Dirac pictures, PNG cover art, a PGS track, and
+   ordinary MP4/MOV/M4V/MKV/WebM/AVI (`tests/test_media_allowlist.py`).
 7. **A held upload** (v1.0.9, `hold=true`) is stored and probed like any
    other, then only listened to (the first 30 s) until it is started. The
    page deletes it on Back or close, and any held upload never started is
@@ -389,8 +463,8 @@ in `install/vcm` and `install/vcm.ps1`):
   and are not signed. Their integrity rests on GHCR and TLS, and image
   content isn't covered by `SHA256SUMS`. Digest pinning and signing are on
   the [ROADMAP](ROADMAP.md).
-- **Model weights:** Whisper repositories are fetched by name; only the
-  M2M100 conversions are pinned to a commit. CTranslate2's `model.bin` is a
+- **Model weights:** Whisper repositories are fetched by name; the M2M100
+  conversions and (v1.1.1) MiniLM are pinned to a commit. CTranslate2's `model.bin` is a
   weights format, not a pickle, so loading it cannot execute code
   (`translation.py`).
 - **Google Fonts** are pinned (v1.0.5): every download comes from the commit

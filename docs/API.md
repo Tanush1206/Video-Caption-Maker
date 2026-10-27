@@ -69,7 +69,12 @@ Validation errors (FastAPI/Pydantic) return **422** with a list:
 ```
 
 Some errors are raised by hand with **422** and a string `detail`, for example
-`"start_ms must be less than end_ms"` and `"Unsupported caption language: xx"`.
+`"A caption has to end after it starts."` and `"That caption language isn't available. Choose one from the list."`.
+Every `detail` meant for a person is a full sentence that says what to do
+next (v1.1.1). The frontend shows a 422 *array* as one sentence: the app's own
+rules without Pydantic's "Value error, " prefix, anything else as "Something in
+that request wasn't valid. Reload the page and try again." (`validationMessage`
+in `lib/api.ts`).
 
 | Status | Meaning in this API |
 |---|---|
@@ -113,7 +118,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi bn mr ta ml fr de nl es pt it ru`), `hold` (default `false`) | `201` [VideoRead](#videoread); transcription is queued, or, with `hold`, the upload waits (`held`, stage `detecting`) while the worker detects the language from the first 30 s; `POST …/transcribe` starts it. Held uploads aren't listed or counted, and are deleted after an hour if never started (v1.0.9) | 400 no filename / empty file · 413 too large · 415 type or extension · 422 unknown language · 507 disk full |
+| POST* | `/api/videos` | multipart: `file` (required), `caption_language` (`same` default, or `en hi bn mr ta ml fr de nl es pt it ru`), `hold` (default `false`) | `201` [VideoRead](#videoread); transcription is queued, or, with `hold`, the upload waits (`held`, stage `detecting`) while the worker detects the language from the first 30 s; `POST …/transcribe` starts it. Held uploads aren't listed or counted, and are deleted after an hour if never started (v1.0.9) | 400 no filename / empty file · 413 too large · 415 type or extension, a cover image as the only picture, or a picture in a codec FFmpeg may not decode (v1.1.1, see SECURITY.md §7) · 422 unknown language · 507 disk full |
 | GET* | `/api/videos` | query `limit` 1–100 (50), `offset` ≥ 0 (0), `status` [VideoStatus](#videostatus) | `200` [VideoList](#videolist) (newest first; `total` counts all matches) | 422 |
 | GET* | `/api/videos/languages` | — | `200` [LanguageOptions](#languageoptions). `translation_available` is **always `true`**: English comes from Whisper, and the others from local M2M100, with no key needed. Each option carries its own-language name (`native`) | — |
 | GET* | `/api/videos/{video_id}` | — | `200` [VideoRead](#videoread) | 404 `Video not found` |
@@ -155,7 +160,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | GET* | `/api/videos/{video_id}/exports/options` | — | `200` [ExportOptions](#exportoptions): resolution ladder, recommended height, `hardware_encoder` (`h264_nvenc` or null) | 404 |
 | GET* | `/api/exports/{export_id}` | — | `200` [ExportRead](#exportread) (polled during a render) | 404 `Export not found` |
 | DELETE* | `/api/exports/{export_id}` | — | `204`; row and file removed | 404 |
-| POST* | `/api/exports/{export_id}/download-token` | — | `200` [DownloadTicket](#downloadticket) | 404 · 409 `This export is <status>, not ready to download` |
+| POST* | `/api/exports/{export_id}/download-token` | — | `200` [DownloadTicket](#downloadticket) | 404 · 409 `This export failed. Make it again from Export.` or `This export is still being made. Download it when it's ready.` |
 | GET | `/api/exports/{export_id}/download` | query `token` (required), `name` (optional stem; extension added) | `200` file as `attachment`. Default name: `<video>.srt`, or `<video>-captions.mp4` for a burn | 401 · 403 `This token is for a different export` · 404 · 409 `This export has no file` |
 
 ### Fonts (`backend/app/api/fonts.py`)

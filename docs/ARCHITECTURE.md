@@ -552,11 +552,25 @@ NVENC.
     `nvidia-cublas-cu12`/`nvidia-cudnn-cu12`;
   - stage `runtime` adds the apt packages (ffmpeg and fonts), copies the venv
     and the vendored fonts (`frontend/public/fonts`, a late layer, so a font
-    change is a small update), then the app;
+    change is a small update), then (v1.1.1, after those large layers) the
+    `vcm` user (uid 10001), the emSign roots switched off, and `/licenses`,
+    then the app;
+  - **runs as `vcm`, not root** (v1.1.1): `docker-entrypoint.sh` starts as
+    root only to trust extra CAs and hand the `media`, `models` and `fonts`
+    volumes to `vcm`, then re-runs itself through `setpriv` as `vcm` for
+    every command. `HF_HOME` stays `/root/.cache/huggingface` (with `/root`
+    made passable) so every compose file's mount still fits. The prod compose
+    sets `no-new-privileges` and keeps only `CHOWN DAC_OVERRIDE FOWNER SETUID
+    SETGID`, which the root part needs; the app itself runs with none;
   - **the version `ARG`/`LABEL`/`ENV` are last**, so a new version only
     changes the image config.
-- **Frontend:** `deps` → `build` (`npm run build`, standalone) → `runtime`
-  (non-root user `app`). The version label is last here too.
+- **Frontend:** `deps` → `build` (`npm run build`, standalone, then the
+  licence files of every production package and Node's) → `runtime`
+  (non-root user `app`, no capabilities, `no-new-privileges`). The runtime
+  stage copies `LICENSE` and `THIRD_PARTY_NOTICES.md` from a second build
+  context, `repo` (the repository root): build it with
+  `--build-context repo=.`; `release.yml` passes it. The version label is
+  last here too.
 - CI caches layers in GHCR (`buildcache*` tags), so unchanged layers keep
   their digests from release to release. See DECISIONS.md D7.
 
