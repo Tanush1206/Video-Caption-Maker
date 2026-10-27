@@ -771,10 +771,15 @@ change `site/`.
 - [x] README: the site link; image links fixed to the files' capitalised
       names (lowercase links break on GitHub); "about 7 MB" a typical
       update (measured 7.2–7.4 MB for 1.0.7 to 1.1.0).
+- [x] Deployed: the pages run for a7e5f35 passed; the live site serves every
+      file.
+- [x] LICENSE: MIT, "Copyright (c) 2026 Tanush Thakran" (Tanush's choice).
+      README and the site footer say the code is MIT, and the model list
+      adds Oriserve/Whisper-Hindi2Hinglish-Apex (Apache-2.0) and IndicXlit
+      (MIT), both downloaded for Hinglish (licences checked on their
+      Hugging Face pages).
 - Decisions: Search shown instead of an Export screenshot (docs/images has
-  none); the footer names the models' licences only, since the repo has no
-  LICENSE file for its own code (Tanush to choose); the command is in
-  monospace (code, not UI text).
+  none; Tanush: keep it); the command is in monospace (code, not UI text).
 
 ## v1.1.0 (in progress): minimal, Apple-like redesign
 Brief (Tanush, 2026-10-23): restyle only (hooks, API calls, state, data
