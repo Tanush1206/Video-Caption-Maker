@@ -23,7 +23,7 @@ from app.models.caption import Caption
 from app.models.caption_style import CaptionStyle
 from app.services import caption as caption_service
 from app.services import rendering, storage, subtitles
-from app.services.caption_layout import SAFE_AREA, layout_caption
+from app.services.caption_layout import SAFE_AREA, default_width, layout_caption
 from app.services.caption_style import default_style_fields
 from tests.conftest import a_style
 
@@ -476,13 +476,18 @@ def test_existing_videos_burn_exactly_as_in_1_0_7():
     four styles x three frames x six captions, one with a manual break: the
     migration gives every style Balanced and 2 words a line, and the same
     captions must produce the same Style line and Dialogue lines, byte for
-    byte.
+    byte. A left-aligned style is moved as e8b3d5f19a42 (v1.2.0) moves it.
     """
+    from tests.test_caption_anchor import migration
+
     reference = json.loads((Path(__file__).parent / "data" / "burn-1.0.7.json").read_text(encoding="utf-8"))
     for name, overrides in reference["styles"].items():
-        style = CaptionStyle(video_id=1, **{**default_style_fields(), **overrides})
         captions = [_caption(t, i) for i, t in enumerate(reference["texts"])]
         for width, height in reference["frames"]:
+            fields = {**default_style_fields(), **overrides}
+            box = fields["box_width"] or default_width(width, height)
+            fields["pos_x"] = migration.anchor(fields["pos_x"], getattr(fields["alignment"], "value", fields["alignment"]), box)
+            style = CaptionStyle(video_id=1, **fields)
             doc = subtitles.to_ass(captions, style, width, height)
             lines = [line for line in doc.splitlines() if line.startswith(("Dialogue:", "Style:"))]
             assert lines == reference["documents"][f"{name}@{width}x{height}"], f"{name}@{width}x{height}"

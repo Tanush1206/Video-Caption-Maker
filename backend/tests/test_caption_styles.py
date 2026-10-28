@@ -593,6 +593,8 @@ async def test_old_placements_convert_to_the_box_centre(client, auth_headers, sa
     into the box centre a one-line caption had, so old videos look the same:
     in from the edge by the margin, the padding or outline and half the font's
     cell; a left- or right-aligned one half the default width further in.
+    Then e8b3d5f19a42 (v1.2.0) makes a left-aligned one's position its left
+    edge again: half the default width back out, where its lines start.
     """
     from sqlalchemy import text
 
@@ -631,8 +633,8 @@ async def test_old_placements_convert_to_the_box_centre(client, auth_headers, sa
         _alembic("upgrade", "head")
 
     got = [(await client.get(f"/api/videos/{i}/style", headers=auth_headers)).json() for i in ids]
-    assert (got[0]["pos_x"], got[0]["pos_y"]) == pytest.approx((60 / 1920 + 0.4, (100 + 3 + 27) / 1080))
+    assert (got[0]["pos_x"], got[0]["pos_y"]) == pytest.approx((60 / 1920, (100 + 3 + 27) / 1080))
     assert (got[1]["pos_x"], got[1]["pos_y"]) == pytest.approx((0.5, 1 - (60 + 10 + 27) / 1080))
     assert (got[2]["pos_x"], got[2]["pos_y"]) == pytest.approx((0.3, 0.2))
-    assert (got[3]["pos_x"], got[3]["pos_y"]) == pytest.approx((0.5, 0.6))
+    assert (got[3]["pos_x"], got[3]["pos_y"]) == pytest.approx((0.1, 0.6))
     assert all(g["box_width"] is None and g["max_lines"] == 2 for g in got)

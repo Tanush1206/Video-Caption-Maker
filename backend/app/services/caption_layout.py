@@ -10,14 +10,21 @@ let the preview and the MP4 disagree, so neither does any more.
 
 The model:
 
-  - A caption is a box `box_width` of the frame wide (or the default for the
-    frame's shape). Text wraps at that width minus its padding, never at its
-    distance to an edge, so where the box is dragged can't change its lines.
+  - `box_width` (or the default for the frame's shape) is how wide a line may
+    get: text wraps at that width minus its padding, never at its distance to
+    an edge, so where the caption is dragged can't change its lines.
   - At most `max_lines` lines: when the text needs more, the font shrinks in
     2% steps, down to 70% of its size. When even that doesn't fit, one more
     line is allowed (at the largest size that fits in it), and past that the
     text keeps every line it needs. Text is never cut.
-  - `pos_x`/`pos_y` are the box's centre, as fractions of the frame.
+  - The caption's visible block is only as wide as its longest line (plus
+    the padding or outline). `pos_x` is that block's anchor, by alignment:
+    its left edge (Left), its centre (Centre) or its right edge (Right), so
+    left-aligned captions of every length share one left edge and
+    right-aligned ones one right edge. `pos_y` is its vertical centre.
+    Alignment otherwise only sets the lines against each other inside the
+    block (v1.2.0; before, the lines sat against the edges of the whole
+    `box_width` box, so changing alignment moved the caption).
   - The caption's whole painted rectangle — its lines, the box padding or the
     outline, the shadow, and what glyphs and antialiasing paint past those
     (OVERHANG_EM, BLEED_PX) — is then slid inside a safe area 3% in from
@@ -120,8 +127,10 @@ class Layout:
     y: float
     width: float
     height: float
-    # The box's centre after the clamp.
-    center_x: float
+    # Where `pos_x` and `pos_y` ask for, after the clamp: the anchor (the
+    # block's left edge, centre or right edge, by alignment), and the
+    # block's vertical centre.
+    anchor_x: float
     center_y: float
 
     @property
@@ -390,18 +399,9 @@ def layout_caption(
 
     bleed = bleed_at(shrink)
 
-    cx = style.pos_x * frame_width
+    ax = style.pos_x * frame_width
     cy = style.pos_y * frame_height
-    # The lines sit in the box by alignment: against its left or right edge,
-    # or centred. The box's own edges don't move the text otherwise.
-    def rect_left(center: float) -> float:
-        if style.alignment == Alignment.LEFT:
-            return center - box / 2
-        if style.alignment == Alignment.RIGHT:
-            return center + box / 2 - rect_w
-        return center - rect_w / 2
-
-    cx += _slide(rect_left(cx) - bleed, rect_w + shadow + 2 * bleed, frame_width)
+    ax += _slide(block_left(ax, rect_w, style.alignment) - bleed, rect_w + shadow + 2 * bleed, frame_width)
     cy += _slide(cy - rect_h / 2 - bleed, rect_h + shadow + 2 * bleed, frame_height)
 
     return Layout(
@@ -411,13 +411,34 @@ def layout_caption(
         pad=pad,
         shadow=shadow,
         bleed=bleed,
-        x=rect_left(cx),
+        x=block_left(ax, rect_w, style.alignment),
         y=cy - rect_h / 2,
         width=rect_w,
         height=rect_h,
-        center_x=cx,
+        anchor_x=ax,
         center_y=cy,
     )
+
+
+def block_left(anchor: float, width: float, alignment: Alignment) -> float:
+    """The left edge of a block `width` wide whose anchor is at `anchor`."""
+    if alignment == Alignment.LEFT:
+        return anchor
+    if alignment == Alignment.RIGHT:
+        return anchor - width
+    return anchor - width / 2
+
+
+def anchor_of(left: float, width: float, alignment: Alignment) -> float:
+    """
+    Where a block's anchor is for this alignment: what the editor saves when
+    alignment changes, so the caption on screen stays exactly where it is.
+    """
+    if alignment == Alignment.LEFT:
+        return left
+    if alignment == Alignment.RIGHT:
+        return left + width
+    return left + width / 2
 
 
 def _slide(start: float, extent: float, frame: float) -> float:

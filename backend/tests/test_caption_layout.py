@@ -186,19 +186,23 @@ def test_a_broken_word_keeps_its_clusters():
         assert line[-1] != "्"
 
 
-def test_alignment_sets_the_lines_against_the_box():
-    """Left-aligned text starts at the box's left edge; right ends at its right."""
+def test_the_position_is_the_blocks_anchor_by_alignment():
+    """
+    Left: the caption's own block starts at pos_x; Right: it ends there;
+    Centre: it is centred on it. However wide Max width is (v1.2.0; the
+    whole-width box's edges set it before). More in test_caption_anchor.py.
+    """
     width = 1920
     for alignment, expect in ((Alignment.LEFT, "left"), (Alignment.RIGHT, "right"), (Alignment.CENTER, "centre")):
-        style = _style("box-pad-0", "small", alignment=alignment, pos_x=0.5, pos_y=0.5, box_width=0.6)
-        layout = layout_caption("Hi there", style, width, 1080)
-        box_left, box_right = 0.5 * width - 0.3 * width, 0.5 * width + 0.3 * width
-        if expect == "left":
-            assert layout.x == pytest.approx(box_left)
-        elif expect == "right":
-            assert layout.x + layout.width == pytest.approx(box_right)
-        else:
-            assert layout.x + layout.width / 2 == pytest.approx(0.5 * width)
+        for box_width in (0.3, 0.6, 0.9):
+            style = _style("box-pad-0", "small", alignment=alignment, pos_x=0.5, pos_y=0.5, box_width=box_width)
+            layout = layout_caption("Hi there", style, width, 1080)
+            if expect == "left":
+                assert layout.x == pytest.approx(0.5 * width)
+            elif expect == "right":
+                assert layout.x + layout.width == pytest.approx(0.5 * width)
+            else:
+                assert layout.x + layout.width / 2 == pytest.approx(0.5 * width)
 
 
 # ── What libass draws from it ────────────────────────────────────────────
