@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import request_guard
+from app import multipart, request_guard
 from app.proxy_headers import TrustedProxyHeaders
 from app.api.router import api_router
 from app.config import get_settings
@@ -14,6 +14,9 @@ from app.config import get_settings
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = get_settings()
+
+# A cancelled upload's temporary file is freed when the request ends.
+multipart.install()
 
 
 @asynccontextmanager
