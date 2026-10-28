@@ -1483,6 +1483,74 @@ const CHECKS = {
   // backend/scripts/caption_layout.py through `docker compose exec`, so this
   // runs on the dev stack only. VCM_LINE_STYLES limits the styles (comma-
   // separated). Changes data.
+  // v1.2.0: an upload over 10 MB reaches the API whole (Next 15's middleware
+  // would keep only its first 10 MB, so /api/videos is left out of it), and
+  // on /api/videos, through this server's proxy, the API's guard still
+  // refuses another origin, another localhost port, a rebinding Host, and a
+  // forged X-Forwarded-Host with an Origin to match it. The file is
+  // VCM_LARGE_VIDEO, or made by the dev stack's FFmpeg. Uploads one held
+  // video and deletes it by id.
+  async "upload-proxy"(browser, base) {
+    const fs = require("node:fs");
+    const http = require("node:http");
+    const { execFileSync } = require("node:child_process");
+    const path = require("node:path");
+    let bytes;
+    if (process.env.VCM_LARGE_VIDEO) {
+      bytes = fs.readFileSync(process.env.VCM_LARGE_VIDEO);
+    } else {
+      bytes = execFileSync(
+        "docker",
+        ["compose", "exec", "-T", "backend", "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=1280x720:r=30:d=20",
+         "-f", "lavfi", "-i", "sine=f=440:d=20", "-c:v", "libx264", "-b:v", "6M", "-c:a", "aac", "-shortest", "-f", "matroska", "pipe:1"],
+        { cwd: path.resolve(__dirname, "../.."), maxBuffer: 256 * 1024 * 1024, env: { ...process.env, MSYS_NO_PATHCONV: "1" } }
+      );
+    }
+    const MB = 1024 * 1024;
+    ok("upload-proxy: the test file is over 10 MB", bytes.length > 10 * MB, `${(bytes.length / MB).toFixed(1)} MB`);
+    const origin = new URL(base).origin;
+    const page = await browser.newPage();
+    const uploaded = await page.request.post(`${base}/api/videos`, {
+      headers: { Origin: origin, "Sec-Fetch-Site": "same-origin" },
+      multipart: { file: { name: "large.mkv", mimeType: "video/x-matroska", buffer: bytes }, caption_language: "same", hold: "true" },
+      timeout: 10 * 60 * 1000,
+    });
+    const video = uploaded.ok() ? await uploaded.json() : null;
+    ok("upload-proxy: the upload is accepted whole", uploaded.status() === 201 && video?.size_bytes === bytes.length,
+      `${uploaded.status()}, ${video?.size_bytes ?? "-"} of ${bytes.length} bytes`);
+    if (video) {
+      const deleted = await page.request.delete(`${base}/api/videos/${video.id}`, { headers: { Origin: origin, "Sec-Fetch-Site": "same-origin" } });
+      ok(`upload-proxy: the test video ${video.id} is deleted`, deleted.status() === 204, `${deleted.status()}`);
+    }
+    await page.close();
+
+    // Raw requests, so Host and the forwarded headers are exactly what's sent.
+    const { hostname, port } = new URL(base);
+    const post = (headers) =>
+      new Promise((resolve, reject) => {
+        const req = http.request({ host: hostname, port, method: "POST", path: "/api/videos", headers: { "Content-Length": 0, ...headers } }, (res) => {
+          res.resume();
+          res.on("end", () => resolve(res.statusCode));
+        });
+        req.on("error", reject);
+        req.end();
+      });
+    const own = `${hostname}:${port}`;
+    const probes = [
+      ["another origin", { Host: own, Origin: "https://evil.example" }, 403],
+      ["another localhost port", { Host: own, Origin: `http://${hostname}:4444` }, 403],
+      ["a rebinding Host", { Host: `evil.example:${port}`, Origin: `http://evil.example:${port}` }, 403],
+      ["a forged X-Forwarded-Host with a matching Origin", { Host: `evil.example:${port}`, "X-Forwarded-Host": own, Origin: `http://${own}` }, 403],
+    ];
+    for (const [name, headers, want] of probes) {
+      const status = await post(headers);
+      ok(`upload-proxy: /api/videos refuses ${name}`, status === want, `${status}`);
+    }
+    // The app itself gets past the guard (422: no file, refused by validation, not the guard).
+    const status = await post({ Host: own, Origin: origin });
+    ok("upload-proxy: the app's own request passes the guard", status !== 403, `${status}`);
+  },
+
   // v1.2.0: changing alignment never moves the caption on screen. For a
   // caption placed at the left edge, the centre and the right edge, at Max
   // width 20/50/80/94% and from each alignment, click the other two in the
