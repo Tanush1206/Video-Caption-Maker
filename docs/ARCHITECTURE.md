@@ -13,7 +13,16 @@ started with different commands (`api` / `worker` in
 `backend/docker-entrypoint.sh`). Only the UI port is published, on
 `127.0.0.1:${VCM_PORT:-3000}` (`docker-compose.prod.yml`). The browser never
 talks to the API directly: Next rewrites `/api/*` to `http://backend:8000`
-(`frontend/next.config.js`).
+(`frontend/next.config.js`), except `/api/videos`, which a route handler
+forwards (`frontend/src/app/api/videos/route.ts`, v1.2.0). Next's rewrite
+proxy copies each request body and keeps the copy: Next 14 held every upload
+whole in memory (34 → 241 MiB for a 192 MB upload) and Next 15 keeps only
+the first 10 MB, which cut larger uploads off. The route handler streams the
+upload to the API with Node's `http`, with backpressure, in constant memory
+(a 2 GB upload peaked at 79 MiB), giving up only on a connection quiet for
+30 minutes; `forwarded-for.js` turns off Node's 5-minute limit on receiving a
+request, so a slow upload isn't cut off. A cancelled upload ends the API's
+request, and the API's partial file goes with it.
 
 | Service | Image (prod) | Role |
 |---|---|---|
@@ -29,7 +38,7 @@ talks to the API directly: Next rewrites `/api/*` to `http://backend:8000`
 ```mermaid
 flowchart LR
     B["Browser<br/>http://localhost:VCM_PORT"] -->|"HTTP, same origin"| F["frontend<br/>Next.js :3000"]
-    F -->|"rewrite /api/* → backend:8000<br/>(X-Forwarded-Host kept)"| A["backend<br/>FastAPI :8000"]
+    F -->|"rewrite /api/* → backend:8000<br/>(/api/videos: route handler, streamed)<br/>(X-Forwarded-Host from Host)"| A["backend<br/>FastAPI :8000"]
     A -->|"SQLAlchemy asyncpg"| P[("postgres :5432")]
     A -->|"task.delay()"| R[("redis :6379")]
     A -->|"query vectors<br/>(search only)"| C[("chromadb :8000")]

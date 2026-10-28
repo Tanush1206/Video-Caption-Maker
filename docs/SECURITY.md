@@ -183,7 +183,15 @@ stand in front of the pages too (docs/LAUNCH_AUDIT.md S1, S4).
   the app, but may not fetch pages, server-component payloads or post forms;
 - requests without browser headers (scripts, `vcm`, the health check) pass;
 - `/_next/image` answers 404, and `images.unoptimized` removes the optimiser
-  the app never used (Next 14's image-optimiser advisories).
+  the app never used (Next 14's image-optimiser advisories);
+- **one path is left out: `/api/videos`**, the upload (and the list), the
+  only route with a large body (v1.2.0). Next copies the body of any request
+  middleware runs on and keeps only its first 10 MB, which cut every larger
+  upload off. There the API's guard (§3) does the same job: other origins,
+  other localhost ports, a rebinding Host, and a forged `X-Forwarded-Host`
+  with an Origin to match are all refused (403), through the proxy
+  (`scripts/ui-check` `upload-proxy`). Its Host comes from
+  `X-Forwarded-Host`, which `forwarded-for.js` sets from the request (§4a).
 
 Refusals are 403 with the same sentence as §3. Checked by
 `frontend/tests/security-headers.test.js` and, in a real browser, by
@@ -238,10 +246,16 @@ Now `frontend/forwarded-for.js` is preloaded into the Next server
 (`node -r` in the runtime image, `NODE_OPTIONS` in the dev compose). On every
 request and upgrade, before Next sees it, it **overwrites**:
 - `X-Forwarded-For` with the frontend socket's peer address;
-- `X-Forwarded-Proto` with `https` or `http`, from whether that socket is TLS.
+- `X-Forwarded-Proto` with `https` or `http`, from whether that socket is TLS;
+- `X-Forwarded-Host` with the request's own `Host` (v1.2.0).
 
-Whatever the caller sent is dropped. `X-Forwarded-Host` was already safe:
-Next's proxy sets it from `Host`, over any caller value.
+Whatever the caller sent is dropped. Next 15's rewrite proxy also sets
+`X-Forwarded-Host` from `Host`, but `/api/videos` doesn't go through that
+proxy (§3a, ARCHITECTURE.md §2), and there the API guard's Host check is the
+only one: the preload makes it unforgeable whatever Next does. A rebinding
+page is same-origin with its own name, so it can send any header with an
+Origin to match; it still reaches the API as its real Host
+(`forwarded-for.test.js`, and `upload-proxy` through the built image).
 
 **Who the peer is.** It is whatever opened the TCP connection to the
 frontend, which is not always the browser:

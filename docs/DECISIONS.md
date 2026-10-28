@@ -664,6 +664,37 @@ median or longest caption: every other caption would still move.
 
 ---
 
+## D20. Uploads bypass Next's rewrite proxy
+
+**Context.** The Next 15.5 upgrade broke every upload over 10 MB. Next's
+`/api` rewrite proxy, and any request middleware runs on, copies the request
+body and keeps the copy: Next 15 caps the copy at 10 MB and cuts the upload
+there; Next 14, shipped until 1.1.1, kept all of it, so every upload sat in
+the frontend's memory (34 → 241 MiB for one 192 MB upload). Node's server also
+ended any request still arriving after five minutes, so a slow upload failed
+in 1.1.1 too, and a cancelled upload's temporary file stayed open in the API.
+
+**Decision (Tanush, 2026-10-28/29).**
+- `/api/videos`, the one route with a large body, is forwarded by a route
+  handler that streams it with Node's `http` (no `fetch` timeouts; only a
+  connection quiet for 30 minutes is given up on). Every other `/api` path
+  keeps the rewrite.
+- The middleware skips exactly that path; every other path keeps its guard.
+  There the API's guard refuses other origins, other localhost ports and
+  rebinding Hosts.
+- The preload overwrites `X-Forwarded-Host` with the request's own Host, as
+  it does `-For` and `-Proto`, so the API's Host check can't be forged.
+- Node's `requestTimeout` is off on the frontend's server.
+- Cancelling ends the API's request, and the API frees the partial upload at
+  once (`app/multipart.py`).
+
+**Alternatives.** Raising Next's body limit: Next would then hold up to the
+4 GB upload limit in memory. Excluding only the middleware: the rewrite proxy
+copies the body too. A hand-written proxy in the preload: works, but sits
+outside Next. Staying on Next 14: the memory and timeout problems remain.
+
+---
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open
