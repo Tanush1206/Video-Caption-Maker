@@ -1658,6 +1658,36 @@ const CHECKS = {
     }
     await page.close();
   },
+
+  // A burn in progress says how long it has left (v1.2.0), from how fast its
+  // percentage moves. The export list is answered here with a burn that gains
+  // 1% a second, so the estimate must appear once there is enough to go on
+  // and read as a time. Reads only.
+  async "export-eta"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    const started = Date.now();
+    await page.route(new RegExp(`/api/videos/${id}/exports$`), (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const progress = Math.min(Math.floor((Date.now() - started) / 1000), 99);
+      const burn = {
+        id: 999_000_002, video_id: id, format: "mp4", status: "processing", size_bytes: null, progress,
+        error_message: null, created_at: new Date(started).toISOString(), height: null, caption_language: "same", current: true,
+      };
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [burn], total: 1 }) });
+    });
+    await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Export", exact: true }).first().click();
+    const status = page.getByRole("status").filter({ hasText: "Rendering the video with captions" });
+    await status.waitFor();
+    const estimate = status.getByText(/ left$/);
+    const shown = await estimate.waitFor({ timeout: 20000 }).then(() => true, () => false);
+    const text = shown ? await estimate.innerText() : "";
+    ok("export-eta: a running burn shows the time left", shown, text);
+    ok("export-eta: it reads as a time", /^(less than a minute|about \d+ min) left$/.test(text), text);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.close();
+  },
 };
 
 (async () => {

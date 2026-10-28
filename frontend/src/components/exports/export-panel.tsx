@@ -30,6 +30,7 @@ import { useDownloadOriginal } from "@/hooks/use-stream";
 import { useLanguageOptions } from "@/hooks/use-videos";
 import { formatFileSize, formatRelativeTime } from "@/lib/format";
 import { languageName } from "@/lib/languages";
+import { useEta } from "@/lib/stages";
 import { cn } from "@/lib/utils";
 import type { ExportFormat, VideoExport } from "@/types/export";
 import type { LanguageOptions } from "@/types/video";
@@ -177,6 +178,7 @@ export function ExportPanel({
   const canRun = !(needsCaptions && !hasCaptions) && !(choice === "mp4" && rendering);
   const busy = createExport.isPending || downloadOriginal.isPending;
   const burn = items.find((item) => item.format === "mp4" && item.status === "processing");
+  const eta = useEta(burn ? `export:${burn.id}` : null, burn?.progress ?? 0);
 
   function run() {
     if (choice === "original") downloadOriginal.mutate(savedAs || undefined);
@@ -317,6 +319,7 @@ export function ExportPanel({
                 style={{ width: `${burn.progress}%` }}
               />
             </div>
+            {eta && <p className="mt-1.5 text-[13px] text-muted-foreground">{eta}</p>}
           </div>
         )}
 
