@@ -145,6 +145,7 @@ directory). Prod: only what §2 lists.
 | `HF_HUB_DISABLE_XET` | `1` | plain HTTP downloads: visible progress, resumable |
 | `HF_HUB_DISABLE_IMPLICIT_TOKEN` | `1` | no token sent |
 | `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` | `/etc/ssl/certs/ca-certificates.crt` | one trust store for every client, including extra CAs from `certs/` |
+| `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH` | `/etc/ssl/certs/ca-certificates.crt` | gRPC uses that store, not its built-in roots (v1.2.0) |
 | `LD_LIBRARY_PATH` | pip's `nvidia/cublas/lib` and `nvidia/cudnn/lib` | CTranslate2 finds CUDA libraries by soname |
 | `TOKENIZERS_PARALLELISM` | `false` | |
 | `PYTHONUNBUFFERED`, `PYTHONDONTWRITEBYTECODE` | `1` | |

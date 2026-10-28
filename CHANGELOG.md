@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- **The last two copies of the distrusted emSign roots are gone.** pip's
+  own certificate list now links to the system one, and gRPC (used by the
+  search database's telemetry library) reads the system list instead of its
+  built-in one. A small layer: the update stays small.
+
 ### Fixed
 - **Alignment no longer moves a caption.** Left, Centre and Right now only
   set the lines against each other inside the caption, which is as wide as

@@ -369,7 +369,12 @@ transcribe, translate, export, search) makes **no outbound requests**.
 - **Distrusted roots are removed** (v1.1.1): the four emSign roots, whose
   intermediate CA keys were compromised (GHSA-6q48-6c7w-9gw2), are switched
   off in Debian's store, and certifi's bundle is a link to that store, so every
-  client trusts one list (and the install's extra CAs).
+  client trusts one list (and the install's extra CAs). Since v1.2.0 the two
+  other bundled lists follow it too: pip's own certifi (both Pythons) is a
+  link to the store, and gRPC (chromadb's telemetry exporter) reads it through
+  `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH` instead of its built-in `roots.pem`
+  (checked: with a one-CA list gRPC refuses a TLS connection the store
+  accepts).
 - **TLS verification is never disabled.** On networks that re-sign HTTPS, the
   user puts the proxy's root `.crt` in the install's `certs/` folder. The
   entrypoint runs `update-ca-certificates`, and `SSL_CERT_FILE`/

@@ -148,6 +148,19 @@ RUN set -e \
              printf '%s\t%s\thttps://snapshot.debian.org/package/%s/%s/\n' "$pkg" "$ver" "$pkg" "$enc"; \
          done; } > /licenses/SOURCES-debian.txt
 
+# The two CA lists the emSign change above didn't reach (v1.2.0): pip's own
+# certifi, in both Pythons, becomes a link to the system list, and gRPC
+# (chromadb's telemetry exporter) is pointed at it instead of its built-in
+# roots.pem. Each path must exist, so a moved file fails the build rather
+# than being skipped.
+RUN set -e \
+    && for pem in /usr/local/lib/python3.11/site-packages/pip/_vendor/certifi/cacert.pem \
+                  /opt/venv/lib/python3.11/site-packages/pip/_vendor/certifi/cacert.pem; do \
+        test -f "$pem"; \
+        ln -sf /etc/ssl/certs/ca-certificates.crt "$pem"; \
+    done
+ENV GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=/etc/ssl/certs/ca-certificates.crt
+
 WORKDIR /app
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic

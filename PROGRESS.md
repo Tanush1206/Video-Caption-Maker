@@ -887,6 +887,15 @@ Tanush's testing first (2026-10-28).
       on 1080p; now 0. Byte-identical: 360 burns made by v1.1.1 before the
       change (`burn-1.1.1.json`, hashes) all match after migration; the 1.0.7
       golden test too.
+- [x] **emSign, the last two copies** (Tanush, 2026-10-28): pip's vendored
+      certifi in both Pythons linked to the system list, gRPC pointed at it
+      (`GRPC_DEFAULT_SSL_ROOTS_FILE_PATH`), in a layer after `/licenses`.
+      CPU image built from the release cache in 24 s (large layers cached).
+      Checked: both links resolve; gRPC with a one-CA list refuses
+      www.google.com, with the system list connects.
+- [x] Cleanup after 1.1.1 (Tanush): CPU images `latest-cpu` and `1.1.0-cpu`
+      and the `busybox:1.37.0` tag removed by name; the pre-1.1.1 backup
+      folder deleted.
 - [x] Checks for items 1-3 (dev stack, video 7623): backend suites touched
       (layout, line control, exports, styles, anchor, fonts) pass; the 8
       existing editor checks (drag, handle, keyboard, safe area, width, snap,
