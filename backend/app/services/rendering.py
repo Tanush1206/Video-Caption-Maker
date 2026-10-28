@@ -7,7 +7,11 @@ are chosen to give up as little as possible.
 
 import logging
 import re
+import shlex
 import subprocess
+import threading
+import time
+from collections import deque
 from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +22,10 @@ from app.services import media
 logger = logging.getLogger(__name__)
 
 RENDER_TIMEOUT_SECONDS = 60 * 60 * 3
+
+# How much of FFmpeg's stderr is kept for the error message: its last lines,
+# which is where it says why it stopped.
+STDERR_TAIL_LINES = 40
 
 # Constant Rate Factor. 18 is the usual "visually indistinguishable from the
 # source" point for x264: low enough that re-encoding is not what anyone
@@ -261,24 +269,65 @@ def burn_captions(
         str(destination),
     ]
 
-    logger.info("Rendering %s -> %s", source.name, destination.name)
+    logger.info(
+        "Rendering %s -> %s: %s", source.name, destination.name, shlex.join(command)
+    )
+    started = time.monotonic()
 
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
 
+    # stderr is read while FFmpeg runs, on its own thread. Until v1.2.0 it was
+    # read only once stdout closed, and a pipe holds 64 KB: a source whose
+    # decoder warns on every few frames (a YouTube download prints "Late SEI
+    # is not implemented", 77 KB over 15 minutes) filled it, FFmpeg blocked
+    # on its next warning, and the export sat at 80% for good.
+    stderr_tail: deque[bytes] = deque(maxlen=STDERR_TAIL_LINES)
+    drain = threading.Thread(target=stderr_tail.extend, args=(process.stderr,), daemon=True)
+    drain.start()
+
+    # A timer, because a timeout on the wait afterwards could never fire on a
+    # hang: `_follow_progress` doesn't return until FFmpeg closes stdout.
+    timed_out = threading.Event()
+
+    def expire() -> None:
+        timed_out.set()
+        process.kill()
+
+    deadline = threading.Timer(RENDER_TIMEOUT_SECONDS, expire)
+    deadline.start()
     try:
         _follow_progress(process, duration_ms, on_progress)
-        _, stderr = process.communicate(timeout=RENDER_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired:
-        process.kill()
         process.wait()
-        raise RuntimeError("Rendering timed out") from None
+    finally:
+        deadline.cancel()
+        if process.poll() is None:
+            # Only after an exception from the progress callback: a normal
+            # run has already waited for FFmpeg to exit.
+            process.kill()
+            process.wait()
+        drain.join()
+        for pipe in (process.stdout, process.stderr):
+            if pipe is not None:
+                pipe.close()
+
+    if timed_out.is_set():
+        destination.unlink(missing_ok=True)
+        raise RuntimeError("Rendering timed out")
 
     if process.returncode != 0 or not destination.exists():
         destination.unlink(missing_ok=True)
-        tail = stderr.decode("utf-8", "replace")[-400:]
+        tail = b"".join(stderr_tail).decode("utf-8", "replace")[-400:]
         raise RuntimeError(f"Rendering failed: {tail}")
+
+    elapsed = time.monotonic() - started
+    logger.info(
+        "Rendered %s in %.0f s (%s real time)",
+        destination.name,
+        elapsed,
+        f"{duration_ms / 1000 / elapsed:.1f}x" if duration_ms and elapsed else "unknown",
+    )
 
 
 def _follow_progress(

@@ -680,6 +680,108 @@ def test_indic_scripts_are_shaped_in_the_burn(tmp_path):
     )
 
 
+def _fake_ffmpeg(tmp_path, monkeypatch, body: str):
+    """
+    Put an `ffmpeg` on PATH that runs `body` (Python, with `out` the output
+    path), for the burn's own pipes. A real source is made first, with the
+    real FFmpeg, because the burn probes it; and the encoder is pinned so the
+    NVENC probe never meets the fake.
+    """
+    import os
+    import sys
+
+    from app.services import rendering
+
+    source = tmp_path / "source.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=320x240:d=1:r=5",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source),
+        ],
+        capture_output=True, timeout=120, check=True,
+    )
+    fake = tmp_path / "bin" / "ffmpeg"
+    fake.parent.mkdir()
+    fake.write_text(
+        f"#!{sys.executable}\nimport sys, time\nout = sys.argv[-1]\n{body}\n", encoding="utf-8"
+    )
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(rendering, "_video_encoder_args", lambda: ["-c:v", "libx264"])
+    return source
+
+
+def _burn_in_thread(source, tmp_path, **kwargs):
+    """Run a burn on a thread, so a hang fails the test instead of the suite."""
+    import threading
+
+    from app.services import rendering
+
+    outcome: dict = {}
+
+    def run():
+        try:
+            rendering.burn_captions(
+                source, tmp_path / "captions.ass", tmp_path / "out.mp4", duration_ms=1000, **kwargs
+            )
+            outcome["ok"] = True
+        except Exception as exc:  # noqa: BLE001
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(timeout=30)
+    assert not thread.is_alive(), "the burn hung"
+    return outcome
+
+
+def test_a_burn_survives_ffmpeg_writing_more_than_a_pipe_holds(tmp_path, monkeypatch):
+    """
+    A YouTube download makes FFmpeg's decoder print "Late SEI is not
+    implemented" every few frames: 77 KB over 15 minutes, more than a pipe's
+    64 KB. stderr was read only after FFmpeg exited, so it blocked on a full
+    pipe and the export sat at 80% for good (v1.0.0–v1.1.1).
+    """
+    source = _fake_ffmpeg(
+        tmp_path,
+        monkeypatch,
+        "sys.stderr.write('[h264] Late SEI is not implemented.\\n' * 30000)\n"
+        "print('out_time_us=500000', flush=True)\n"
+        "open(out, 'wb').write(b'burned')",
+    )
+    seen: list[int] = []
+    assert _burn_in_thread(source, tmp_path, on_progress=seen.append) == {"ok": True}
+    assert seen == [50]
+
+
+def test_a_failed_burn_still_says_why_after_a_flood_of_warnings(tmp_path, monkeypatch):
+    """Only stderr's tail is kept, and that is where FFmpeg says why it stopped."""
+    source = _fake_ffmpeg(
+        tmp_path,
+        monkeypatch,
+        "sys.stderr.write('[h264] Late SEI is not implemented.\\n' * 30000)\n"
+        "sys.stderr.write('Conversion failed: the real reason\\n')\n"
+        "sys.exit(1)",
+    )
+    outcome = _burn_in_thread(source, tmp_path)
+    assert "the real reason" in str(outcome["error"])
+
+
+def test_a_hung_burn_is_stopped_at_the_render_timeout(tmp_path, monkeypatch):
+    """
+    The 3-hour limit was a timeout on the wait after FFmpeg closed stdout, so
+    an FFmpeg that hung with stdout open was never stopped.
+    """
+    from app.services import rendering
+
+    source = _fake_ffmpeg(tmp_path, monkeypatch, "time.sleep(60)")
+    monkeypatch.setattr(rendering, "RENDER_TIMEOUT_SECONDS", 1)
+    outcome = _burn_in_thread(source, tmp_path)
+    assert "timed out" in str(outcome["error"])
+    assert not (tmp_path / "out.mp4").exists()
+
+
 def test_the_burn_asks_libass_for_complex_shaping():
     from pathlib import Path
 
