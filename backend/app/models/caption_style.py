@@ -130,8 +130,9 @@ class CaptionStyle(Base):
     # drawn on the video, not what they say.
     uppercase: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # How the lines sit against each other and in the box: flush left,
-    # centred or flush right. Not where the caption is — that is pos_x/pos_y.
+    # How the lines sit against each other inside the caption's block: flush
+    # left, centred or flush right. Not where the caption is — that is
+    # pos_x/pos_y, though it says which edge of the block pos_x is.
     alignment: Mapped[Alignment] = mapped_column(
         Enum(Alignment, name="caption_alignment",
              values_callable=lambda e: [m.value for m in e]),
@@ -139,7 +140,9 @@ class CaptionStyle(Base):
         default=Alignment.CENTER,
     )
 
-    # Where the caption box's centre is, as a fraction of the frame, 0..1.
+    # Where the caption is, as a fraction of the frame, 0..1: `pos_x` is its
+    # block's anchor by alignment, the left edge (Left), centre (Centre) or
+    # right edge (Right) since v1.2.0; `pos_y` is the block's vertical centre.
     #
     # Fractions rather than reference pixels because this is the geometry the
     # user sets by pointing at the frame, and a fraction survives a video of

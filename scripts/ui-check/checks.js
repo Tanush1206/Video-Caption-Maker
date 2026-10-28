@@ -1483,6 +1483,68 @@ const CHECKS = {
   // backend/scripts/caption_layout.py through `docker compose exec`, so this
   // runs on the dev stack only. VCM_LINE_STYLES limits the styles (comma-
   // separated). Changes data.
+  // v1.2.0: changing alignment never moves the caption on screen. For a
+  // caption placed at the left edge, the centre and the right edge, at Max
+  // width 20/50/80/94% and from each alignment, click the other two in the
+  // panel: the drawn block stays put, and the saved style burns it at the same
+  // rectangle. Then Left captions of different lengths share a left edge and
+  // Right ones a right edge. Changes the style; resets it after.
+  async "alignment-anchor"(browser, base) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const id = await editorVideo(page, base);
+    const texts = ["Hi there", "ko auto generate karegi aur", LAYOUT_TEXTS.long];
+    await mockCaptions(page, base, id, texts);
+    const labels = { left: "Left", center: "Centre", right: "Right" };
+    const block = () =>
+      page.evaluate(() => {
+        const r = document.querySelector("[data-caption-box]").getBoundingClientRect();
+        const f = document.querySelector("video").parentElement.getBoundingClientRect();
+        return { x: (r.x - f.x) / f.width, y: (r.y - f.y) / f.height, width: r.width / f.width, height: r.height / f.height, px: f.width };
+      });
+    const look = { font_size: 54, box_opacity: 0.8, box_padding: 12, outline_width: 0, shadow: 0, pos_y: 0.8, line_style: "balanced", max_lines: 2 };
+    for (const [place, pos_x] of [["left edge", 0], ["centre", 0.5], ["right edge", 1]]) {
+      for (const box_width of [0.2, 0.5, 0.8, 0.94]) {
+        for (const from of ["left", "center", "right"]) {
+          const at = `alignment-anchor: ${place}, width ${box_width * 100}%, from ${labels[from]}`;
+          await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...look, alignment: from, pos_x, box_width } });
+          await openMocked(page, base, id);
+          await page.getByRole("radio", { name: "Position" }).click();
+          await showCaption(page, 1, texts[1]);
+          const frame = await page.evaluate(() => ({ width: document.querySelector("video").videoWidth, height: document.querySelector("video").videoHeight }));
+          const before = await block();
+          const moved = [];
+          for (const to of ["left", "center", "right"].filter((a) => a !== from)) {
+            await page.getByRole("radiogroup", { name: "Alignment" }).getByRole("radio", { name: labels[to] }).click();
+            await page.waitForTimeout(900);
+            const after = await block();
+            const shift = Math.max(...["x", "y", "width", "height"].map((k) => Math.abs(after[k] - before[k]) * before.px));
+            const saved = await styleOf(page, base, id);
+            const [burn] = burnLayout(saved, [texts[1]], frame);
+            const burnShift = Math.max(...["x", "y", "width", "height"].map((k) => Math.abs(burn[k] - before[k]) * before.px));
+            if (saved.alignment !== to || shift > 0.5 || burnShift > 1) {
+              moved.push(`${labels[to]}: preview ${shift.toFixed(2)}px, burn ${burnShift.toFixed(2)}px, saved ${saved.alignment}`);
+            }
+          }
+          ok(`${at}: the caption stays put, in the preview and the burn`, moved.length === 0, moved.join("; "));
+        }
+      }
+    }
+    for (const [alignment, pos_x, edge] of [["left", 0.1, (b) => b.x], ["right", 0.9, (b) => b.x + b.width]]) {
+      await page.request.patch(`${base}/api/videos/${id}/style`, { data: { ...look, alignment, pos_x, box_width: 0.8 } });
+      await openMocked(page, base, id);
+      const edges = [];
+      for (const [i, text] of texts.entries()) {
+        await showCaption(page, i, text);
+        edges.push(edge(await block()));
+      }
+      const spread = (Math.max(...edges) - Math.min(...edges)) * (await block()).px;
+      ok(`alignment-anchor: ${labels[alignment]} captions of different lengths share one ${alignment} edge`, spread < 0.5, `spread ${spread.toFixed(2)}px`);
+    }
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.request.delete(`${base}/api/videos/${id}/style`);
+    await page.close();
+  },
+
   async "layout-parity"(browser, base) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const ids = await safeVideos(page, base);
