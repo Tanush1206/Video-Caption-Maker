@@ -6,6 +6,32 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Alignment no longer moves a caption.** Left, Centre and Right now only
+  set the lines against each other inside the caption, which is as wide as
+  its longest line; the caption stays exactly where it is on the video, in
+  the editor and in the MP4. A caption's position is its left edge on Left,
+  its centre on Centre and its right edge on Right, so left-aligned captions
+  of different lengths line up on the left. Existing videos look exactly as
+  before (migration `e8b3d5f19a42`; checked byte for byte against 360 burns
+  made by 1.1.1).
+- **The app no longer stalls while a font downloads.** A first download from
+  Google held up every other request, the style save included.
+
+### Added
+- The Font field says "Downloading font… this can take a few seconds the
+  first time." while a new font downloads, and says so in plain words if the
+  download fails. Neither message sits next to Reset.
+- **Undo after Reset**, for 10 seconds. Reset is one click, so taking it back
+  is one click too. A tab that regains focus reads the style again, so it
+  never shows a style an export won't use.
+- Tests that SRT and VTT break exactly where the MP4 does for the line style
+  at export time (Balanced, Auto, Stacked, manual breaks). The SRT on one
+  line reported against 1.1.1 came from a Reset just before the export, not
+  from the export.
+
 ## [1.1.1] - 2026-10-27
 
 Security, safety and legal fixes from the launch-readiness audit

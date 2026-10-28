@@ -850,6 +850,53 @@ private security reporting), no email.
 - S7: least-privilege `permissions:` in every workflow.
 - Skipped: robots.txt (SEO3); it needs a separate root repo, small gain.
 
+## v1.2.0 (in progress)
+Brief: the phase-2 list above (Next 15.5, long videos, virtual caption list,
+CLS, weekly check, `vcm doctor`, model mirror, S7), with three items from
+Tanush's testing first (2026-10-28).
+
+- [x] **Item 3, SRT on one line** (91a078d, 4e1123b): not an export bug. The
+      install's log: Reset on video 84 at 08:35:18 UTC, 4 s after the last
+      style save; the SRT at 08:35:36 used the reset defaults (Balanced). The
+      two-line MP4s were exports 179-183, made before. Reproduced on dev:
+      Stacked 3 → SRT/VTT = the burn line for line; Reset in one editor shows
+      the defaults at once. Tanush's choice: tests + a safer Reset. Test:
+      SRT and VTT = the burn's lines cue for cue for Balanced, Auto, Stacked 1
+      and 3, manual breaks, style changed before each export (fails when the
+      sidecar ignores the style, checked). Undo for 10 s after Reset; the
+      style is read again when a tab regains focus.
+- [x] **Item 1, font feedback** (351f27e, 4e1123b, 9234bf9): the download happens on
+      the font file's first GET, which ran `ensure()` on the event loop and
+      held up every request (the style save's spinner by Reset was all that
+      showed). Now in a thread (test fails before: 1.53 s, passes after). The
+      Font field says "Downloading font… this can take a few seconds the
+      first time." after 0.3 s and a plain failure message (role alert), ~190
+      px below Reset. The style's `font_win_span` is taken from the server
+      once the face arrives (that field only, if the font is unchanged).
+      A message belongs to its font: a Reset or preset that swaps the font
+      clears it (found by screenshot, fixed in 9234bf9).
+- [x] **Item 2, alignment moves the caption** (d8ad077, b78ee88, b7c7372,
+      fc8e7e1, b60c09a): Tanush's edge-anchor rule (D19). `pos_x` = the
+      block's left edge / centre / right edge by alignment; the block is as
+      wide as its longest line; an alignment change saves `anchorOf` the
+      shown caption's block (the nearest one in a gap); Top/Middle/Bottom
+      centre the shown caption; drag snaps the caption's centre; on Left/Right
+      the width handles keep the anchored edge unless it is the one dragged.
+      Migration `e8b3d5f19a42` (old box edge, NULL width by the file's frame
+      shape). The old rule moved a caption up to 1091 px (80%) / 1350 px (94%)
+      on 1080p; now 0. Byte-identical: 360 burns made by v1.1.1 before the
+      change (`burn-1.1.1.json`, hashes) all match after migration; the 1.0.7
+      golden test too.
+- [x] Checks for items 1-3 (dev stack, video 7623): backend suites touched
+      (layout, line control, exports, styles, anchor, fonts) pass; the 8
+      existing editor checks (drag, handle, keyboard, safe area, width, snap,
+      line styles, layout parity) 199 PASS, 0 FAIL; `alignment-anchor` 38
+      PASS (36 cases ≤0.5 px preview, ≤1 px burn; shared edges); axe 0 on
+      dashboard, editor, settings, search, and on the editor with each new
+      message (downloading, failed, Undo) in light/dark at 375/1440; browser
+      script: download message, failure message, measured win span, Reset →
+      Undo restores every field, a focused tab shows another tab's Reset.
+
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
 facts in README, PRD and LANGUAGE_QUALITY.md only; the app's design system;
