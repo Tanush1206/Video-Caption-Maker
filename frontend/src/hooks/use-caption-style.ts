@@ -33,6 +33,10 @@ export function useCaptionStyle(videoId: number) {
   return useQuery({
     queryKey: styleKeys.forVideo(videoId),
     queryFn: () => api.get<CaptionStyle>(`/api/videos/${videoId}/style`),
+    // Read again whenever the tab comes back, however recent the copy: a
+    // second tab on the same video (or a Reset there) changes what an export
+    // will use, and this tab must show that, not what it last saw.
+    refetchOnWindowFocus: "always",
   });
 }
 
@@ -125,10 +129,10 @@ export function useUpdateCaptionStyle(videoId: number) {
   return { update, isSaving: mutation.isPending };
 }
 
-/** Presets and reset replace the whole style, so they use the response as-is. */
-function useReplacingMutation(
+/** Presets, reset and undo replace the whole style, so they use the response as-is. */
+function useReplacingMutation<T>(
   videoId: number,
-  fn: (arg: string) => Promise<CaptionStyle>
+  fn: (arg: T) => Promise<CaptionStyle>
 ) {
   const queryClient = useQueryClient();
 
@@ -148,5 +152,23 @@ export function useApplyPreset(videoId: number) {
 export function useResetStyle(videoId: number) {
   return useReplacingMutation(videoId, () =>
     api.delete<CaptionStyle>(`/api/videos/${videoId}/style`)
+  );
+}
+
+/** Every field a PATCH accepts: what Undo sends back after a Reset. */
+const EDITABLE = [
+  "font_key", "font_size", "bold", "italic", "underline", "strikeout", "uppercase",
+  "letter_spacing", "text_color", "outline_color", "outline_width", "shadow", "shadow_color",
+  "box_color", "box_opacity", "box_padding", "alignment", "pos_x", "pos_y", "box_width",
+  "max_lines", "line_style", "words_per_line",
+] as const satisfies readonly (keyof CaptionStyle)[];
+
+/** Put back a whole style, as it was before a Reset. */
+export function useRestoreStyle(videoId: number) {
+  return useReplacingMutation(videoId, (style: CaptionStyle) =>
+    api.patch<CaptionStyle>(
+      `/api/videos/${videoId}/style`,
+      Object.fromEntries(EDITABLE.map((field) => [field, style[field]]))
+    )
   );
 }

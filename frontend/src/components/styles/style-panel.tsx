@@ -1,19 +1,27 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { useId, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
 
 import { FontPicker } from "@/components/styles/font-picker";
 import { Range } from "@/components/ui/range";
 import {
+  styleKeys,
   useApplyPreset,
   useCaptionStyle,
   useResetStyle,
+  useRestoreStyle,
   useStyleOptions,
 } from "@/hooks/use-caption-style";
+import { useFontDownload } from "@/hooks/use-fonts";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MAX_BOX_WIDTH, MIN_BOX_WIDTH, PLACEMENT_Y, defaultWidth } from "@/lib/caption-layout";
 import type { Alignment, CaptionStyle, LineStyle } from "@/types/style";
+
+/** How long Undo stays offered after a Reset. */
+const UNDO_MS = 10_000;
 
 const PRESET_LABELS: Record<string, string> = {
   youtube: "YouTube",
@@ -311,6 +319,37 @@ export function StylePanel({
 
   const applyPreset = useApplyPreset(videoId);
   const resetStyle = useResetStyle(videoId);
+  const restoreStyle = useRestoreStyle(videoId);
+  // The style as it was before a Reset, while Undo is offered. Reset is one
+  // click with no question asked, so it has to be one click to take back.
+  const [undo, setUndo] = useState<CaptionStyle | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  // A face's line height is measured from its file on the server, so a save
+  // that beat the download came back unmeasured. Once the file is there, take
+  // the measurement — that field only, and only if the font is still the one
+  // chosen, so a reply can't drag back anything changed since.
+  const queryClient = useQueryClient();
+  const fontArrived = useCallback(
+    (key: string) => {
+      api
+        .get<CaptionStyle>(`/api/videos/${videoId}/style`)
+        .then((fresh) =>
+          queryClient.setQueryData<CaptionStyle>(styleKeys.forVideo(videoId), (old) =>
+            old && old.font_key === key && fresh.font_key === key
+              ? { ...old, font_win_span: fresh.font_win_span }
+              : old
+          )
+        )
+        .catch(() => undefined);
+    },
+    [queryClient, videoId]
+  );
+  const fontDownload = useFontDownload(fontArrived);
 
   if (isLoading || !style) {
     return (
@@ -333,7 +372,10 @@ export function StylePanel({
             {isSaving && <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label="Saving" />}
             <button
               type="button"
-              onClick={() => resetStyle.mutate("")}
+              onClick={() => {
+                const before = style;
+                resetStyle.mutate("", { onSuccess: () => setUndo(before) });
+              }}
               title="Back to defaults"
               className="rounded-md px-1.5 py-0.5 text-sm text-primary transition-colors duration-200 ease-out hover:bg-surface-2"
             >
@@ -346,12 +388,32 @@ export function StylePanel({
             <button
               key={preset}
               type="button"
-              onClick={() => applyPreset.mutate(preset)}
+              onClick={() => {
+                setUndo(null);
+                applyPreset.mutate(preset);
+              }}
               className="min-h-11 flex-1 rounded-[6px] px-2 text-sm text-foreground transition-colors duration-200 ease-out hover:bg-segment sm:min-h-7"
             >
               {PRESET_LABELS[preset] ?? preset}
             </button>
           ))}
+        </div>
+        <div role="status">
+          {undo && (
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-2 text-[13px] text-muted-foreground">
+              <span>Style reset to the defaults.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  restoreStyle.mutate(undo);
+                  setUndo(null);
+                }}
+                className="rounded-md px-1.5 py-0.5 text-sm text-primary transition-colors duration-200 ease-out hover:bg-surface-2"
+              >
+                Undo
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -362,8 +424,28 @@ export function StylePanel({
             <FontPicker
               builtins={options?.fonts ?? []}
               value={style.font_key}
-              onChange={(font_key) => set({ font_key })}
+              onChange={(font_key) => {
+                set({ font_key });
+                if (options?.fonts.some((font) => font.key === font_key)) fontDownload.clear();
+                else fontDownload.start(font_key, style.bold);
+              }}
             />
+            {/* Here, by the font, and nowhere near Reset. */}
+            <div role="status" className="text-[13px] leading-[18px] text-muted-foreground">
+              {fontDownload.state === "downloading" && (
+                <p className="flex items-center gap-1.5">
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                  Downloading font… this can take a few seconds the first time.
+                </p>
+              )}
+            </div>
+            {fontDownload.state === "failed" && (
+              <p role="alert" className="flex items-start gap-1.5 text-[13px] leading-[18px] text-destructive">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                This font couldn&apos;t be downloaded. Check the internet connection and choose it again, or pick
+                another font.
+              </p>
+            )}
           </div>
           <Slider
             label="Size"

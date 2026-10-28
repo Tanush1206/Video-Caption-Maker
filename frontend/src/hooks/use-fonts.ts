@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
 import { API_URL } from "@/lib/config";
@@ -70,6 +70,70 @@ export function useInjectedFontFace(key: string | undefined, family: string | un
     style.textContent = `@font-face{font-family:"${family}";src:url("${fontFileUrl(key)}") format("truetype");font-weight:400;font-style:normal;font-display:swap}`;
     document.head.append(style);
   }, [key, family]);
+}
+
+/** How long a download may take before saying so: a cached face never flashes the message. */
+const DOWNLOAD_NOTICE_MS = 300;
+
+export type FontDownload = "downloading" | "failed" | null;
+
+/**
+ * Fetch a catalogue face's files the moment it is chosen, and say how it went.
+ *
+ * The first request for a face makes the server download it from Google,
+ * which takes seconds; until then the preview draws the caption in a fallback
+ * face. Fetching here, through the same URL the preview's @font-face uses,
+ * puts the file in the browser's cache for it and tells the panel whether it
+ * arrived. A bold face the family doesn't have (404) is not a failure: the
+ * caption is then drawn in the regular one.
+ *
+ * `onArrived` runs once the files are there, for whatever was measured from
+ * them on the server.
+ */
+export function useFontDownload(onArrived: (key: string) => void) {
+  const [state, setState] = useState<FontDownload>(null);
+  const latest = useRef<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stop = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+
+  const start = useCallback(
+    (key: string, bold: boolean) => {
+      latest.current = key;
+      stop();
+      setState(null);
+      timer.current = setTimeout(() => setState("downloading"), DOWNLOAD_NOTICE_MS);
+      const weights = bold ? (["regular", "bold"] as const) : (["regular"] as const);
+      Promise.all(
+        weights.map((weight) =>
+          fetch(fontFileUrl(key, weight))
+            .then((response) => response.ok || (weight === "bold" && response.status === 404))
+            .catch(() => false)
+        )
+      ).then((results) => {
+        if (latest.current !== key) return;
+        stop();
+        const arrived = results.every(Boolean);
+        setState(arrived ? null : "failed");
+        if (arrived) onArrived(key);
+      });
+    },
+    [onArrived]
+  );
+
+  /** A built-in face was chosen instead: nothing to download, nothing to say. */
+  const clear = useCallback(() => {
+    latest.current = null;
+    stop();
+    setState(null);
+  }, []);
+
+  useEffect(() => stop, []);
+
+  return { state, start, clear };
 }
 
 export type { FontLibraryEntry };
