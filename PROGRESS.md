@@ -747,7 +747,7 @@ One commit per fix, each with tests:
   only forwarded-for.js.
 - Left as asked: install running on 3000, dev stack stopped.
 
-## v1.1.1: security, safety and legal (ready to tag, 2026-10-27)
+## v1.1.1: security, safety and legal (released 2026-10-27, tag on 115afa7)
 Brief (Tanush, 2026-10-27): phase 2 of docs/LAUNCH_AUDIT.md, first release.
 Then v1.2.0 (Next 15.5, long videos, virtual caption list, CLS, weekly
 check, `vcm doctor`, model mirror). Published contact: GitHub only (issues,
@@ -809,8 +809,46 @@ private security reporting), no email.
       dashboard, search, settings, editor; shoot.js ok; E2E on the dev stack
       (GPU) all six languages passed: dev videos 7617-7622 deleted by id,
       7426 (not ours) left.
-- [ ] After push: CI green; tag v1.1.1; release workflow (4 jobs); `vcm update`
-      the install; the release checklist's after-release steps.
+- [x] CI fix (115afa7): the first push failed CI's ruff step. The lint ran
+      through the entrypoint, so as `vcm`, which can't write `.ruff_cache`
+      into the runner's checkout; now `--no-cache`. Reproduced first, then
+      ruff and pytest (564 passed) run as `vcm` on a runner-owned copy.
+- [x] Released 2026-10-27: tag v1.1.1 on 115afa7; `release.yml` 4/4 green;
+      8 assets match `SHA256SUMS`; anonymous manifest fetches 200.
+
+### v1.1.1 released and measured (2026-10-28)
+- Backup before `vcm update` (DATABASE.md §7, file ownership changes):
+  `C:\Users\Admin\vcm-backup-pre-1.1.1-2026-10-28` (dump, media 28 files,
+  `.env` copied unread). Kept until Tanush confirms.
+- Update download: new layers 0.6 MB per backend variant, 7.1 MB frontend
+  (manifest diff 1.1.0 → 1.1.1). `vcm update` took 25 s.
+- Windows GPU install: `VCM_VERSION` 1.1.1, alembic at head, data unchanged
+  (1 video, 159 captions, 5 exports); backend and worker uid 10001,
+  `CapEff 0`, `NoNewPrivs 1`, nothing in the volumes left un-owned;
+  `/licenses` in all three containers; 0 emSign certs; installed compose and
+  `vcm.ps1` identical to the release.
+- CPU upgrade (throwaway project `vcmcpu`, port 3006, no GPU override):
+  1.1.0 install, one video + SRT + MP4 export as root; update to 1.1.1;
+  85 files handed to vcm, the old video streams and its exports download,
+  no model re-downloaded, new transcription and MP4 export as vcm. Videos
+  1 and 2 deleted by id; project removed with `down -v`.
+- Guard probes on the install: own origin at localhost and 127.0.0.1 200;
+  other origin, cross-site and rebinding Host 403; `/_next/image` 404;
+  headers on pages and API. `checks.js framing frontend-guard csp` pass.
+- E2E on the GPU install (same, en, fr; 40 s clip): all exports downloaded.
+  `flow.js` at localhost and 127.0.0.1 all PASS, speech model back on auto.
+  Videos 107, 108 (deleted by flow.js) and 109 (API) gone; 84 (Tanush's)
+  remains.
+- Secrets: none in git history or either image; extra-CA and storage dirs
+  empty.
+- Found: pip's vendored certifi (build-time only) and grpcio's built-in
+  `roots.pem` (from chromadb's OpenTelemetry exporter) still list the emSign
+  roots. The app's own TLS (ssl default, certifi) has 0. Raised with Tanush.
+- Live site: both pages, og.png, apple-touch-icon, sitemap 200; tags in place.
+
+### Added to v1.2.0 (Tanush, 2026-10-28)
+- S7: least-privilege `permissions:` in every workflow.
+- Skipped: robots.txt (SEO3); it needs a separate root repo, small gain.
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
