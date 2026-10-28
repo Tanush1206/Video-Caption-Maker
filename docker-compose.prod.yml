@@ -106,10 +106,14 @@ services:
       # The API runs the migrations; the worker must not start writing first.
       backend:
         condition: service_healthy
+    # A heartbeat file the worker touches every 15 s from its own thread, after
+    # pinging Redis (app/workers/celery_app.py). Until v1.2.0 this was
+    # `celery inspect ping`, which a --pool=solo worker can't answer while it
+    # runs a job: every long transcription or burn showed "unhealthy".
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]
+      test: ["CMD-SHELL", "test -n \"$$(find /tmp/vcm-worker-heartbeat -mmin -1 2>/dev/null)\""]
       interval: 30s
-      timeout: 20s
+      timeout: 10s
       start_period: 60s
       retries: 5
 

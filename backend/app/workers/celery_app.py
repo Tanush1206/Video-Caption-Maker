@@ -1,7 +1,9 @@
 import logging
+import threading
+from pathlib import Path
 
 from celery import Celery
-from celery.signals import worker_ready
+from celery.signals import worker_init, worker_ready
 
 from app.config import get_settings
 
@@ -83,6 +85,53 @@ def report_hardware(**_kwargs) -> None:
         asyncio.run(write())
     except Exception:  # noqa: BLE001
         logging.getLogger(__name__).exception("Could not record worker hardware")
+
+
+# The worker's health check (docker-compose.prod.yml) passes while this file
+# is less than a minute old.
+HEARTBEAT_FILE = Path("/tmp/vcm-worker-heartbeat")
+HEARTBEAT_SECONDS = 15
+
+
+def beat_once(client) -> bool:
+    """Touch the heartbeat file if Redis, the job queue, answers."""
+    try:
+        client.ping()
+        HEARTBEAT_FILE.touch()
+    except Exception:  # noqa: BLE001 - a missed beat is the signal
+        return False
+    return True
+
+
+@worker_init.connect
+def clear_heartbeat(**_kwargs) -> None:
+    """A restarted container keeps its /tmp: no beat counts until this run's."""
+    HEARTBEAT_FILE.unlink(missing_ok=True)
+
+
+@worker_ready.connect
+def start_heartbeat(**_kwargs) -> threading.Event:
+    """
+    Beat every 15 s from a thread of its own, so a busy worker stays healthy.
+
+    The health check was `celery inspect ping`, which `--pool=solo` answers
+    from the loop that runs tasks: every long transcription or burn showed the
+    worker as unhealthy until it finished (to v1.1.1). The thread keeps
+    beating during a task; each beat pings Redis first, so a worker cut off
+    from its queue still shows unhealthy. Returns the event that stops it.
+    """
+    import redis
+
+    client = redis.Redis.from_url(settings.redis_url, socket_timeout=5)
+    stop = threading.Event()
+
+    def run() -> None:
+        while not stop.is_set():
+            beat_once(client)
+            stop.wait(HEARTBEAT_SECONDS)
+
+    threading.Thread(target=run, name="vcm-heartbeat", daemon=True).start()
+    return stop
 
 
 @worker_ready.connect

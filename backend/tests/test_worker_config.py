@@ -30,3 +30,64 @@ def test_the_render_is_bounded_by_its_own_ffmpeg_timeout():
 def test_jobs_run_one_at_a_time_and_survive_a_crash():
     assert celery_app.conf.worker_prefetch_multiplier == 1
     assert celery_app.conf.task_acks_late is True
+
+
+class _Redis:
+    def __init__(self, answers: bool):
+        self.answers = answers
+
+    def ping(self):
+        if not self.answers:
+            raise ConnectionError("no route to redis")
+        return True
+
+
+def test_the_heartbeat_beats_only_while_the_queue_answers(tmp_path, monkeypatch):
+    from app.workers import celery_app as worker
+
+    beat = tmp_path / "heartbeat"
+    monkeypatch.setattr(worker, "HEARTBEAT_FILE", beat)
+
+    assert worker.beat_once(_Redis(answers=False)) is False
+    assert not beat.exists()
+    assert worker.beat_once(_Redis(answers=True)) is True
+    assert beat.exists()
+
+
+def test_the_heartbeat_keeps_beating_while_a_job_holds_the_worker(tmp_path, monkeypatch):
+    """
+    `--pool=solo` runs a job on the worker's own loop, which is why `celery
+    inspect ping` went unanswered (and the worker "unhealthy") for as long as
+    a job ran. The heartbeat has a thread of its own.
+    """
+    import time
+
+    import redis
+
+    from app.workers import celery_app as worker
+
+    beat = tmp_path / "heartbeat"
+    monkeypatch.setattr(worker, "HEARTBEAT_FILE", beat)
+    monkeypatch.setattr(worker, "HEARTBEAT_SECONDS", 0.05)
+    monkeypatch.setattr(redis.Redis, "from_url", staticmethod(lambda *a, **k: _Redis(answers=True)))
+
+    stop = worker.start_heartbeat()
+    try:
+        deadline = time.monotonic() + 2
+        while not beat.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)  # a job: the calling thread never yields to Celery
+        first = beat.stat().st_mtime_ns
+        time.sleep(0.3)
+        assert beat.stat().st_mtime_ns > first
+    finally:
+        stop.set()
+
+
+def test_a_restarted_worker_does_not_count_its_old_heartbeat(tmp_path, monkeypatch):
+    from app.workers import celery_app as worker
+
+    beat = tmp_path / "heartbeat"
+    beat.touch()
+    monkeypatch.setattr(worker, "HEARTBEAT_FILE", beat)
+    worker.clear_heartbeat()
+    assert not beat.exists()
