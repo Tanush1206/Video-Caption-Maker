@@ -230,7 +230,7 @@ and downloaded models only if you type `DELETE` when asked.
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14, React, Tailwind CSS |
+| Frontend | Next.js 15, React 19, Tailwind CSS |
 | Backend | FastAPI, Celery |
 | Data | PostgreSQL, Redis, ChromaDB |
 | Speech | faster-whisper (Whisper small / large-v3-turbo / large-v3) |
@@ -273,7 +273,7 @@ python scripts/e2e.py --base http://localhost:8000 --video clip.mp4   # end to e
 Backend tests run against an isolated test database; see
 [docs/TESTING.md](docs/TESTING.md) for the exact commands.
 
-- Frontend (Next.js 14): `frontend/`. Backend (FastAPI, Celery): `backend/`.
+- Frontend (Next.js 15): `frontend/`. Backend (FastAPI, Celery): `backend/`.
 - Production images: `backend/Dockerfile` (`VARIANT=cpu|cuda`, built from the
   repo root) and `frontend/Dockerfile`. Both use the `runtime` target:
   ```bash

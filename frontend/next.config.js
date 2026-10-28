@@ -22,7 +22,7 @@ const DEVELOPMENT = process.env.NODE_ENV !== "production";
  * Everything comes from this server. `frame-ancestors 'none'` is the part
  * that matters most: framed by another site, the app's own clicks are
  * same-origin, so the API's request guard would let a hidden Delete through.
- * Inline scripts are allowed because Next 14's App Router writes its
+ * Inline scripts are allowed because Next's App Router writes its
  * bootstrap inline (no nonces); development adds the API's port, eval for
  * the dev tooling and the hot-reload socket.
  */

@@ -14,7 +14,7 @@ MP4 with burned-in captions, or SRT/VTT/JSON.
 - **Install:** one command, Docker Compose underneath, single-user local mode
   with **no login**, UI only on `127.0.0.1`.
 - **Stack:**
-  - Next.js 14 (`frontend/`);
+  - Next.js 15 (`frontend/`);
   - FastAPI + Celery (`backend/`, one image, `api`/`worker` commands);
   - Postgres 16, Redis 7, ChromaDB 1.0;
   - installers in `install/`, release automation in `.github/workflows/`.
