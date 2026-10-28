@@ -13,8 +13,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   own certificate list now links to the system one, and gRPC (used by the
   search database's telemetry library) reads the system list instead of its
   built-in one. A small layer: the update stays small.
+- **Next.js 15.5** (15.5.28, from 14.2.35) with **React 19.2.9**: the
+  remaining Next 14 server advisories (docs/LAUNCH_AUDIT.md S1) no longer
+  apply. Next 15's optional image library (sharp, with an LGPL libvips
+  binary) is left out of the image: the app never optimises images.
 
 ### Fixed
+- **Large and slow uploads.** An upload now streams through the app in
+  constant memory: until now the whole video sat in memory on its way (about
+  4 GB of RAM for a 4 GB file), and Next 15 would have cut anything over
+  10 MB. An upload that takes longer than five minutes is no longer cut off,
+  and cancelling one frees its partial file at once. Checked with a 2 GB
+  upload and a 360 MB one at 1 MB/s.
 - **Alignment no longer moves a caption.** Left, Centre and Right now only
   set the lines against each other inside the caption, which is as wide as
   its longest line; the caption stays exactly where it is on the video, in

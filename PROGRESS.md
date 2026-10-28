@@ -896,6 +896,32 @@ Tanush's testing first (2026-10-28).
 - [x] Cleanup after 1.1.1 (Tanush): CPU images `latest-cpu` and `1.1.0-cpu`
       and the `busybox:1.37.0` tag removed by name; the pre-1.1.1 backup
       folder deleted.
+- [x] **S1: Next.js 15.5** (dbd5b4c, 67219f9, c8516e5, 632925b, then the
+      upload commits): next 15.5.28, react/react-dom 19.2.9 (19.2 line, as
+      Next 15.5 shipped against; 14 Oct patch), @types 19.2, eslint-config-next
+      15.5.28; ESLint 8 kept (`next lint` warns it goes in 16). The two [id]
+      pages read the id with `useParams`. sharp (Next 15's optional image
+      library, LGPL libvips binary) removed before the build; notices
+      regenerated. Production build clean; headers, guard probes, framing,
+      frontend-guard, csp pass on dev and the built image; the forwarded-for
+      hook checked with an echo backend.
+      Full ui-check set on the built image (26 checks): 400 PASS, 0 FAIL; axe
+      0 on 6 pages; shoot.js 4 pages x 2 widths x 2 themes; E2E (same, en)
+      through the built image.
+- [x] **Uploads bypass Next's proxy** (D20, Tanush's conditions): found
+      that the upgrade capped uploads at 10 MB (the rewrite proxy, not only
+      middleware, copies the body), and that Next 14 already held each upload
+      in memory and Node cut uploads after 5 min. Route handler
+      `app/api/videos/route.ts` (Node http, 30 min idle); middleware skips
+      exactly `/api/videos` (the only route with a file field); preload sets
+      X-Forwarded-Host from Host and `requestTimeout = 0`; API closes a
+      dropped upload's temp file (`app/multipart.py`, Starlette closes it only
+      on parse/disk errors). Measured: 2.05 GB in 9.8 s, frontend peak 79
+      MiB; 360 MB at 1 MB/s in 358 s (1.1.0 frontend: cut off); browser
+      Cancel at 360 MB: API request ended, 0 bytes held, no row or file.
+      `upload-proxy` check: >10 MB whole, 4 guard probes 403 through the
+      proxy, own request passes. Backend 605 passed; frontend 10 tests.
+      Test videos 7625-7628, 7661-7667 (mine) deleted; 7426 left.
 - [x] Checks for items 1-3 (dev stack, video 7623): backend suites touched
       (layout, line control, exports, styles, anchor, fonts) pass; the 8
       existing editor checks (drag, handle, keyboard, safe area, width, snap,
