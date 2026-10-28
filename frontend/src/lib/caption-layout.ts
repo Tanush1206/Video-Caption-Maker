@@ -7,13 +7,15 @@
  * both; scripts/ui-check `layout-parity` compares them on real captions.
  *
  * The model, as there:
- *  - A caption is a box `box_width` of the frame wide (or the default for the
- *    frame's shape). Text wraps at that width minus its padding, never at its
- *    distance to an edge.
+ *  - `box_width` (or the default for the frame's shape) is how wide a line may
+ *    get: text wraps at it minus its padding, never at its distance to an edge.
  *  - At most `max_lines` lines; past that the font shrinks in 2% steps to
  *    70%, then one more line is allowed, then the text keeps every line it
  *    needs. Text is never cut.
- *  - `pos_x`/`pos_y` are the box's centre, as fractions of the frame.
+ *  - The visible block is as wide as its longest line. `pos_x` is its anchor
+ *    by alignment (left edge, centre, right edge), `pos_y` its vertical
+ *    centre, as fractions of the frame. Alignment otherwise only sets the
+ *    lines against each other inside the block.
  *  - Everything it paints is slid inside a safe area 3% in from every edge.
  *
  * Widths come from canvas `measureText`, which shapes with HarfBuzz like
@@ -73,9 +75,15 @@ export interface Layout {
   y: number;
   width: number;
   height: number;
-  centerX: number;
+  /** Where pos_x asks for after the clamp: the block's left edge, centre or right edge, by alignment. */
+  anchorX: number;
+  /** The block's vertical centre after the clamp. */
   centerY: number;
-  /** The wrap box: where the lines may go, and where the width handles sit. */
+  /**
+   * The Max-width box: how wide a line may get, from the anchor (rightwards
+   * on Left, leftwards on Right, both ways on Centre). Where the width
+   * handles sit; nothing is drawn against its edges.
+   */
   boxLeft: number;
   boxWidth: number;
 }
@@ -307,7 +315,7 @@ function pyRound(value: number): number {
 export interface LayoutOptions {
   overrideScale?: number | null;
   bold?: boolean | null;
-  /** Where the centre is asked to be, when it isn't the style's (a drag in flight). */
+  /** Where the anchor is asked to be, when it isn't the style's (a drag in flight). */
   center?: { x: number; y: number };
   /** The box width, when it isn't the style's (a width handle in flight). */
   boxWidth?: number;
@@ -389,12 +397,10 @@ export function layoutCaption(
   const em = (size * shrink) / primarySpan;
   const bleed = bleedAt(shrink);
 
-  const rectLeft = (center: number, alignment: Alignment) =>
-    alignment === "left" ? center - box / 2 : alignment === "right" ? center + box / 2 - rectW : center - rectW / 2;
-
-  let cx = (options.center?.x ?? style.pos_x) * frame.width;
+  // pos_x is the block's anchor by alignment (v1.2.0), as in caption_layout.py.
+  let ax = (options.center?.x ?? style.pos_x) * frame.width;
   let cy = (options.center?.y ?? style.pos_y) * frame.height;
-  cx += slide(rectLeft(cx, style.alignment) - bleed, rectW + shadow + 2 * bleed, frame.width);
+  ax += slide(blockLeft(ax, rectW, style.alignment) - bleed, rectW + shadow + 2 * bleed, frame.width);
   cy += slide(cy - rectH / 2 - bleed, rectH + shadow + 2 * bleed, frame.height);
 
   return {
@@ -406,13 +412,26 @@ export function layoutCaption(
     shadow,
     spacing,
     bleed,
-    x: rectLeft(cx, style.alignment),
+    x: blockLeft(ax, rectW, style.alignment),
     y: cy - rectH / 2,
     width: rectW,
     height: rectH,
-    centerX: cx,
+    anchorX: ax,
     centerY: cy,
-    boxLeft: cx - box / 2,
+    boxLeft: blockLeft(ax, box, style.alignment),
     boxWidth: box,
   };
+}
+
+/** The left edge of a block `width` wide whose anchor is at `anchor` (caption_layout.block_left). */
+export function blockLeft(anchor: number, width: number, alignment: Alignment): number {
+  return alignment === "left" ? anchor : alignment === "right" ? anchor - width : anchor - width / 2;
+}
+
+/**
+ * Where a block's anchor is for an alignment (caption_layout.anchor_of): what
+ * an alignment change saves, so the caption on screen stays exactly where it is.
+ */
+export function anchorOf(left: number, width: number, alignment: Alignment): number {
+  return alignment === "left" ? left : alignment === "right" ? left + width : left + width / 2;
 }

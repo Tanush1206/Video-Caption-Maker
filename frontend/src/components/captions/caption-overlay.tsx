@@ -41,7 +41,7 @@ const KEY_STEP_LARGE = 0.1;
 const WIDTH_STEP = 0.01;
 const WIDTH_STEP_LARGE = 0.05;
 
-/** How close the centre has to come to the frame's middle to snap to it, in CSS px. */
+/** How close the caption's centre has to come to the frame's middle to snap to it, in CSS px. */
 const SNAP_PX = 8;
 
 /** The handles' hit area, in CSS pixels. WCAG 2.5.8 asks for 24. */
@@ -65,15 +65,20 @@ interface CaptionOverlayProps {
 /** What a gesture in flight is doing, captured when the pointer goes down. */
 interface Grab {
   kind: "move" | "width";
+  /** Which width handle, for a width gesture. */
+  side?: "left" | "right";
   pointerX: number;
   pointerY: number;
-  /** Where the box's centre was drawn when it was grabbed, as fractions. */
+  /** Where the anchor was drawn when it was grabbed, as fractions. */
   startX: number;
   startY: number;
+  /** The Max width, and the caption's own block's width, as fractions. */
+  startWidth: number;
+  blockWidth: number;
   frame: DOMRect;
 }
 
-/** A gesture's live result, drawn without saving until it ends. */
+/** A gesture's live result, drawn without saving until it ends. `center` is the anchor. */
 interface Live {
   center?: { x: number; y: number };
   boxWidth?: number;
@@ -89,11 +94,13 @@ const round3 = (value: number) => Math.round(value * 1000) / 1000;
  * burn (lib/caption-layout.ts) in the video's own pixels and drawn scaled to
  * the player, so what's on screen is what the MP4 gets.
  *
- * The box is placed by its centre and keeps its width wherever it is
- * dragged: the layout slides it inside the safe area instead of letting an
- * edge shrink or rewrap it. Three handles: the grip on its top edge (drag, or
- * arrow keys) and the left and right edges of its wrap box (drag, or arrow
- * keys) for the width, which the Max width slider also sets.
+ * The caption is placed by its anchor (v1.2.0): its block's left edge on
+ * Left, centre on Centre, right edge on Right. It keeps its width wherever it
+ * is dragged: the layout slides it inside the safe area instead of letting an
+ * edge shrink or rewrap it. Three handles: the grip on the anchor (drag, or
+ * arrow keys) and the two edges of the Max-width box (drag, or arrow keys),
+ * which the Max width slider also sets. On Left or Right the anchored edge of
+ * that box stays put unless its own handle is the one moved.
  */
 export function CaptionOverlay({
   caption,
@@ -126,7 +133,7 @@ export function CaptionOverlay({
    * second press doesn't measure the old position and lose the first.
    */
   const keyed = useRef<{ x: number; y: number } | null>(null);
-  const keyedWidth = useRef<number | null>(null);
+  const keyedWidth = useRef<{ x: number; width: number } | null>(null);
 
   const libraryKey = style && !BUILT_IN.has(style.font_key) ? style.font_key : undefined;
   useInjectedFontFace(libraryKey, style?.font_family);
@@ -190,24 +197,37 @@ export function CaptionOverlay({
   // Keep the grip inside the frame: it sits on the box's top edge, and a box
   // against the top of the safe area would leave half of it clipped.
   const gripTop = layout ? Math.max(HANDLE_SIZE / 2, layout.y * scale) : 0;
-  const gripX = layout
-    ? style?.alignment === "left"
-      ? layout.x * scale
-      : style?.alignment === "right"
-        ? (layout.x + layout.width) * scale
-        : layout.centerX * scale
-    : 0;
+  // On the anchor: the block's left edge, centre or right edge.
+  const gripX = layout ? layout.anchorX * scale : 0;
 
   function frameRect(): DOMRect | null {
     const rect = frame.current?.getBoundingClientRect();
     return rect && rect.width > 0 && rect.height > 0 ? rect : null;
   }
 
-  /** The centre and width being drawn now, as fractions. */
-  function current(): { x: number; y: number; width: number } {
+  /** The anchor, the Max width and the block's own width being drawn now, as fractions. */
+  function current(): { x: number; y: number; width: number; block: number } {
     const l = layout;
-    if (!l || !style) return { x: 0.5, y: 0.5, width: 0.8 };
-    return { x: l.centerX / video.width, y: l.centerY / video.height, width: l.boxWidth / video.width };
+    if (!l || !style) return { x: 0.5, y: 0.5, width: 0.8, block: 0 };
+    return {
+      x: l.anchorX / video.width,
+      y: l.centerY / video.height,
+      width: l.boxWidth / video.width,
+      block: l.width / video.width,
+    };
+  }
+
+  /**
+   * A Max-width change as an anchor and a width. On Centre the box grows both
+   * ways; on Left or Right its anchored edge stays put, unless that edge's own
+   * handle is the one moved, when the far edge stays and the anchor follows.
+   */
+  function resized(side: "left" | "right", from: { x: number; width: number }, width: number): Live {
+    const alignment = style?.alignment ?? "center";
+    const next = clamp(width, MIN_BOX_WIDTH, MAX_BOX_WIDTH);
+    if (alignment === "center" || side !== alignment) return { boxWidth: next };
+    const far = alignment === "left" ? from.x + from.width : from.x - from.width;
+    return { boxWidth: next, center: { x: alignment === "left" ? far - next : far + next, y: current().y } };
   }
 
   /**
@@ -223,21 +243,34 @@ export function CaptionOverlay({
     if (g.kind === "move") {
       let x = g.startX + (pointer.x - g.pointerX) / g.frame.width;
       let y = g.startY + (pointer.y - g.pointerY) / g.frame.height;
-      // Snap to the frame's centre lines.
-      const snapX = Math.abs(x - 0.5) * g.frame.width < SNAP_PX;
+      // Snap the caption's own centre to the frame's centre lines: on Left or
+      // Right the anchor is an edge, half the block away from that centre.
+      const toCentre =
+        style.alignment === "left" ? g.blockWidth / 2 : style.alignment === "right" ? -g.blockWidth / 2 : 0;
+      const snapX = Math.abs(x + toCentre - 0.5) * g.frame.width < SNAP_PX;
       const snapY = Math.abs(y - 0.5) * g.frame.height < SNAP_PX;
-      if (snapX) x = 0.5;
+      if (snapX) x = 0.5 - toCentre;
       if (snapY) y = 0.5;
       pending.current = { center: { x, y }, snapX, snapY };
     } else {
-      const centre = g.frame.left + g.startX * g.frame.width;
-      const width = clamp((2 * Math.abs(pointer.x - centre)) / g.frame.width, MIN_BOX_WIDTH, MAX_BOX_WIDTH);
-      pending.current = { boxWidth: width };
+      const px = (pointer.x - g.frame.left) / g.frame.width;
+      const side = g.side ?? "right";
+      // Measured from the box's fixed point: the anchor on Centre (the box
+      // grows both ways, so twice the distance), else the edge not moving.
+      const alignment = style.alignment;
+      const fixed =
+        alignment === "center" || side !== alignment
+          ? g.startX
+          : alignment === "left"
+            ? g.startX + g.startWidth
+            : g.startX - g.startWidth;
+      const width = (alignment === "center" ? 2 : 1) * Math.abs(px - fixed);
+      pending.current = resized(side, { x: g.startX, width: g.startWidth }, width);
     }
     setLive(pending.current);
   }
 
-  function start(kind: Grab["kind"], event: React.PointerEvent) {
+  function start(kind: Grab["kind"], event: React.PointerEvent, side?: Grab["side"]) {
     keyed.current = null;
     keyedWidth.current = null;
     const rect = frameRect();
@@ -245,7 +278,17 @@ export function CaptionOverlay({
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     const now = current();
-    grab.current = { kind, pointerX: event.clientX, pointerY: event.clientY, startX: now.x, startY: now.y, frame: rect };
+    grab.current = {
+      kind,
+      side,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      startX: now.x,
+      startY: now.y,
+      startWidth: now.width,
+      blockWidth: now.block,
+      frame: rect,
+    };
     pending.current = null;
     moved.current = false;
   }
@@ -265,11 +308,14 @@ export function CaptionOverlay({
     if (painting.current === null) painting.current = requestAnimationFrame(paint);
   }
 
-  /** The finished gesture as a patch: the centre the box is drawn at, or the width. */
+  /** The finished gesture as a patch: the anchor, the width, or both. */
   function commit(result: Live | null) {
     if (!result || !onPlace) return;
     if (result.boxWidth !== undefined) {
-      onPlace({ box_width: round3(result.boxWidth) });
+      onPlace({
+        box_width: round3(result.boxWidth),
+        ...(result.center ? { pos_x: round3(clamp(result.center.x, 0, 1)) } : {}),
+      });
       return;
     }
     if (result.center) {
@@ -332,7 +378,7 @@ export function CaptionOverlay({
     if (clicked) onToggle?.();
   }
 
-  /** Arrow keys on the grip move the box's centre; Shift moves it ten times as far. */
+  /** Arrow keys on the grip move the anchor; Shift moves it ten times as far. */
   function handleMoveKey(event: React.KeyboardEvent) {
     const delta = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
     if (!delta || !style || !onPlace || !ready) return;
@@ -344,7 +390,7 @@ export function CaptionOverlay({
     // walk the saved centre off into a dead zone the next press must undo.
     const drawn = layoutFor({ center: asked });
     if (!drawn) return;
-    const next = { x: clamp(drawn.centerX / video.width, 0, 1), y: clamp(drawn.centerY / video.height, 0, 1) };
+    const next = { x: clamp(drawn.anchorX / video.width, 0, 1), y: clamp(drawn.centerY / video.height, 0, 1) };
     keyed.current = next;
     setLive({ center: next });
     onPlace({ pos_x: round3(next.x), pos_y: round3(next.y) });
@@ -358,11 +404,15 @@ export function CaptionOverlay({
       event.key === outward || event.key === "ArrowUp" ? 1 : event.key === inward || event.key === "ArrowDown" ? -1 : 0;
     if (!sign || !style || !onPlace || !ready) return;
     event.preventDefault();
-    const from = keyedWidth.current ?? current().width;
-    const next = clamp(from + sign * (event.shiftKey ? WIDTH_STEP_LARGE : WIDTH_STEP), MIN_BOX_WIDTH, MAX_BOX_WIDTH);
+    const from = keyedWidth.current ?? current();
+    const result = resized(side, from, from.width + sign * (event.shiftKey ? WIDTH_STEP_LARGE : WIDTH_STEP));
+    const next = { x: result.center?.x ?? from.x, width: result.boxWidth ?? from.width };
     keyedWidth.current = next;
-    setLive({ boxWidth: next });
-    onPlace({ box_width: round3(next) });
+    setLive(result);
+    onPlace({
+      box_width: round3(next.width),
+      ...(result.center ? { pos_x: round3(clamp(next.x, 0, 1)) } : {}),
+    });
   }
 
   const draggable = Boolean(onPlace && style);
@@ -444,7 +494,7 @@ export function CaptionOverlay({
         >
           {dragging === "width"
             ? `width ${widthPercent}%`
-            : `${Math.round((layout.centerX / video.width) * 100)}% · ${Math.round((layout.centerY / video.height) * 100)}%`}
+            : `${Math.round((layout.anchorX / video.width) * 100)}% · ${Math.round((layout.centerY / video.height) * 100)}%`}
         </div>
       )}
 
@@ -523,7 +573,7 @@ export function CaptionOverlay({
                 handlesShown ? "opacity-100" : "opacity-0"
               )}
               onPointerEnter={() => setNear(true)}
-              onPointerDown={(event) => start("width", event)}
+              onPointerDown={(event) => start("width", event, side)}
               onPointerMove={handleMove}
               onPointerUp={(event) => end(event)}
               onPointerCancel={(event) => end(event)}

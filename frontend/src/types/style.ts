@@ -29,12 +29,14 @@ export interface CaptionStyle {
   box_opacity: number;
   /** Only drawn when `box_opacity` is above 0; the burn draws the same rectangle. */
   box_padding: number;
-  /** How the lines justify against each other and sit in the box. */
+  /** How the lines justify against each other inside the caption's block. */
   alignment: Alignment;
   /**
-   * The caption box's centre, as fractions of the frame. Where the box is
-   * asked to be: each caption is slid inside the safe area on its own
-   * (lib/caption-layout.ts), because each one is a different size.
+   * Where the caption is, as fractions of the frame: `pos_x` is its block's
+   * anchor by alignment (left edge, centre, right edge; v1.2.0), `pos_y` the
+   * block's vertical centre. Where it is asked to be: each caption is slid
+   * inside the safe area on its own (lib/caption-layout.ts), because each one
+   * is a different size.
    */
   pos_x: number;
   pos_y: number;

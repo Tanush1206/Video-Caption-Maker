@@ -30,8 +30,11 @@ import { usePlayback } from "@/hooks/use-playback";
 import { usePlayerShortcuts } from "@/hooks/use-player-shortcuts";
 import { useWaveform } from "@/hooks/use-stream";
 import { useVideo } from "@/hooks/use-videos";
+import { anchorOf, layoutCaption } from "@/lib/caption-layout";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { Caption } from "@/types/caption";
+import type { Alignment } from "@/types/style";
 
 /** The loading and error states' frame. */
 const SHELL = "mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-8";
@@ -87,6 +90,44 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
 
   const activeCaption =
     captions.find((caption) => caption.id === playback.activeCaptionId) ?? null;
+
+  /**
+   * The caption an alignment change or a placement keeps in view, laid out
+   * as the overlay draws it: the one on screen, or in a gap the nearest one.
+   */
+  const shownLayout = () => {
+    const frame = playback.intrinsic;
+    if (!style || !frame) return null;
+    let caption: Caption | null = activeCaption;
+    if (!caption) {
+      const now = playback.currentMs();
+      const distance = (c: Caption) => (now < c.start_ms ? c.start_ms - now : now > c.end_ms ? now - c.end_ms : 0);
+      caption = captions.reduce<Caption | null>((best, c) => (!best || distance(c) < distance(best) ? c : best), null);
+    }
+    return {
+      frame,
+      layout: layoutCaption(caption?.text ?? "", style, frame, {
+        overrideScale: caption?.override_scale,
+        bold: caption?.override_bold,
+      }),
+    };
+  };
+  /**
+   * The `pos_x` that keeps that caption exactly where it is under
+   * `alignment` (v1.2.0: alignment never moves it), or that centres it.
+   */
+  const anchorFor = (alignment: Alignment, centre = false) => {
+    if (centre && alignment === "center") return 0.5;
+    const shown = shownLayout();
+    if (!shown) return centre ? 0.5 : (style?.pos_x ?? 0.5);
+    const { frame, layout } = shown;
+    const left = centre ? (frame.width - layout.width) / 2 : layout.x;
+    return anchorOf(left, layout.width, alignment) / frame.width;
+  };
+  const shown = style && style.alignment !== "center" ? shownLayout() : null;
+  const centred = shown
+    ? Math.abs(shown.layout.x + shown.layout.width / 2 - shown.frame.width / 2) < 1
+    : undefined;
 
   /**
    * Pull the captions again the moment a transcription finishes.
@@ -228,6 +269,8 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
                 isSaving={isSavingStyle}
                 tab={tool === "captions" ? "typography" : tool}
                 aspect={aspect}
+                anchorFor={anchorFor}
+                centred={centred}
               />
             ),
           }}

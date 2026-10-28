@@ -306,6 +306,8 @@ export function StylePanel({
   isSaving,
   tab,
   aspect = 16 / 9,
+  anchorFor,
+  centred,
 }: {
   videoId: number;
   update: (patch: Partial<CaptionStyle>) => void;
@@ -313,6 +315,15 @@ export function StylePanel({
   tab: StyleTab;
   /** The video's aspect ratio, for the default width of its shape. */
   aspect?: number;
+  /**
+   * The `pos_x` that keeps the caption on screen exactly where it is under
+   * `alignment`, or, with `centre`, the one that centres it on the frame
+   * (lib/caption-layout `anchorOf`). From the editor, which knows the caption
+   * and the frame; without it, alignment and placement set `pos_x` as given.
+   */
+  anchorFor?: (alignment: Alignment, centre?: boolean) => number;
+  /** Whether the caption on screen is centred on the frame, for Placement. */
+  centred?: boolean;
 }) {
   const { data: style, isLoading } = useCaptionStyle(videoId);
   const { data: options } = useStyleOptions();
@@ -563,17 +574,21 @@ export function StylePanel({
             label="Placement"
             options={PLACEMENTS}
             selected={
-              style.pos_x === 0.5
+              (centred ?? style.pos_x === 0.5)
                 ? (PLACEMENTS.find(({ key }) => PLACEMENT_Y[key] === style.pos_y)?.key ?? null)
                 : null
             }
-            onSelect={(key) => set({ pos_x: 0.5, pos_y: PLACEMENT_Y[key] })}
+            onSelect={(key) =>
+              set({ pos_x: anchorFor ? anchorFor(style.alignment, true) : 0.5, pos_y: PLACEMENT_Y[key] })
+            }
           />
+          {/* Lines against each other inside the caption; the caption itself
+              stays where it is on the frame (v1.2.0). */}
           <Choice
             label="Alignment"
             options={ALIGNMENTS}
             selected={style.alignment}
-            onSelect={(alignment) => set({ alignment })}
+            onSelect={(alignment) => set({ alignment, ...(anchorFor ? { pos_x: anchorFor(alignment) } : {}) })}
           />
           {/* The box's width: text wraps at it, wherever the box is. The same
               value the handles on the box's edges set. */}
