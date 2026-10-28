@@ -303,8 +303,20 @@ logged and never surfaced to the user.
      but the only one of the two that accepts `shaping=complex`, without
      which Indic scripts were drawn unshaped (v1.0.7);
   3. encode with `h264_nvenc` (`-cq 19 -preset p6`) when it works, otherwise
-     `libx264 -crf 18 -preset medium` (`services/rendering.py`);
-  4. write the progress from FFmpeg's `out_time_us`.
+     `libx264 -crf 18 -preset faster` (`services/rendering.py`; `medium`
+     until v1.2.0, see D21);
+  4. write the progress from FFmpeg's `out_time_us`, read from stdout while
+     a thread drains stderr (only its last lines are kept, for the error
+     message). Until v1.2.0 stderr was read only after FFmpeg exited, so a
+     source whose decoder warns often filled the 64 KB pipe and the burn
+     hung for good (a 15-minute YouTube download stopped at 80%);
+  5. log the FFmpeg command, and when it finishes, the time taken and the
+     speed against real time.
+- Measured on a 15-minute 1080p30 source (v1.2.0): 72 s with NVENC on an
+  RTX 5080 (12.4× real time; libass costs nothing measurable, the encoder
+  sets the pace), 397 s on 4 CPU cores with no GPU (2.25×).
+- The export panel shows a time-left estimate under the bar (`useEta`,
+  the same one transcription uses).
 - The output goes to `user_N/exports/<uuid>.<fmt>`. A retry writes a new
   file, never resuming a partial one.
 - **Preview = burn.** `lib/caption-style.ts` is the browser twin of
@@ -346,8 +358,9 @@ logged and never surfaced to the user.
   mixes script fonts). It is a drawn rectangle (`\p1`) of the layout's exact
   size, on layer 0 under the text, filled with the box colour and opacity;
   the text is BorderStyle 1 with no outline or shadow.
-- Render timeout: 3 h (`RENDER_TIMEOUT_SECONDS`), enforced by the FFmpeg
-  subprocess itself.
+- Render timeout: 3 h (`RENDER_TIMEOUT_SECONDS`), a timer that kills FFmpeg.
+  Until v1.2.0 it was a timeout on the wait after FFmpeg closed stdout, so it
+  could never stop a burn that hung with stdout open.
 - **No Celery time limits** (`task_soft_time_limit`/`task_time_limit` are
   `None` in `celery_app.py`). Until v1.0.5 they were 30/35 min, which would
   have killed long CPU transcriptions and multi-hour renders, except that

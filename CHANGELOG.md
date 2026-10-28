@@ -19,6 +19,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   binary) is left out of the image: the app never optimises images.
 
 ### Fixed
+- **A long MP4 export no longer stops at 80% for good.** Some videos (a
+  YouTube download, for one) make FFmpeg print a warning every few frames;
+  after about 64 KB of them the export waited on itself forever, from
+  v1.0.0 on. A 15-minute 1080p video now burns in about 72 s on an RTX 5080,
+  and in about 6.5 minutes on 4 CPU cores with no GPU. The 3-hour render
+  limit now really applies.
+- **Faster exports without a GPU:** x264 runs at its `faster` preset, at the
+  same quality setting (files about 5% larger).
 - **Large and slow uploads.** An upload now streams through the app in
   constant memory: until now the whole video sat in memory on its way (about
   4 GB of RAM for a 4 GB file), and Next 15 would have cut anything over
@@ -37,6 +45,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Google held up every other request, the style save included.
 
 ### Added
+- The MP4 export shows how long it has left ("about 2 min left").
+- `scripts/burn_time.py` times a burn on a long video; the release checklist
+  now runs it.
 - The Font field says "Downloading font… this can take a few seconds the
   first time." while a new font downloads, and says so in plain words if the
   download fails. Neither message sits next to Reset.

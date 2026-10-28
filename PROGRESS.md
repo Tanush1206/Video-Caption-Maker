@@ -931,6 +931,34 @@ Tanush's testing first (2026-10-28).
       message (downloading, failed, Undo) in light/dark at 375/1440; browser
       script: download message, failure message, measured win span, Reset →
       Undo restores every field, a focused tab shows another tab's Reset.
+- [x] **MP4 export "slow" (Tanush, 2026-10-29): it was a hang, from
+      v1.0.0.** new.mp4 (15 min, 1080p30, Hindi, a YouTube download) was
+      exported on the **install** (v1.1.1, CUDA image, h264_nvenc), not on
+      dev: video 140, export started 18:57:28 UTC; the output stopped growing
+      at 18:58, ffmpeg asleep with 90 s of CPU, GPU 0%, worker "unhealthy".
+      Cause: stderr was a pipe read only after ffmpeg exited; this source's
+      decoder prints "Late SEI is not implemented" (77 KB over the video), the
+      64 KB pipe filled at ~80%, ffmpeg blocked, and the 3-hour timeout never
+      started (it was a timeout on the wait after stdout closed). Stage times
+      on this file, install GPU: decode 14 s, decode + libass 13 s, decode +
+      NVENC 72 s, full 71 s (encoder-bound; captions cost nothing measurable).
+      Same `burn_captions` from v1.1.0, v1.1.1 and the fix, same image and
+      ffmpeg: 1.1.0 and 1.1.1 at 80% after 58 s and hung; the fix 72 s.
+      Fix: stderr drained on a thread (last 40 lines kept for the error), the
+      deadline a timer that kills ffmpeg, the command and the time/speed
+      logged; x264 `faster` (D21; 4 cores, 120 s: medium 87 s, faster 51 s,
+      veryfast 34 s). Measured: GPU dev stack through the app
+      (`scripts/burn_time.py`): 76 s end to end, ffmpeg 72 s (12.4x); CPU
+      only, 4 cores, whole video: 397 s (2.25x). Time left shown under the
+      export bar (`useEta`); `export-eta` check PASS; axe 0, 375/1440 light
+      and dark. Release checklist item 6. Tests: 3 new (all fail on 1.1.1);
+      backend 608 passed. Test videos 7668 (by the script) and 7669 deleted;
+      7426 left.
+      Found, not changed: the export options ask the **API** whether NVENC
+      works, and the API container has no GPU, so "GPU encoding." never
+      shows (null on dev and install); and the worker's health check pings a
+      `--pool=solo` worker that can't answer during a task, so any long job
+      shows "unhealthy" (nothing acts on it).
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
