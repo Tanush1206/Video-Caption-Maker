@@ -29,8 +29,12 @@ ENV NEXT_PUBLIC_API_URL="" \
     NEXT_PUBLIC_AUTH_MODE=${NEXT_PUBLIC_AUTH_MODE} \
     BACKEND_URL=http://backend:8000 \
     NEXT_TELEMETRY_DISABLED=1
+# sharp (Next 15's optional image optimiser, with a prebuilt LGPL libvips) is
+# removed first: images.unoptimized means nothing calls it, and without it on
+# disk the standalone server can't include it nor /licenses list it.
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
+    && rm -rf node_modules/sharp node_modules/@img \
     && npm run build
 
 # The licence files of every production dependency (their code is in the

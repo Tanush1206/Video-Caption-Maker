@@ -98,6 +98,8 @@ def main() -> None:
     # The compiler binary is per platform; the image has the Linux one.
     npm_rows = [r for r in npm_rows if not r[0].startswith("@next/swc-")]
     npm_rows.append(["@next/swc-linux-* (the image's Linux builds)", "as installed", "MIT"])
+    # frontend/Dockerfile removes sharp and its binaries before the build: not shipped.
+    npm_rows = [r for r in npm_rows if r[0] != "sharp" and not r[0].startswith("@img/")]
 
     python_rows = [[n, v, LICENCE_FROM_FILE.get(n, l)] for n, v, l in python_rows]
     nvidia = [r for r in python_rows if r[0].startswith("nvidia-")]
