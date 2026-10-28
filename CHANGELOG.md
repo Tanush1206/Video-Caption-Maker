@@ -6,7 +6,13 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-29
+
+Next.js 15.5, uploads that stream, long exports that finish, and fixes from
+testing 1.1.1. One migration (`e8b3d5f19a42`, caption positions) runs on the
+first start and leaves every existing caption exactly where it was. The
+frontend image is new (Next.js 15); the backend downloads its app layers and
+one small layer, and the large Python and system layers are unchanged.
 
 ### Security
 - **The last two copies of the distrusted emSign roots are gone.** pip's

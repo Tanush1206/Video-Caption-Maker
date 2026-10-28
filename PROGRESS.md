@@ -983,6 +983,14 @@ Tanush's testing first (2026-10-28).
       425-466 s on dev, 286-310 segments, against 75 s for Tanush's export of
       it in Roman script (the Hinglish model). Not a regression: same code,
       libraries and model files. Test video 141 (install) deleted.
+- [x] **Before tagging 1.2.0:** backend 612 passed, 1 skipped, ruff clean;
+      frontend lint, types, 10 tests; `docker build --target build frontend`
+      clean (`/api/videos` a dynamic route). E2E on the GPU dev stack
+      (hinglish.mp4, same and en, SRT, VTT, MP4): ALL PASSED; on the CPU path
+      (same images, no GPU: large-v3-turbo int8, libx264 `faster`, burn 20 s
+      at 11.3x on 32 cores): ALL PASSED. Test videos 7671-7673 deleted; 7426
+      left. Notices unchanged since the Next commit (no dependency or base
+      image change after it).
 - Scope (Tanush, 2026-10-29): release v1.2.0 with what is done. Long-video
   phrasing and honest progress, the virtualised caption list, CLS, the
   weekly workflow, `vcm doctor` with the issue template, S7, and the model
