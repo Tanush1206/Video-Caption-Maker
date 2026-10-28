@@ -47,5 +47,10 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Everything but the build's static files, which carry no state.
-export const config = { matcher: ["/((?!_next/static).*)"] };
+// Everything but the build's static files, which carry no state, and the
+// upload, POST /api/videos: the one route with a large body. Since Next 15
+// middleware buffers a request's body and keeps only its first 10 MB, which
+// broke every larger upload (v1.2.0). The API's own request guard refuses
+// other origins, other localhost ports and rebinding Hosts there; the Host it
+// reads comes through forwarded-for.js, which no caller can forge.
+export const config = { matcher: ["/((?!_next/static|api/videos$).*)"] };
