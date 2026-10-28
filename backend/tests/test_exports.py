@@ -782,6 +782,31 @@ def test_a_hung_burn_is_stopped_at_the_render_timeout(tmp_path, monkeypatch):
     assert not (tmp_path / "out.mp4").exists()
 
 
+@pytest.mark.asyncio
+async def test_gpu_encoding_is_the_workers_answer_not_the_apis(
+    client, auth_headers, exportable, db_session, monkeypatch
+):
+    """
+    Only the worker has the GPU. The export options asked the API's own
+    process, which never has one, so "GPU encoding." never showed (to v1.1.1).
+    """
+    from app.services import app_settings, rendering
+
+    def api_probe():
+        raise AssertionError("the API probed NVENC itself")
+
+    monkeypatch.setattr(rendering, "nvenc_available", api_probe)
+    before = await app_settings.get_value(db_session, app_settings.WORKER_HARDWARE)
+    url = f"/api/videos/{exportable}/exports/options"
+    try:
+        for report, expected in (({"nvenc": True}, "h264_nvenc"), ({"nvenc": False}, None), ({}, None)):
+            await app_settings.set_value(db_session, app_settings.WORKER_HARDWARE, json.dumps(report))
+            response = await client.get(url, headers=auth_headers)
+            assert response.json()["hardware_encoder"] == expected, report
+    finally:
+        await app_settings.set_value(db_session, app_settings.WORKER_HARDWARE, before)
+
+
 def test_the_burn_asks_libass_for_complex_shaping():
     from pathlib import Path
 

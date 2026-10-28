@@ -304,7 +304,7 @@ Keys in use (`backend/app/services/app_settings.py`):
 |---|---|---|
 | `gemini_api_key` | `PATCH /api/system/settings` | the key, **plain text** (acceptable: single-user, and Postgres is reachable only on the compose network); never returned by any response; never logged (both engines use `hide_parameters=True`); blank clears it (row deleted) |
 | `whisper_model` | `PATCH /api/system/settings` | `small`/`medium`/`large-v3-turbo`/`large-v3`; absent = automatic |
-| `worker_hardware` | worker at `worker_ready` | JSON: `cuda`, `gpu_name`, `vram_gb`, `ram_gb`, `cpu_count`, `whisper_default`, `translator` |
+| `worker_hardware` | worker at `worker_ready` | JSON: `cuda`, `gpu_name`, `vram_gb`, `ram_gb`, `cpu_count`, `whisper_default`, `translator`, `nvenc` (v1.2.0: whether `h264_nvenc` opens on the worker) |
 
 ### Enum types
 

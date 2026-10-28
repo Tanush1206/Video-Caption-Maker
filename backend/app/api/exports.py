@@ -18,7 +18,7 @@ from app.schemas.export import (
 )
 from app.services import export as export_service
 from app.utils.filenames import safe_stem
-from app.services import media, rendering
+from app.services import app_settings, media, rendering
 from app.services import storage
 from app.services import video as video_service
 from app.utils.security import (
@@ -187,11 +187,15 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
 
     recommended = rendering.recommended_height(source_height) if source_height else None
 
+    # The worker's answer, not this process's: only the worker has the GPU
+    # (v1.2.0; asking here always said no).
+    report = await app_settings.worker_hardware(db)
+
     return ExportOptions(
         source_width=source_width,
         source_height=source_height,
         recommended_height=recommended,
-        hardware_encoder="h264_nvenc" if rendering.nvenc_available() else None,
+        hardware_encoder="h264_nvenc" if report and report.get("nvenc") else None,
         resolutions=resolutions,
     )
 

@@ -429,7 +429,7 @@ Enum: `srt`, `vtt`, `json`, `mp4`
 | `source_width` | integer \| null | yes |  |
 | `source_height` | integer \| null | yes |  |
 | `recommended_height` | integer \| null | yes |  |
-| `hardware_encoder` | string \| null | yes |  |
+| `hardware_encoder` | string \| null | yes | `h264_nvenc` when the worker found NVENC usable (its hardware report, v1.2.0), else null |
 | `resolutions` | [ExportResolution](#exportresolution)[] | yes |  |
 
 ### ExportRead

@@ -55,13 +55,17 @@ def report_hardware(**_kwargs) -> None:
 
     Only the worker container has the GPU passed through, so it is the only
     one that can answer. Written once at startup into app_settings, where the
-    Settings page reads it. Failure here must never stop the worker.
+    Settings page and the export panel read it. Failure here must never stop
+    the worker.
+
+    `nvenc` included since v1.2.0: the export panel used to ask the API's own
+    process, which has no GPU, so "GPU encoding." never showed.
     """
     import asyncio
     import json
     import logging
 
-    from app.services import app_settings, hardware
+    from app.services import app_settings, hardware, rendering
     from app.workers.db import worker_session
 
     async def write() -> None:
@@ -70,6 +74,7 @@ def report_hardware(**_kwargs) -> None:
             **hw.as_dict(),
             "whisper_default": hardware.whisper_profile(hw).__dict__,
             "translator": hardware.translator_profile(hw).__dict__,
+            "nvenc": rendering.nvenc_available(),
         }
         async with worker_session() as session:
             await app_settings.set_value(session, app_settings.WORKER_HARDWARE, json.dumps(report))
