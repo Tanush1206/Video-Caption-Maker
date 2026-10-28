@@ -9,6 +9,7 @@ browser half is checked by scripts/ui-check `line-styles` and
 """
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -158,6 +159,105 @@ async def test_srt_and_vtt_break_where_the_burn_does(fmt, client, auth_headers, 
     # In the burn's lines, in the words' own case (the burn is upper-cased).
     assert "\n".join(line.title() for line in burned[1]).lower() in body.lower()
     assert "\n".join(burned[1]) not in body
+
+
+def _sidecar_lines(body: str, fmt: str) -> list[list[str]]:
+    """Each cue's text lines, in order: everything after its timing line."""
+    if fmt == "vtt":
+        body = body.removeprefix("WEBVTT\n\n")
+    cues = []
+    for block in body.strip("\n").split("\n\n"):
+        lines = block.split("\n")
+        timing = next(i for i, line in enumerate(lines) if " --> " in line)
+        cues.append(lines[timing + 1:])
+    return cues
+
+
+def _burned_lines(document: str) -> list[list[str]]:
+    """Each caption's lines as the burn draws them: its text event, tags removed."""
+    # Fields: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text.
+    return [
+        re.sub(r"\{[^}]*\}", "", line.split(",", 9)[9]).split("\\N")
+        for line in document.splitlines()
+        if line.startswith("Dialogue: 1,")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_srt_and_vtt_follow_the_line_style_at_export_time(
+    client, auth_headers, sample_video_bytes, tmp_path
+):
+    """
+    For each line style, changed just before exporting: every SRT and VTT cue
+    has exactly the lines the burn draws for that caption, on the video's
+    frame. Stacked with 3 words a line is the case from 1.1.1's testing.
+    """
+    from app.models.video import Video
+
+    width, height = 1280, 720
+    video_id = (
+        await client.post(
+            "/api/videos", headers=auth_headers,
+            files={"file": ("clip.mp4", sample_video_bytes, "video/mp4")},
+        )
+    ).json()["id"]
+    source = tmp_path / "black.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d=1:r=5",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)],
+        capture_output=True, timeout=120, check=True,
+    )
+    texts = [
+        "ko auto generate karegi aur",
+        "Hello there\nmy friends, and a few more words",
+        ENGLISH,
+        HINDI,
+        "short",
+    ]
+    async with AsyncSessionLocal() as session:
+        video = (await session.execute(select(Video).where(Video.id == video_id))).scalar_one()
+        storage.resolve(video.storage_path).write_bytes(source.read_bytes())
+        session.add_all([
+            Caption(video_id=video_id, sequence=i, start_ms=i * 2000, end_ms=i * 2000 + 1500, text=t)
+            for i, t in enumerate(texts)
+        ])
+        await session.commit()
+
+    looks = [
+        {"line_style": "stacked", "words_per_line": 3, "max_lines": 4},
+        {"line_style": "balanced", "max_lines": 2},
+        {"line_style": "auto", "max_lines": 3, "box_width": 0.5},
+        {"line_style": "stacked", "words_per_line": 1, "max_lines": 6},
+        {"line_style": "balanced", "max_lines": 1, "box_width": 0.3},
+    ]
+    for look in looks:
+        saved = await client.patch(f"/api/videos/{video_id}/style", headers=auth_headers, json=look)
+        assert saved.status_code == 200
+        async with AsyncSessionLocal() as session:
+            style = (
+                await session.execute(select(CaptionStyle).where(CaptionStyle.video_id == video_id))
+            ).scalar_one()
+            burned = _burned_lines(subtitles.to_ass(
+                [Caption(video_id=video_id, sequence=i, start_ms=i * 2000, end_ms=i * 2000 + 1500, text=t)
+                 for i, t in enumerate(texts)],
+                style, width, height,
+            ))
+        assert any(len(lines) > 1 for lines in burned), look
+        for fmt in ("srt", "vtt"):
+            created = (
+                await client.post(f"/api/videos/{video_id}/exports", headers=auth_headers, json={"format": fmt})
+            ).json()
+            ticket = (
+                await client.post(f"/api/exports/{created['id']}/download-token", headers=auth_headers)
+            ).json()
+            body = (await client.get(f"/api/exports/{created['id']}/download?token={ticket['token']}")).text
+            assert _sidecar_lines(body, fmt) == burned, (look, fmt)
+    # The 1.1.1 report: Stacked, 3 words a line, gives two lines.
+    stacked = _burned_lines(subtitles.to_ass(
+        [Caption(video_id=1, sequence=0, start_ms=0, end_ms=1500, text=texts[0])],
+        _style(line_style="stacked", words_per_line=3, max_lines=4), width, height,
+    ))
+    assert stacked == [["ko auto generate", "karegi aur"]]
 
 
 @pytest.mark.asyncio
