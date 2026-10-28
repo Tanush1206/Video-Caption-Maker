@@ -432,14 +432,14 @@ export function StylePanel({
             />
             {/* Here, by the font, and nowhere near Reset. */}
             <div role="status" className="text-[13px] leading-[18px] text-muted-foreground">
-              {fontDownload.state === "downloading" && (
+              {fontDownload.statusOf(style.font_key) === "downloading" && (
                 <p className="flex items-center gap-1.5">
                   <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
                   Downloading font… this can take a few seconds the first time.
                 </p>
               )}
             </div>
-            {fontDownload.state === "failed" && (
+            {fontDownload.statusOf(style.font_key) === "failed" && (
               <p role="alert" className="flex items-start gap-1.5 text-[13px] leading-[18px] text-destructive">
                 <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                 This font couldn&apos;t be downloaded. Check the internet connection and choose it again, or pick

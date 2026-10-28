@@ -88,11 +88,14 @@ export type FontDownload = "downloading" | "failed" | null;
  * caption is then drawn in the regular one.
  *
  * `onArrived` runs once the files are there, for whatever was measured from
- * them on the server.
+ * them on the server. `statusOf(key)` is what to say about that font: the
+ * message belongs to one font, and a Reset, preset or Undo that swaps it
+ * out must not leave it behind.
  */
 export function useFontDownload(onArrived: (key: string) => void) {
-  const [state, setState] = useState<FontDownload>(null);
+  const [status, setStatus] = useState<{ key: string; state: FontDownload } | null>(null);
   const latest = useRef<string | null>(null);
+  const setState = (state: FontDownload) => setStatus(state && latest.current ? { key: latest.current, state } : null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stop = () => {
@@ -133,7 +136,8 @@ export function useFontDownload(onArrived: (key: string) => void) {
 
   useEffect(() => stop, []);
 
-  return { state, start, clear };
+  const statusOf = (key: string): FontDownload => (status?.key === key ? status.state : null);
+  return { statusOf, start, clear };
 }
 
 export type { FontLibraryEntry };
