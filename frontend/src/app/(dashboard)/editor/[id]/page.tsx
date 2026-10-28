@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -52,8 +53,9 @@ const WORKSPACE_HEIGHT = "lg:h-[calc(100vh-104px)]";
  */
 const NOT_VIDEO_PX = 104 + 48 + 60 + 128;
 
-export default function EditorPage({ params }: { params: { id: string } }) {
-  const videoId = Number(params.id);
+export default function EditorPage() {
+  // From the router: since Next 15 the `params` prop is a Promise.
+  const videoId = Number(useParams<{ id: string }>().id);
 
   // Split in two so the workspace can call hooks unconditionally: a bad id has
   // to be rejected before any query is allowed to fire.

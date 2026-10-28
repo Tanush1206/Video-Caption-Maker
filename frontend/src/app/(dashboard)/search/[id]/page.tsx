@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 
 import { WIDE_CONTAINER } from "@/components/layout/page-frame";
@@ -8,8 +9,9 @@ import { SearchWorkspace } from "@/components/search/search-workspace";
 import { cn } from "@/lib/utils";
 import { useVideo } from "@/hooks/use-videos";
 
-export default function VideoSearchPage({ params }: { params: { id: string } }) {
-  const videoId = Number(params.id);
+export default function VideoSearchPage() {
+  // From the router: since Next 15 the `params` prop is a Promise.
+  const videoId = Number(useParams<{ id: string }>().id);
 
   if (Number.isNaN(videoId)) {
     return <p className="p-8 text-[15px] text-muted-foreground">Invalid video id.</p>;
