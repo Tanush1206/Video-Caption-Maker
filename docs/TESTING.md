@@ -137,6 +137,24 @@ python scripts/e2e.py --base http://localhost:3000 \
 For each job it prints the stages it saw, the time taken, any notice and the
 first captions. Each job exports SRT, VTT and (unless `--no-burn`) MP4.
 
+### Burn time on a long video: `scripts/burn_time.py` (v1.2.0)
+
+Uploads one video, waits for its captions, burns an MP4 at the source's size
+and times it from the request to the finished file. It prints when the burn
+passed 25, 50 and 75%, so a stall shows where it happened, gives up after 2
+minutes without progress, and **deletes the video it uploaded**. Exits
+non-zero if the burn fails or is slower than `--min-speed` × real time.
+
+```bash
+python scripts/burn_time.py --base http://localhost:3000 --video long.mp4 --min-speed 5   # GPU
+python scripts/burn_time.py --base http://localhost:3000 --video long.mp4 --min-speed 1   # CPU
+```
+
+The encoder used is in the worker's log (`NVENC available`, the logged FFmpeg
+command), with FFmpeg's own time and speed (`Rendered … in 72 s (12.4x real
+time)`). Baseline on a 15-minute 1080p30 YouTube download: 76 s end to end on
+the RTX 5080 dev stack; 397 s on 4 CPU cores with no GPU.
+
 ### Screenshots, accessibility and UI behaviour: `scripts/ui-check/`
 
 Committed in v1.0.5 (see its README). Run against a running app: an install,
@@ -382,6 +400,7 @@ Full layer digests are in PROGRESS.md.
 | A first font download doesn't hold up the API (v1.2.0) | `test_font_library.py` (`test_a_slow_font_download_does_not_hold_up_other_requests`) | the Font field's download and failure messages, Reset then Undo, by browser on the dev stack |
 | Uploads through the frontend (v1.2.0): `/api/videos` is streamed by a route handler, not Next's rewrite proxy; the preload overwrites `X-Forwarded-Host` and turns off Node's 5-minute `requestTimeout`; a dropped upload's temporary file is closed at once | `frontend/tests/forwarded-for.test.js`; `test_upload_cancel.py` (fails without `app/multipart.py`) | `checks.js upload-proxy`; measured on the built image: 2.05 GB in 9.8 s, frontend peak 79 MiB (Next 14: 34 → 241 MiB for 192 MB); 360 MB at 1 MB/s in 358 s (the 1.1.0 frontend cut it off at 5 minutes); Cancel in the browser at 360 MB: the API's request ended, its temporary file freed at once, no video or file left |
 | Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
+| A burn never hangs on FFmpeg's own output (v1.2.0): over 1 MB of stderr, a failure's reason kept after it, the 3-hour limit actually stops a hung FFmpeg; the export shows time left | `test_exports.py` (`test_a_burn_survives_ffmpeg_writing_more_than_a_pipe_holds`, `test_a_failed_burn_still_says_why_after_a_flood_of_warnings`, `test_a_hung_burn_is_stopped_at_the_render_timeout`; all three fail on 1.1.1) | `checks.js export-eta`; `scripts/burn_time.py` on a 15-minute 1080p video: 1.1.0 and 1.1.1 stop at 80% for good, the fix burns it in 72 s with NVENC, 397 s on 4 CPU cores |
 | Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |
 | Reset and presets centre the box with the default width and lines | `test_caption_styles.py` (`test_reset_and_presets_clear_a_hand_placement`) | |
 | Caption drag, grab handle, keyboard placement, style sliders | | `checks.js caption-drag`, `caption-handle`, `caption-keyboard`, `style-sliders` |
@@ -532,7 +551,12 @@ else does.
 4. UI changes: `scripts/ui-check` screenshots at 375/1440 px in light and
    dark, axe 0, and the relevant `checks.js` checks pass.
 5. E2E on the GPU install, and on CPU for pipeline changes.
-6. CI green on the `main` commit to be tagged.
+6. Burn time on a long video (v1.2.0): `scripts/burn_time.py` with a video
+   of 15 minutes or more at 1080p, ideally a YouTube download (its decoder
+   warnings are what hung 1.1.1). GPU: `--min-speed 5` (a 15-minute video
+   in 3 minutes or less); CPU-only: `--min-speed 1`. Compare with the
+   baseline in §2, and note the worker's `Rendered … in` line.
+7. CI green on the `main` commit to be tagged.
 
 **Tag and release** (maintainer)
 1. Push `main`, then the tag `vX.Y.Z`.
