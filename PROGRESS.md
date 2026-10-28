@@ -954,11 +954,39 @@ Tanush's testing first (2026-10-28).
       and dark. Release checklist item 6. Tests: 3 new (all fail on 1.1.1);
       backend 608 passed. Test videos 7668 (by the script) and 7669 deleted;
       7426 left.
-      Found, not changed: the export options ask the **API** whether NVENC
-      works, and the API container has no GPU, so "GPU encoding." never
-      shows (null on dev and install); and the worker's health check pings a
+      Found, fixed next (Tanush: "they're small"): the export options asked
+      the **API** whether NVENC works, and the API container has no GPU, so
+      "GPU encoding." never showed; and the worker's health check pinged a
       `--pool=solo` worker that can't answer during a task, so any long job
-      shows "unhealthy" (nothing acts on it).
+      showed "unhealthy".
+- [x] **Install cleanup (Tanush, 2026-10-29):** the hung export's 1.36 GB
+      partial file deleted; then storage against the `exports` table: 19
+      more files with no row (8 MP4, 11 SRT/VTT, ~43 MB, 2026-10-08 to 10-12,
+      from the pre-v1.0.5 delete bug), deleted by name with Tanush's OK. Now
+      2 rows, 2 files, none missing either way.
+- [x] **"GPU encoding." from the worker:** the worker's hardware report
+      (`worker_ready`) carries `nvenc`; `/exports/options` reads it, never
+      probes in the API. Test: the API's own probe raises, the answer follows
+      the report (true, false, absent). Live: dev report `nvenc: true`.
+- [x] **Worker heartbeat:** a thread touches `/tmp/vcm-worker-heartbeat`
+      every 15 s after a Redis ping; `worker_init` clears it; the prod health
+      check passes while it is under a minute old. Measured on the GPU dev
+      stack through a 15-minute transcription and burn (video 7670, deleted):
+      heartbeat healthy at every 8 s poll, `celery inspect ping` no answer
+      throughout. `vcm update`/`restart`/`start` wait only for `/api/health`,
+      nothing `depends_on` the worker's health and Docker restarts nothing for
+      it: an unhealthy worker never made `update` wait or restart it. `update`
+      does restart a busy worker when its image changes; recovery requeues the
+      job (unchanged). Tests: 3 heartbeat + 1 encoder; backend 612 passed.
+- [x] Checked while testing: transcribing new.mp4 with the language on
+      automatic (Devanagari, large-v3) takes 395 s on the 1.1.1 install and
+      425-466 s on dev, 286-310 segments, against 75 s for Tanush's export of
+      it in Roman script (the Hinglish model). Not a regression: same code,
+      libraries and model files. Test video 141 (install) deleted.
+- Scope (Tanush, 2026-10-29): release v1.2.0 with what is done. Long-video
+  phrasing and honest progress, the virtualised caption list, CLS, the
+  weekly workflow, `vcm doctor` with the issue template, S7, and the model
+  mirror move to the next version.
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from

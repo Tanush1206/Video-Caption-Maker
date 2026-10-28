@@ -409,6 +409,8 @@ Full layer digests are in PROGRESS.md.
 | API version is `VCM_VERSION` | `test_version.py` | |
 | Forwarded headers trusted only from the frontend | `test_proxy_headers.py` | live: a container aliased `frontend` vs another (v1.0.5) |
 | No Celery limit can cut a long job | `test_worker_config.py` | measured: `--pool=solo` enforces no limit |
+| The worker is healthy while a job runs (v1.2.0): a heartbeat thread beats only while Redis answers, keeps beating while the job holds the worker, and a restart clears the old beat | `test_worker_config.py` (`test_the_heartbeat_*`, `test_a_restarted_worker_does_not_count_its_old_heartbeat`) | the health command polled every 8 s through a 15-minute transcription and burn on the GPU dev stack: healthy every time, while `celery inspect ping` got no answer; on the install after the update, `docker ps` during `burn_time.py` |
+| "GPU encoding." comes from the worker, which has the GPU (v1.2.0) | `test_exports.py` (`test_gpu_encoding_is_the_workers_answer_not_the_apis`) | the export panel on the GPU install |
 | Google Fonts pinned to a commit; a font moved on `main` still downloads | `test_font_library.py` | |
 | Unused settings removed; upload limit 4096 MB | `test_settings.py` | |
 | Test isolation itself | `test_isolation.py` | |

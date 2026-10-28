@@ -25,6 +25,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   v1.0.0 on. A 15-minute 1080p video now burns in about 72 s on an RTX 5080,
   and in about 6.5 minutes on 4 CPU cores with no GPU. The 3-hour render
   limit now really applies.
+- **"GPU encoding." shows again** in the export panel on a computer with an
+  NVIDIA GPU. Exports were already using the GPU; the panel asked the part of
+  the app that has no GPU access.
+- **The worker no longer shows as "unhealthy" while it works.** Its health
+  check couldn't be answered during a long transcription or export; it's
+  now a heartbeat the worker keeps up while busy. Nothing restarted it, but
+  `vcm status` showed it as unhealthy.
 - **Faster exports without a GPU:** x264 runs at its `faster` preset, at the
   same quality setting (files about 5% larger).
 - **Large and slow uploads.** An upload now streams through the app in
