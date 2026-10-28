@@ -14,6 +14,7 @@ break browser font loading, which does not send credentials.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
@@ -92,7 +93,9 @@ async def get_font_file(key: str, weight: str) -> Response:
     true rather than hopeful.
     """
     try:
-        path = font_library.ensure(key, weight)
+        # In a thread: a first download waits on Google for seconds, and on the
+        # event loop it held up every other request, the style save included.
+        path = await asyncio.to_thread(font_library.ensure, key, weight)
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except RuntimeError as exc:

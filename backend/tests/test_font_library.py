@@ -352,3 +352,31 @@ def test_a_moved_family_still_downloads_from_the_pinned_commit():
     request = urllib.request.Request(catalogue["base_url"] + entry["regular"], method="HEAD")
     with urllib.request.urlopen(request, timeout=30) as response:
         assert response.status == 200
+
+
+async def test_a_slow_font_download_does_not_hold_up_other_requests(client, tmp_path, monkeypatch):
+    """
+    The first request for a face waits on Google for seconds. It runs in a
+    thread, so the editor's style save (here, the health check) is answered
+    meanwhile; on the event loop it waited for the whole download (v1.2.0).
+    """
+    import asyncio
+    import time
+
+    face = tmp_path / "slow.ttf"
+    face.write_bytes(b"\0" * 16)
+
+    def slow_ensure(key: str, weight: str = "regular"):
+        time.sleep(1.5)
+        return face
+
+    monkeypatch.setattr(font_library, "ensure", slow_ensure)
+    started = time.monotonic()
+    download = asyncio.create_task(client.get("/api/fonts/lobster/regular.ttf"))
+    await asyncio.sleep(0.2)
+    health = await client.get("/api/health")
+    answered = time.monotonic() - started
+
+    assert health.status_code == 200
+    assert answered < 1.0, f"health answered after {answered:.2f}s, behind the 1.5s download"
+    assert (await download).status_code == 200
