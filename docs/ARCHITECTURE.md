@@ -312,8 +312,12 @@ logged and never surfaced to the user.
     style inside each manual line (`balanced`, evened out; `auto`, each line
     filled; `stacked`, `words_per_line` words a line, v1.0.8), the Max lines
     shrink (2% steps to 70%, then one extra line), the fit rule (a box taller
-    or wider than the safe area keeps shrinking, to 10%), the centre
-    (`pos_x`/`pos_y`) and the slide into the 3% safe area. SRT and VTT are
+    or wider than the safe area keeps shrinking, to 10%), the position (the
+    block, as wide as its longest line, anchored at `pos_x` by its left edge,
+    centre or right edge as the alignment says, and centred on `pos_y`;
+    v1.2.0) and the slide into the 3% safe area. An alignment change in the
+    editor saves the anchor that keeps the caption on screen in place
+    (`anchorOf`). SRT and VTT are
     written with the same lines (`subtitles.laid_out_texts`, on the video's
     own frame, in the original letter case). Widths come from HarfBuzz (`uharfbuzz`) on the files libass
     draws with, and from canvas `measureText` in the browser. The ASS gets

@@ -634,6 +634,36 @@ outright: no way left to try a language Whisper half-knows.
 
 ---
 
+## D19. A caption's position is its block's anchor by alignment
+
+**Context.** From v1.0.7 (D16) `pos_x` was the centre of a box Max width
+wide, and Left/Right lines sat against that box's edges. Whenever Max width
+was wider than the text, changing alignment threw the caption across the
+frame: at 80% a caption dragged to the right edge jumped to the middle on
+Left (measured: up to 1091 px at 80% and 1350 px at 94% on 1080p).
+
+**Decision (Tanush, 2026-10-28).**
+- The visible block is only as wide as its longest line; Max width only
+  limits how wide a line may get.
+- `pos_x` is that block's anchor for the alignment: its left edge on Left,
+  centre on Centre, right edge on Right. Left captions of different lengths
+  share one left edge, Right ones one right edge.
+- Changing alignment never moves the caption on screen: the editor saves the
+  anchor that keeps its block exactly where it is (`anchorOf`). Alignment
+  otherwise only sets the lines against each other inside the block.
+- Dragging moves the anchor; the clamp keeps every block inside the safe
+  area, per caption, as before.
+- Saved Left/Right styles get the old box's left or right edge
+  (`e8b3d5f19a42`), which reproduces the old layout exactly; Centre styles
+  are unchanged. Editor and burn share the one layout rule.
+
+**Alternatives.** Centre every block on `pos_x` whatever the alignment:
+simpler, but Left captions of different lengths would no longer line up,
+and no position could keep old Left/Right videos' look. Migrating by a
+median or longest caption: every other caption would still move.
+
+---
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open

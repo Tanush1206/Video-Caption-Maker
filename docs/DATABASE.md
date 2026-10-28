@@ -254,8 +254,8 @@ Sizes are in **reference pixels against a 1080-px-high canvas**
 | `underline`, `strikeout` | boolean | no | ORM false | |
 | `letter_spacing` | integer | no | ORM 0 | ASS `Spacing` |
 | `uppercase` | boolean | no | ORM false | applied to the burn and the preview, **never** to stored text or SRT/VTT |
-| `alignment` | enum `caption_alignment` | no | ORM `center` | `left` `center` `right`: how lines justify in the box |
-| `pos_x`, `pos_y` | double | no | ORM 0.5, 0.88 | the caption box's centre, 0..1 of the frame; each caption is slid inside the 3% safe area at layout (`services/caption_layout.py`) |
+| `alignment` | enum `caption_alignment` | no | ORM `center` | `left` `center` `right`: how lines justify inside the caption's block, and which edge of it `pos_x` is |
+| `pos_x`, `pos_y` | double | no | ORM 0.5, 0.88 | 0..1 of the frame: `pos_x` the block's anchor by alignment (left edge, centre, right edge; v1.2.0), `pos_y` its vertical centre; each caption is slid inside the 3% safe area at layout (`services/caption_layout.py`) |
 | `box_width` | double | yes | | the box's width, 0..1 of the frame's width; NULL = 0.80 (landscape, square) or 0.85 (portrait) |
 | `max_lines` | integer | no | `2` | 1-6 (1-3 offered unless `stacked`); past it the font shrinks to 70%, then more lines; a box taller than the safe area keeps shrinking |
 | `line_style` | enum `caption_line_style` | no | `balanced` | `balanced` (lines evened out), `auto` (each line filled), `stacked` (`words_per_line` words a line) |
@@ -359,7 +359,8 @@ date is the commit that introduced the file.
 | 15 | `e3a9c71f5b28` | 2026-10-18 | caption line style (v1.0.8): add enum `caption_line_style` and `caption_styles.line_style` (`balanced` for every row, the line breaking every caption already had) and `words_per_line` (2). Downgrade caps `max_lines` at 3 |
 | 16 | `f7c1d2e8a940` | 2026-10-18 | exports record their captions (v1.0.8): add `exports.caption_language` and `exports.captions_from` (when that set of captions was written: its oldest caption's `created_at`), both nullable and left null on existing rows |
 | 17 | `a4d8e2c6f130` | 2026-10-18 | add `videos.speech` (v1.0.8): the word timings captions are timed to; nullable, NULL until a video's next transcription |
-| 18 | `b6e0f4a9c2d1` | 2026-10-21 | add `videos.hindi_script`, `videos.detected_language`, `videos.detected_confidence` (all nullable, NULL on existing rows) and `videos.held` (`false`) (v1.0.9, head). Changes nothing already captioned |
+| 18 | `b6e0f4a9c2d1` | 2026-10-21 | add `videos.hindi_script`, `videos.detected_language`, `videos.detected_confidence` (all nullable, NULL on existing rows) and `videos.held` (`false`) (v1.0.9). Changes nothing already captioned |
+| 19 | `e8b3d5f19a42` | 2026-10-28 | caption anchor by alignment (v1.2.0, head): `pos_x` becomes the block's left edge (Left), centre (Centre) or right edge (Right). **Converts** Left/Right rows to the old box's edge, `pos_x ∓ width/2` clamped to 0..1, with a NULL `box_width` taken by the video's frame shape (read from its file, as the burn reads it; landscape if unreadable), so every video burns byte for byte as before (`tests/test_caption_anchor.py`, against `tests/data/burn-1.1.1.json`). Centre rows unchanged. Downgrade converts back |
 
 ## 6. Migration rules
 

@@ -314,8 +314,8 @@ Enum: `left`, `center`, `right`
 | `box_opacity` | number | yes |  |
 | `box_padding` | integer | yes |  |
 | `alignment` | [Alignment](#alignment) | yes |  |
-| `pos_x` | number | yes | the caption box's centre, 0..1 of the frame (v1.0.7) |
-| `pos_y` | number | yes | as `pos_x` |
+| `pos_x` | number | yes | the caption block's anchor by `alignment`: its left edge (`left`), centre (`center`) or right edge (`right`), 0..1 of the frame's width (v1.2.0; the wrap box's centre before) |
+| `pos_y` | number | yes | the block's vertical centre, 0..1 of the frame's height |
 | `box_width` | number \| null | no | the box's width, 0..1 of the frame's width; null = 0.80 (landscape, square) or 0.85 (portrait) (v1.0.7) |
 | `max_lines` | integer | no | default `2` (v1.0.7) |
 | `line_style` | [LineStyle](#linestyle) | no | default `balanced` (v1.0.8) |

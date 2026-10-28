@@ -260,7 +260,14 @@ the speech model for every video until changed back.
 - Built-in fonts: Sans, Serif, Mono, DejaVu, Poppins (default), Lato,
   Barlow Condensed, Anton, Bebas Neue. Presets: `youtube`, `tiktok`,
   `minimal`. The Google Fonts library can also be searched, and a family is
-  downloaded the first time it is used.
+  downloaded the first time it is used. While it downloads, the Font field
+  says "Downloading font… this can take a few seconds the first time." (after
+  0.3 s, so a cached face never flashes it); a failed download says so under
+  the field, in plain words. Neither sits next to Reset (v1.2.0).
+- **Reset** puts the style back to the defaults and offers **Undo** for 10
+  seconds, which restores the whole style as it was. A tab regaining focus
+  reads the style again, so a second tab never shows a style the export
+  won't use (v1.2.0).
 - Sizes are stored against a 1080p reference and scaled to the output.
 - **The preview is the export** (v1.0.7, measured against burned frames):
   - a caption is drawn at libass's size: the preview divides the font size
@@ -280,27 +287,39 @@ the speech model for every video until changed back.
     wraps at that width (minus the padding), never at its distance to an
     edge, and the width never changes because of where the box is;
   - the width is set by dragging the handles on the box's left and right
-    edges (mouse, touch, or arrow keys when focused; both edges move,
-    keeping the centre) and by the **Max width** slider (20–94%); the two
-    stay in sync;
+    edges (mouse, touch, or arrow keys when focused) and by the **Max width**
+    slider (20–94%); the two stay in sync. On Centre both edges move, keeping
+    the centre; on Left or Right the anchored edge stays put, unless its own
+    handle is the one dragged (then the far edge stays) (v1.2.0);
   - **Max lines** (1, 2 or 3; default 2): a caption that needs more lines at
     that width is drawn smaller, in 2% steps, down to 70% of the chosen
     size; if it still doesn't fit it gets one extra line, at the largest
     size that fits in it, and past that keeps every line it needs. Text is
     never cut. A word wider than the box is broken (never before a mark or
     after a virama);
-  - the position is the box's **centre** (`pos_x`, `pos_y`);
+  - the caption's visible block is only as wide as its longest line (plus
+    padding), never wider than Max width, which only limits how wide a line
+    may get before it wraps;
+  - the position is the block's **anchor by alignment** (v1.2.0): `pos_x` is
+    its left edge on Left, its centre on Centre, its right edge on Right;
+    `pos_y` is its vertical centre. So Left captions of every length share
+    one left edge and Right ones one right edge;
+  - **alignment never moves the caption:** changing it saves the anchor that
+    keeps the caption on screen (or, in a gap, the nearest one) exactly where
+    it is, and only sets the lines against each other inside the block. The
+    burn uses the same rule. Saved Left/Right styles were moved to the old
+    box's edge, so existing videos burn exactly as before;
   - each caption's whole painted rectangle (lines, box padding or outline,
     shadow, and glyph overhang) is slid inside a **safe area** 3% from every
     edge, after layout, every time: while dragging, with the keys, after a
     font, size, padding or width change, and for every caption of the video
     on its own. It slides; it never shrinks or rewraps because of an edge;
-  - **snapping:** while dragging, the box snaps when its centre comes within
-    8 px of the frame's horizontal or vertical centre, with a guide line;
-    a guide also shows at the safe area's edge the box is pushed against;
-  - **Top / Middle / Bottom** centre the box horizontally at 12%, 50% or 88%
-    of the height; presets and Reset centre it at the bottom (or middle) with
-    the default width and line count.
+  - **snapping:** while dragging, the caption snaps when its centre comes
+    within 8 px of the frame's horizontal or vertical centre, with a guide
+    line; a guide also shows at the safe area's edge it is pushed against;
+  - **Top / Middle / Bottom** centre the caption on screen horizontally at
+    12%, 50% or 88% of the height; presets and Reset centre it at the bottom
+    (or middle) with the default width and line count.
 - **Line control** (v1.0.8):
   - **manual line breaks:** Shift+Enter in a caption's text inserts a line
     break (Enter still saves). It is saved with the caption, shown in the
