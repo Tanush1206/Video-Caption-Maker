@@ -695,6 +695,24 @@ outside Next. Staying on Next 14: the memory and timeout problems remain.
 
 ---
 
+## D21. CPU burns use x264 `faster`
+
+**Context.** The target set for v1.2.0: a burn no slower than real time
+without a GPU. At `-preset medium`, 120 s of a 1080p30 video took 87 s on 4
+CPU cores of a fast desktop CPU, so a laptop with slower cores would fall
+behind real time.
+
+**Decision (v1.2.0, to meet Tanush's target).** `libx264 -crf 18 -preset
+faster`. CRF sets the quality; the preset only trades file size for time.
+Same 120 s on 4 cores: 51 s, with a file 5% larger. The whole 15-minute video:
+397 s (2.25× real time). NVENC is unchanged (`p6`, CQ 19).
+
+**Alternatives.** `veryfast`: 34 s, but its lookahead and motion search are
+cut further than the time gained is worth at 4 cores. `medium` with a lower
+resolution by default: changes what the user gets without asking.
+
+---
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open

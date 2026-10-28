@@ -154,12 +154,17 @@ def _video_encoder_args() -> list[str]:
 
     NVENC is roughly an order of magnitude faster than x264 at these sizes,
     which is what makes rendering a long video at 1080p or 2160p reasonable at
-    all. It is slightly less efficient per bit than `x264 -preset medium`, so
-    the quality target is set a little tighter (CQ 19) to compensate; `p6` is
-    NVENC's second-slowest preset, chosen for the same reason.
+    all. It is slightly less efficient per bit than x264, so the quality
+    target is set a little tighter (CQ 19) to compensate; `p6` is NVENC's
+    second-slowest preset, chosen for the same reason.
 
     Falls back to x264 with no configuration when there is no usable GPU, so
     the same image runs on a laptop and on a machine with a card in it.
+    `faster`, not `medium` (v1.2.0, D21): CRF fixes the quality, and the
+    preset only trades file size for time. Measured on a 15-minute 1080p30
+    video with 4 CPU cores, 120 s of it took 87 s at `medium` and 51 s at
+    `faster`, for a file 5% larger: real time with room to spare on a slower
+    laptop.
     """
     if nvenc_available():
         return [
@@ -172,7 +177,7 @@ def _video_encoder_args() -> list[str]:
             "-cq", str(NVENC_CQ),
             "-b:v", "0",
         ]
-    return ["-c:v", "libx264", "-crf", str(CRF), "-preset", "medium"]
+    return ["-c:v", "libx264", "-crf", str(CRF), "-preset", "faster"]
 
 
 def _filter_chain(subtitle_file: Path, target: tuple[int, int] | None) -> str:
