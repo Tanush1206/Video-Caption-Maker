@@ -1,0 +1,84 @@
+# The installer on an ARM machine (v1.2.1). Our images are Intel/AMD only;
+# the compose file asks for them by platform so Docker emulates them on
+# Apple silicon and ARM Linux. Until then `docker compose pull` failed there
+# with "no matching manifest for linux/arm64/v8".
+#
+# Runs the real install.sh on GitHub's arm64 Linux runner, against this
+# commit's compose files and `vcm` served as a release (with its own
+# SHA256SUMS), so it tests what the next release will ship.
+name: arm64
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.prod.yml
+      - docker-compose.gpu.yml
+      - install/**
+      - .github/workflows/arm64.yml
+  pull_request:
+    paths:
+      - docker-compose.prod.yml
+      - docker-compose.gpu.yml
+      - install/**
+      - .github/workflows/arm64.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: amd64 emulation, as the installer tells ARM Linux users to turn it on
+        run: docker run --privileged --rm tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0 --install amd64
+
+      - name: Serve this commit's files as a release
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          cp docker-compose.prod.yml docker-compose.gpu.yml install/vcm "$RUNNER_TEMP/release/"
+          (cd "$RUNNER_TEMP/release" && sha256sum docker-compose.prod.yml docker-compose.gpu.yml vcm > SHA256SUMS)
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$RUNNER_TEMP/release" > /dev/null 2>&1 &
+
+      - name: Install
+        env:
+          VCM_BASE_URL: http://127.0.0.1:8000
+          VCM_HOME: ${{ runner.temp }}/vcm
+          VCM_NO_OPEN: "1"
+        run: |
+          bash install/install.sh 2>&1 | tee "$RUNNER_TEMP/install.log"
+          grep -q "ARM processor" "$RUNNER_TEMP/install.log"
+          grep -q "Docker can run Intel/AMD containers here (emulated)" "$RUNNER_TEMP/install.log"
+
+      - name: Our images run as amd64, the others natively
+        run: |
+          for c in backend worker frontend; do
+            arch="$(docker image inspect --format '{{.Architecture}}' "$(docker inspect --format '{{.Image}}' "vcm-$c-1")")"
+            echo "$c: $arch"; [ "$arch" = amd64 ]
+          done
+          for c in postgres redis chromadb; do
+            arch="$(docker image inspect --format '{{.Architecture}}' "$(docker inspect --format '{{.Image}}' "vcm-$c-1")")"
+            echo "$c: $arch"; [ "$arch" = arm64 ]
+          done
+
+      - name: The app answers, and vcm works without DOCKER_DEFAULT_PLATFORM
+        run: |
+          [ -z "${DOCKER_DEFAULT_PLATFORM:-}" ]
+          port="$(grep '^VCM_PORT=' "$RUNNER_TEMP/vcm/.env" | cut -d= -f2)"
+          curl -fsS "http://localhost:$port/api/health"
+          curl -fsS "http://localhost:$port/api/system" | grep -q '"version"'
+          vcm="$RUNNER_TEMP/vcm/vcm"
+          "$vcm" status
+          "$vcm" stop
+          "$vcm" up
+          for _ in $(seq 1 120); do curl -fsS "http://localhost:$port/api/health" > /dev/null 2>&1 && break; sleep 3; done
+          curl -fsS "http://localhost:$port/api/health"
+
+      - name: Logs
+        if: failure()
+        run: |
+          cd "$RUNNER_TEMP/vcm" 2>/dev/null && docker compose -p vcm --env-file .env -f docker-compose.prod.yml logs --tail 80 || true

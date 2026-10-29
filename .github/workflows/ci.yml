@@ -40,6 +40,19 @@ jobs:
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml config -q
+      - name: Our images are asked for as amd64, the others are left native (v1.2.1)
+        run: |
+          for files in "-f docker-compose.prod.yml" "-f docker-compose.prod.yml -f docker-compose.gpu.yml"; do
+            # shellcheck disable=SC2086
+            POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose $files config --format json | python3 -c '
+          import json, sys
+          services = json.load(sys.stdin)["services"]
+          platforms = {name: s.get("platform") for name, s in services.items()}
+          print(platforms)
+          assert all(platforms[n] == "linux/amd64" for n in ("backend", "worker", "frontend")), platforms
+          assert all(platforms[n] is None for n in ("postgres", "redis", "chromadb")), platforms
+          '
+          done
       - name: Dev stack builds the CPU image unless the GPU is asked for
         run: |
           touch .env
