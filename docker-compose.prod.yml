@@ -12,6 +12,11 @@ name: vcm
 
 x-backend: &backend
   image: ${VCM_REGISTRY:-ghcr.io/tanush1206}/video-caption-maker-backend:${VCM_VERSION:-latest}-${VCM_VARIANT:-cpu}
+  # Our images are built for Intel and AMD only. Named here, Docker on an ARM
+  # machine (Apple silicon, ARM Linux) pulls them and runs them under
+  # emulation instead of failing with "no matching manifest for
+  # linux/arm64/v8" (v1.2.1). Postgres, Redis and ChromaDB stay native.
+  platform: linux/amd64
   restart: unless-stopped
   # The app runs as the user `vcm`. The entrypoint starts as root only to
   # trust extra CAs and hand the volumes over, so it keeps just what that
@@ -119,6 +124,8 @@ services:
 
   frontend:
     image: ${VCM_REGISTRY:-ghcr.io/tanush1206}/video-caption-maker-frontend:${VCM_VERSION:-latest}
+    # Intel and AMD only, as the backend: emulated on ARM.
+    platform: linux/amd64
     restart: unless-stopped
     # Runs as the image's `app` user and needs no privileges at all.
     security_opt: ["no-new-privileges:true"]
