@@ -18,16 +18,28 @@ You need [Docker](https://docs.docker.com/get-docker/), which is free:
 Docker Desktop on Windows and macOS, Docker Engine on Linux. Make sure it's
 running, then paste one line into a terminal.
 
-**macOS / Linux**
+**Windows** (PowerShell)
+
+```powershell
+irm https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.ps1 | iex
+```
+
+**macOS** (Terminal)
 
 ```bash
 curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash
 ```
 
-**Windows** (PowerShell)
+macOS hasn't been tested yet. It needs
+[Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)
+and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) it's
+currently slow, because the app's images are built for Intel and AMD
+processors.
 
-```powershell
-irm https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.ps1 | iex
+**Linux**
+
+```bash
+curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash
 ```
 
 The installer:
@@ -189,9 +201,11 @@ healthy.
 ## Known limitations
 
 - **macOS is untested.** The installer and images are built to work with
-  Docker Desktop for Mac (Apple Silicon runs the amd64 images under
-  emulation, which is slow), but nobody has run them there yet. On a Mac
-  everything runs on the CPU; NVIDIA GPUs are Windows and Linux only.
+  Docker Desktop for Mac, but nobody has run them there yet. On a Mac
+  everything runs on the CPU; NVIDIA GPUs are Windows and Linux only. The
+  images are built for Intel and AMD (amd64) only, so Apple silicon (M1–M4)
+  runs them under emulation, which is slow (native arm64 images are planned
+  for v1.3.0).
 - **Languages:** English, Hindi (as Hinglish in Roman letters or in
   Devanagari), Spanish, Portuguese, Italian, Russian, French, German and
   Dutch, spoken and as captions. Measured on Google's FLEURS speech set,
