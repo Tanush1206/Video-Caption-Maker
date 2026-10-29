@@ -1114,6 +1114,37 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
       each Copy and toggle counted once, clipboard right; preselection Mac →
       macOS, Linux → Linux, Windows and iPad → Windows. README install
       section matches (Windows, macOS with the note, Linux).
+- [x] **Apple silicon: the installer failed** (Tanush's M2 MacBook Air, 8 GB,
+      2026-10-30): `docker compose pull` stopped with "no matching manifest
+      for linux/arm64/v8" on our frontend image (both of ours are amd64
+      only), and the installer said "Check your internet connection". The
+      site's "slow on Apple silicon" was wrong: it didn't install at all.
+      Fixed in v1.2.1, before the tag:
+      - `platform: linux/amd64` on the backend anchor (backend, worker) and
+        the frontend; Postgres, Redis, ChromaDB native (all three publish
+        arm64, checked). `vcm` start/update/uninstall need nothing more:
+        compose asks for the platform itself.
+      - install.sh: Docker's server architecture (not `uname`, which says
+        x86_64 under Rosetta); on arm64 a plain note that the app is
+        emulated and slower; on a Mac, Docker Desktop's
+        `UseVirtualizationFrameworkRosetta` read from its settings file
+        (on / off with how to turn it on / unreadable); a one-line amd64
+        container (`busybox:1.37 uname -m` = x86_64) or a stop with what to
+        do (Rosetta on a Mac, `tonistiigi/binfmt --install amd64` on Linux);
+        never the GPU on ARM. install.ps1 the same for an ARM PC.
+      - Pull errors, both installers: Docker's output kept and sorted into
+        "no image for this processor (not a network problem)", "the
+        connection to the registry failed", or Docker's last lines. Tested
+        against fake failures of each kind; shellcheck clean.
+      - CI: the compose platforms checked in `scripts` (fails on a wrong
+        platform, checked); `arm64.yml` runs the real install.sh on
+        `ubuntu-24.04-arm` with this commit's files served as a release,
+        then checks our containers are amd64 and the others arm64, the
+        API answers, and `vcm stop`/`up` work.
+      - Site and README note: emulated on Apple silicon, keep Rosetta on,
+        slower; "not fully tested". Site check again: axe 0, 375/1440,
+        light/dark. Tanush is timing it on the M2 with
+        DOCKER_DEFAULT_PLATFORM=linux/amd64 meanwhile.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.

@@ -18,6 +18,14 @@ migration; the update downloads the app layers only.
   and to read them through before exporting. It only opens when you click it.
 
 ### Fixed
+- **The installer works on Apple-silicon Macs and ARM Linux.** It stopped
+  with "no matching manifest for linux/arm64/v8" and then blamed the
+  internet connection. The app's images are built for Intel and AMD, so
+  they're now asked for by name and Docker runs them under emulation
+  (slower; on a Mac, keep Rosetta on in Docker Desktop, which the installer
+  checks). The installer says when the app will be emulated, and a download
+  that fails for this reason is no longer reported as a network problem.
+  `vcm start`, `update` and `uninstall` need no extra settings.
 - **No more "nan nan nan" captions over music.** The Hinglish speech model
   writes "nan" where there is music and no speech, confidently enough that
   no existing filter caught it: on a 15-minute vlog, 33 of 515 captions were

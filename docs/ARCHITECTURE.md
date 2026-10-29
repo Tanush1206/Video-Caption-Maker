@@ -560,6 +560,7 @@ Other retry limits in the code:
 |---|---|---|
 | Project name | directory name (`videocaptionmaker`) | `vcm` (so `--remove-orphans` can never touch dev) |
 | Images | built locally, `target: dev`; backend `VARIANT` defaults to **cpu**, `VCM_VARIANT=cuda` for the GPU | pulled from GHCR, `VCM_VERSION`-`VCM_VARIANT` (`cpu` unless the installer found a GPU) |
+| Platform | the host's | our images (backend, worker, frontend) `platform: linux/amd64`, the only one they are built for: on Apple silicon and ARM Linux Docker emulates them instead of failing to pull (v1.2.1). Postgres, Redis and ChromaDB native. The installer reads Docker's architecture, says the app is emulated and slower, checks amd64 containers run (and Docker Desktop's Rosetta setting on a Mac), and never picks the GPU there |
 | Source | bind-mounted (`./backend:/app`, `./frontend:/app`) | baked into the image |
 | Backend command | `uvicorn --reload`; **migrations are run by hand**: `docker compose exec backend alembic upgrade head` | entrypoint `api`: `alembic upgrade head`, then uvicorn `--no-proxy-headers` |
 | Worker command | `watchfiles … celery … --pool=solo` (restarts on code change) | entrypoint `worker` |
