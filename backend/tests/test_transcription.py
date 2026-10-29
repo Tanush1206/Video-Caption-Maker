@@ -1192,3 +1192,129 @@ def test_a_recovered_segment_the_snap_moved_back_is_kept(tmp_path, monkeypatch):
 
     kept = transcription._decode_stretch(None, audio, 77.48, 87.74, "hi", "transcribe", [], [])
     assert [s.text for s in kept] == ["हम लोग डाउनलोड"]
+
+
+# ── Words a model says over music (v1.2.1) ─────────────────────────────────
+
+
+def _run(monkeypatch, tmp_path, model_name: str, segments: list, language: str = "en"):
+    """transcribe() over a model that returns `segments`, as `model_name`."""
+
+    class Model:
+        def transcribe(self, path, **options):
+            return iter(segments), SimpleNamespace(duration=60.0, language=language)
+
+    monkeypatch.setattr(transcription, "get_model", lambda: Model())
+    monkeypatch.setattr(transcription, "_model_key", (model_name, "cuda", "float16"))
+    monkeypatch.setattr(transcription, "silent_spans", lambda path, *_: [])
+    monkeypatch.setattr(transcription, "vocal_envelope", lambda path, *_: [])
+    monkeypatch.setattr(transcription, "_fill_skipped", lambda model, audio, segs, *a, **k: segs)
+    monkeypatch.setattr(transcription, "_snap_to_onset", lambda start, end, levels, floor: start)
+    found, _ = transcription.transcribe(tmp_path / "a.wav", language=language)
+    return found
+
+
+def _nan_run(start: float, count: int, then: list[tuple[str, float, float]] = ()):
+    words = [(" nan", start + i * 0.3, start + i * 0.3 + 0.25) for i in range(count)]
+    return _segment(words + list(then))
+
+
+def test_the_hinglish_models_nan_over_music_is_no_caption(monkeypatch, tmp_path):
+    """
+    Apex writes "nan" over music (its training data's missing transcripts),
+    at word probability 0.8-0.98 and no-speech probability 0.00: 33 of 515
+    captions of a 15-minute vlog were nothing else. Music stays uncaptioned.
+    """
+    found = _run(monkeypatch, tmp_path, transcription.HINGLISH, [_nan_run(14.7, 8), _nan_run(17.6, 8)])
+    assert found == []
+
+
+def test_a_caption_running_from_music_into_speech_keeps_the_speech(monkeypatch, tmp_path):
+    """ "nan nan nan Hey guys, what's up?": the words, from when they're said. """
+    speech = [(" Hey", 27.5, 27.7), (" guys,", 27.7, 28.0), (" what's", 28.0, 28.3), (" up?", 28.3, 28.6)]
+    [caption] = _run(monkeypatch, tmp_path, transcription.HINGLISH, [_nan_run(26.8, 3, speech)])
+    assert caption.text == "Hey guys, what's up?"
+    assert caption.start_ms == 27500
+    assert [w for _, _, w in caption.speech] == ["Hey", "guys,", "what's", "up?"]
+
+
+def test_a_marker_inside_a_sentence_goes_and_the_rest_stays(monkeypatch, tmp_path):
+    words = [(" Ab", 1.0, 1.2), (" main", 1.2, 1.4), (" bataata", 1.4, 1.8), (" hoon.", 1.8, 2.0),
+             (" nan", 2.1, 2.3), (" nan.", 2.3, 2.5), (" Suno", 2.6, 2.9), (" suno.", 2.9, 3.2)]
+    found = _run(monkeypatch, tmp_path, transcription.HINGLISH, [_segment(words)])
+    assert [c.text for c in found] == ["Ab main bataata hoon.", "Suno suno."]
+    assert found[1].start_ms == 2600
+
+
+def test_repetition_that_was_said_is_kept(monkeypatch, tmp_path):
+    """About 1:52 of the vlog: real speech, four times over."""
+    phrase = []
+    for i in range(4):
+        at = 112.4 + i * 0.45
+        phrase += [(" khelta", at, at + 0.2), (" jaoon,", at + 0.2, at + 0.45)]
+    [caption] = _run(monkeypatch, tmp_path, transcription.HINGLISH, [_segment([(" cricket", 112.1, 112.4)] + phrase)])
+    assert caption.text == "cricket khelta jaoon, khelta jaoon, khelta jaoon, khelta jaoon,"
+
+
+def test_other_models_keep_the_word_nan(monkeypatch, tmp_path):
+    """Only the model that uses it as a marker loses it: "nan" is a word in English."""
+    words = [(" I", 1.0, 1.1), (" called", 1.1, 1.4), (" my", 1.4, 1.5), (" nan", 1.5, 1.8), (" today.", 1.8, 2.1)]
+    [caption] = _run(monkeypatch, tmp_path, "large-v3", [_segment(words)])
+    assert caption.text == "I called my nan today."
+
+
+def test_music_is_kept_flagged_until_the_gaps_are_filled(monkeypatch):
+    """
+    The marker runs split a long stretch of music into the shorter ones
+    `_fill_skipped` decodes again. Dropped at once, "log yaad karo
+    bhaiyon…", said inside 24 s of music at 806 s of the vlog, was lost.
+    """
+    speech = [(" log", 805.8, 806.0), (" yaad", 806.0, 806.3), (" karo", 806.3, 806.6)]
+
+    class Model:
+        def transcribe(self, path, **options):
+            return iter([_nan_run(793.0, 4), _nan_run(805.0, 2, speech)]), SimpleNamespace(duration=900.0, language="en")
+
+    monkeypatch.setattr(transcription, "_model_key", (transcription.HINGLISH, "cuda", "float16"))
+    monkeypatch.setattr(transcription, "_snap_to_onset", lambda start, end, levels, floor: start)
+    found, _ = transcription._decode(Model(), Path("a.wav"), "en", "transcribe", [], [], None)
+    assert [(s.text, s.non_speech) for s in found] == [
+        ("nan nan nan nan", True), ("nan nan", True), ("log yaad karo", False),
+    ]
+
+
+def test_trimming_a_music_run_keeps_it_music():
+    music = transcription.Segment(0, 900, "nan nan nan", None, [(0, 300, "nan"), (300, 600, "nan"), (600, 900, "nan")], True)
+    assert transcription._without(music, 1, from_start=True).non_speech is True
+
+
+def _filler(text: str, start: float, no_speech: float):
+    words = [(f" {w}", start + i * 0.4, start + i * 0.4 + 0.35) for i, w in enumerate(text.split())]
+    segment = _segment(words)
+    segment.no_speech_prob = no_speech
+    return segment
+
+
+def test_whispers_own_filler_over_music_is_no_caption(monkeypatch, tmp_path):
+    """
+    large-v3 over the vlog's music: "कर दो", "करते हैं", "हुआ है", at no-speech
+    probability 0.56-0.90 and log-probability above -1.0, so Whisper kept them.
+    """
+    found = _run(monkeypatch, tmp_path, "large-v3", [
+        _filler("कर दो", 14.5, 0.78), _filler("करते हैं", 20.7, 0.73), _filler("कर दो कर दो", 629.9, 0.69),
+        _filler("कर दो कि अ", 683.2, 0.58),
+    ], language="hi")
+    assert found == []
+
+
+def test_the_same_words_said_are_kept(monkeypatch, tmp_path):
+    """Said on their own with confidence, or inside a sentence, they are speech."""
+    found = _run(monkeypatch, tmp_path, "large-v3", [
+        _filler("करते हैं", 10.0, 0.2), _filler("चलो अभी करते हैं", 20.0, 0.8),
+    ], language="hi")
+    assert [c.text for c in found] == ["करते हैं", "चलो अभी करते हैं"]
+
+
+def test_the_hinglish_model_uses_its_own_marker_not_the_phrases(monkeypatch, tmp_path):
+    [caption] = _run(monkeypatch, tmp_path, transcription.HINGLISH, [_filler("kar do", 5.0, 0.9)], language="en")
+    assert caption.text == "kar do"

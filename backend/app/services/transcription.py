@@ -69,6 +69,9 @@ class Segment:
     # through translation, where the words no longer match the text but the
     # speech is still the speech.
     speech: list[tuple[int, int, str]] = field(default_factory=list)
+    # The model's word for "no speech" (NON_SPEECH_WORDS), kept until the
+    # gaps are filled and never captioned (v1.2.1).
+    non_speech: bool = False
 
 
 def _repo_for(model: str) -> str:
@@ -766,6 +769,9 @@ def transcribe(
         if segments:
             low_confidence_note = LOW_CONFIDENCE_NOTE
 
+    # The model's non-speech runs have done their part (splitting music for
+    # `_fill_skipped`) and are never captions.
+    segments = [s for s in segments if not s.non_speech]
     if segments:
         segments = _words_on_onsets(segments, vocal_envelope(audio_path, WORD_ONSET_WINDOW_MS / 1000))
     return segments, info.language or "unknown"
@@ -857,6 +863,7 @@ def _without(segment: Segment, count: int, from_start: bool) -> Segment | None:
         text=" ".join(keep),
         confidence=segment.confidence,
         speech=timed or segment.speech,
+        non_speech=segment.non_speech,
     )
 
 
@@ -993,8 +1000,17 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, offse
     total_seconds = info.duration or 0
     segments: list[Segment] = []
     dropped = 0
+    # The loaded model's own word for "no speech", if it has one: its runs
+    # come back as `non_speech` segments, apart from the speech around them,
+    # before any timing or silence check sees them (`_speech_runs`).
+    markers = NON_SPEECH_WORDS.get(_model_key[0], frozenset()) if _model_key else frozenset()
+    # Whisper's own filler over music, in the language decoded; never for the
+    # Hinglish model, which decodes under English and has its marker instead.
+    phrases = () if markers else NON_SPEECH_PHRASES.get(language or settings.whisper_language or "", ())
 
-    for index, segment in enumerate(_iter(_shifted(segment, offset) for segment in raw_segments)):
+    for index, segment in enumerate(
+        _iter((_shifted(segment, offset) for segment in raw_segments), markers, phrases)
+    ):
         text = segment.text.strip()
         if text:
             # Tighten to the words before anything else looks at the timings:
@@ -1029,6 +1045,7 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, offse
                         text=text,
                         confidence=getattr(segment, "avg_logprob", None),
                         speech=words,
+                        non_speech=getattr(segment, "non_speech", False),
                     )
                 )
 
@@ -1042,10 +1059,16 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, offse
     return segments, info
 
 
-def _iter(segments) -> Iterator:
+def _iter(segments, markers: frozenset[str] = frozenset(), phrases: tuple[tuple[str, ...], ...] = ()) -> Iterator:
     """Consuming the generator is what actually performs the decoding."""
     for segment in segments:
-        yield from _split_long(_with_plausible_words(segment))
+        for part in _speech_runs(segment, markers, phrases):
+            non_speech = getattr(part, "non_speech", False)
+            for piece in _split_long(_with_plausible_words(part)):
+                if non_speech:
+                    # Always a namespace of ours here, never Whisper's own.
+                    piece.non_speech = True
+                yield piece
 
 
 # The longest a single word's timing is believed. Alignment can hand the
@@ -1069,6 +1092,104 @@ def _speech(segment, start: float, end: float) -> list[tuple[int, int, str]]:
         if e >= s:
             out.append((int(s * 1000), max(int(e * 1000), int(s * 1000) + 1), word.word.strip()))
     return out or [(int(start * 1000), int(end * 1000), "")]
+
+
+# Words a model writes for "no speech here" (v1.2.1). The Hinglish model
+# (Apex) says "nan" over music, the text a missing value (NaN) becomes,
+# learned from its training data's untranscribed clips: on a 15-minute vlog,
+# 33 of 515 captions were only "nan", at word probability 0.8-0.98 with a
+# no-speech probability of 0.00, so no Whisper threshold could catch it.
+NON_SPEECH_WORDS: dict[str, frozenset[str]] = {HINGLISH: frozenset({"nan"})}
+
+# What Whisper itself (large-v3 and the rest) says over music in Hindi, by
+# language decoded. Over every stretch of music in the same vlog large-v3
+# wrote only these, alone or strung together ("कर दो", "करते हैं", "हुआ है",
+# "कर दो कि अ"): 22 of its 25 segments there. Never touched inside a
+# sentence: only a segment that is nothing else, and only when Whisper also
+# thought it was probably not speech (no-speech probability at least
+# NON_SPEECH_MIN_PROBABILITY; over the music, 0.56-0.90). Where that rule
+# also fired over speech (3 of 182 segments), the speech was other words.
+NON_SPEECH_PHRASES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "hi": (("कर", "दो"), ("करते", "हैं"), ("हुआ", "है"), ("कि",), ("अ",), ("अजय", "को")),
+}
+NON_SPEECH_MIN_PROBABILITY = 0.5
+
+
+def _only_phrases(text: str, phrases: tuple[tuple[str, ...], ...]) -> bool:
+    """Whether `text` is one or more of `phrases` and nothing else."""
+    words = [_bare(w) for w in text.split() if _bare(w)]
+    i = 0
+    while i < len(words):
+        match = next((p for p in phrases if tuple(words[i:i + len(p)]) == p), None)
+        if match is None:
+            return False
+        i += len(match)
+    return bool(words)
+
+
+def _speech_runs(segment, markers: frozenset[str], phrases: tuple[tuple[str, ...], ...] = ()) -> Iterator:
+    """
+    The segment cut where the model's non-speech words start and stop: each
+    run of speech timed to its own words, each run of markers flagged
+    `non_speech`.
+
+    So a caption that runs from music into speech ("nan nan nan Hey guys,
+    what's up?") keeps its words and starts when the first is said. The
+    marker runs are kept, flagged, until the gaps are filled: they split a
+    long stretch of music into the shorter ones `_fill_skipped` decodes
+    again, and dropped at once, a line said inside a 24-second stretch of
+    music ("log yaad karo bhaiyon…", 806 s of the vlog) was never found.
+    Repetition of anything else is never touched: "khelta jaoon, khelta
+    jaoon, …" is a phrase said four times.
+
+    A segment that is only the language's filler over music (`phrases`), and
+    that Whisper thought was probably not speech, is one non-speech run.
+    """
+    words = getattr(segment, "words", None) or []
+    if (
+        phrases
+        and (getattr(segment, "no_speech_prob", None) or 0.0) >= NON_SPEECH_MIN_PROBABILITY
+        and _only_phrases(segment.text, phrases)
+    ):
+        yield SimpleNamespace(
+            text=segment.text, start=segment.start, end=segment.end, words=words,
+            avg_logprob=getattr(segment, "avg_logprob", None), non_speech=True,
+        )
+        return
+    if not markers or not words:
+        if markers and all(_bare(w) in markers for w in segment.text.split()):
+            yield SimpleNamespace(
+                text=segment.text, start=segment.start, end=segment.end, words=words,
+                avg_logprob=getattr(segment, "avg_logprob", None), non_speech=True,
+            )
+        else:
+            yield segment
+        return
+    if not any(_bare(w.word.strip()) in markers for w in words):
+        yield segment
+        return
+
+    def run(chunk, non_speech: bool):
+        timed = [w for w in chunk if w.start is not None and w.end is not None]
+        return SimpleNamespace(
+            text="".join(w.word for w in chunk).strip(),
+            start=timed[0].start if timed else segment.start,
+            end=timed[-1].end if timed else segment.end,
+            words=chunk,
+            avg_logprob=getattr(segment, "avg_logprob", None),
+            non_speech=non_speech,
+        )
+
+    chunk: list = []
+    marker = False
+    for word in words:
+        is_marker = _bare(word.word.strip()) in markers
+        if chunk and is_marker != marker:
+            yield run(chunk, marker)
+            chunk = []
+        chunk.append(word)
+        marker = is_marker
+    yield run(chunk, marker)
 
 
 def _with_plausible_words(segment):
@@ -1106,6 +1227,7 @@ def _shifted(segment, offset: float):
     return SimpleNamespace(
         text=segment.text, start=segment.start + offset, end=segment.end + offset,
         words=words, avg_logprob=getattr(segment, "avg_logprob", None),
+        no_speech_prob=getattr(segment, "no_speech_prob", None),
     )
 
 
