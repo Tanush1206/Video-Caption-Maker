@@ -30,11 +30,14 @@ irm https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/i
 curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash
 ```
 
-macOS hasn't been tested yet. It needs
+macOS hasn't been fully tested yet. It needs
 [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)
-and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) it's
-currently slow, because the app's images are built for Intel and AMD
-processors.
+and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) the
+app's images run under emulation, because they're built for Intel and AMD
+processors: keep "Use Rosetta for x86_64/amd64 emulation on Apple Silicon"
+on in Docker Desktop's settings (the installer checks it), and expect
+transcription and exports to be slower. Before v1.2.1 the installer
+stopped on Apple silicon with "no matching manifest for linux/arm64/v8".
 
 **Linux**
 
@@ -200,12 +203,13 @@ healthy.
 
 ## Known limitations
 
-- **macOS is untested.** The installer and images are built to work with
-  Docker Desktop for Mac, but nobody has run them there yet. On a Mac
-  everything runs on the CPU; NVIDIA GPUs are Windows and Linux only. The
-  images are built for Intel and AMD (amd64) only, so Apple silicon (M1–M4)
-  runs them under emulation, which is slow (native arm64 images are planned
-  for v1.3.0).
+- **macOS isn't fully tested.** On a Mac everything runs on the CPU;
+  NVIDIA GPUs are Windows and Linux only. The images are built for Intel
+  and AMD (amd64) only, so Apple silicon (M1–M4) and ARM Linux run them
+  under emulation (v1.2.1), which is slower; native arm64 images are
+  planned for v1.3.0. On ARM Linux, amd64 emulation has to be turned on once
+  (`docker run --privileged --rm tonistiigi/binfmt --install amd64`); the
+  installer says so if it's missing.
 - **Languages:** English, Hindi (as Hinglish in Roman letters or in
   Devanagari), Spanish, Portuguese, Italian, Russian, French, German and
   Dutch, spoken and as captions. Measured on Google's FLEURS speech set,

@@ -97,7 +97,7 @@
         </div>
 
         <p class="note os-windows">Paste it into PowerShell. You need <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>, which is free, running first.</p>
-        <p class="note os-macos">Paste it into Terminal. macOS hasn't been tested yet. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a> and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) it's currently slow, because the app's images are built for Intel and AMD processors.</p>
+        <p class="note os-macos">Paste it into Terminal. macOS hasn't been fully tested yet. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a> and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) the app's images run under emulation, because they're built for Intel and AMD processors: keep "Use Rosetta" on in Docker Desktop's settings, and expect transcription and exports to be slower.</p>
         <p class="note os-linux">Paste it into a terminal. You need <a href="https://docs.docker.com/get-docker/">Docker Engine</a>, which is free, running first.</p>
         <p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
       </div>
