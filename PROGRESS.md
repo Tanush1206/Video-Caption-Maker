@@ -1103,6 +1103,33 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
       stack (clip20, same, en, hi; SRT, VTT, MP4): ALL PASSED; on the CPU
       path (no GPU, large-v3-turbo int8): ALL PASSED. Test videos
       7681-7686 deleted (7681 was already gone); 7426 left.
+- [x] **macOS on the landing page** (Tanush, 2026-10-30, site only, before
+      the tag): the toggle is Windows, macOS, Linux; macOS shows the same
+      install.sh command as Linux and is preselected on a Mac (not on an
+      iPad, which also reports "MacIntel"), with Tanush's note under it.
+      GoatCounter events `os-macos` and `copy-macos`. Images checked first:
+      1.2.0 backend and frontend are amd64 only, so the note is true. Site
+      check (index and privacy, 375/1440, light/dark): axe 0, no overflow,
+      no CSP, console or failed requests; toggle by click and arrow keys,
+      each Copy and toggle counted once, clipboard right; preselection Mac →
+      macOS, Linux → Linux, Windows and iPad → Windows. README install
+      section matches (Windows, macOS with the note, Linux).
+
+## v1.3.0 (planned)
+Added by Tanush, 2026-10-30. Not started.
+
+- [ ] **Multi-arch CPU images** (`linux/amd64` + `linux/arm64`), the arm64
+      half built natively on GitHub's free arm64 runners (no QEMU), so
+      Apple-silicon Macs and ARM Linux run without emulation. Check on arm64:
+      faster-whisper / CTranslate2, M2M100, IndicXlit and FFmpeg (and the
+      FFmpeg allow-list); measure speed against amd64. The CUDA image stays
+      amd64. Then the macOS note on the site and in the README changes.
+- [ ] **A macOS test in CI:** run install.sh on a GitHub macOS runner with a
+      Docker runtime (e.g. Colima) and a short E2E. Known before starting:
+      GitHub's Apple-silicon macOS runners have no nested virtualization, so
+      a Docker VM may only run on an Intel macOS runner, if one is still
+      offered. If none can run Docker, tell Tanush and keep macOS marked
+      untested.
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
