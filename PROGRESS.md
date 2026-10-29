@@ -1032,7 +1032,7 @@ Tanush's testing first (2026-10-28).
         containers removed. Not done this time: a Linux/CPU install (none
         here; the CPU path was covered by E2E before tagging).
 
-## v1.2.1 (in progress)
+## v1.2.1
 Brief (Tanush, 2026-10-29): the (i) button (brief to come), and "nan nan
 nan" captions in music sections: test-assets/new.mp4 (15-min Hinglish vlog,
 gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
@@ -1097,6 +1097,12 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
       `shoot.js` 4 pages × 2 widths × 2 themes ok. Lint, types clean.
       (axe's best-practice "region" rule, not in our WCAG set, flags the
       editor's top bar with or without the note: not new.)
+- [x] Tanush's check on the dev stack (3001): all good (2026-10-30).
+- [x] **Before tagging 1.2.1:** backend 622 passed, ruff clean; frontend
+      lint, types, 10 tests, production build clean. E2E on the GPU dev
+      stack (clip20, same, en, hi; SRT, VTT, MP4): ALL PASSED; on the CPU
+      path (no GPU, large-v3-turbo int8): ALL PASSED. Test videos
+      7681-7686 deleted (7681 was already gone); 7426 left.
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from

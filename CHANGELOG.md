@@ -6,7 +6,10 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.2.1] - 2026-10-30
+
+Music sections without "nan" captions, and a note on caption accuracy. No
+migration; the update downloads the app layers only.
 
 ### Added
 - **An (i) beside the caption count, and beside "Spoken audio" when you
