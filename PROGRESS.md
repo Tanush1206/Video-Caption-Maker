@@ -1079,6 +1079,24 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
         fail on the old code; the khelta, same-words and English "nan" ones
         guard real speech). Backend 622 passed. `backend/scripts/
         music_check.py`. Test videos 7674-7680 deleted.
+- [x] ROADMAP (Tanush, 2026-10-30): large-v3 repetition loops (left for
+      now; the "सब्सक्राइब ×3" example and the risk to real repetition),
+      custom vocabulary / word corrections, find and replace across all
+      captions.
+- [x] **The (i) button** (Tanush's brief, 2026-10-30): `AccuracyInfo` beside
+      the caption count (editor) and "Spoken audio" (language step), the
+      brief's text word for word. `Popover` gains `panelLabel` (a labelled
+      dialog, described by its text, focused on open) and keeps its panel
+      16 px inside the window (found by screenshot: at 375 px the note ran
+      off the right edge in the language step). `caption-accuracy` check:
+      45 PASS (click, tap at 375, Enter, Escape, click outside, focus in and
+      back, announced, not shown by itself, 44 px on a phone). With
+      language-step, hindi-script, editor-languages: 107 PASS, 0 FAIL. axe
+      (WCAG A/AA) 0 with the note open, editor and language step, light and
+      dark, 375 and 1440; `axe.js` 0 on dashboard, search, settings, editor;
+      `shoot.js` 4 pages × 2 widths × 2 themes ok. Lint, types clean.
+      (axe's best-practice "region" rule, not in our WCAG set, flags the
+      editor's top bar with or without the note: not new.)
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from

@@ -207,7 +207,14 @@ resolution). `iconOnly` keeps the label as the accessible name.
 - `Menu`: the "…" button and its list (`role="menu"`, arrow keys, Escape,
   click outside). The video actions live here, not as visible buttons.
 - `Popover`: a button and a small floating panel (the volume slider, the
-  speed list); Escape and a click outside close it, focus returns.
+  speed list); Escape and a click outside close it, focus returns. The
+  panel is kept 16 px inside the window (v1.2.1). With `panelLabel` it is a
+  dialog of that name, described by its text, and takes the focus, for a
+  panel that only says something.
+- `AccuracyInfo` (`captions/accuracy-info.tsx`, v1.2.1): the (i) beside the
+  caption count and beside "Spoken audio", named "About caption accuracy".
+  It opens the note on what AI captions get wrong, only on click, tap or
+  keyboard; never a banner.
 
 ### Dialog (`dialog.tsx`)
 

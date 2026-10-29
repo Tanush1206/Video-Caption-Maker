@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **An (i) beside the caption count, and beside "Spoken audio" when you
+  choose languages,** that says what AI captions get wrong (names,
+  technical terms, mixed Hindi and English, fast speech, background noise)
+  and to read them through before exporting. It only opens when you click it.
+
 ### Fixed
 - **No more "nan nan nan" captions over music.** The Hinglish speech model
   writes "nan" where there is music and no speech, confidently enough that

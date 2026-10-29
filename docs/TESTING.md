@@ -433,6 +433,7 @@ Full layer digests are in PROGRESS.md.
 | Unused settings removed; upload limit 4096 MB | `test_settings.py` | |
 | Test isolation itself | `test_isolation.py` | |
 | System theme, 404 page, Retry with small model | | `checks.js theme`, `not-found`, `retry-small` |
+| The caption accuracy (i) (v1.2.1): beside the caption count and "Spoken audio"; one button named "About caption accuracy", 44 px on a phone; not shown until clicked; opens on click, tap and keyboard as a labelled dialog that takes the focus and is described by the note; Escape and a click outside close it, focus returns; the panel stays inside the window | | `checks.js caption-accuracy` (1440 and 375, editor and language step); axe 0 with it open, light and dark |
 | Request guard and audit log | `test_request_guard.py` (8 tests; 6 fail with the guard removed) | live probes on both installs at `localhost` and `127.0.0.1` |
 | Restart recovery and the 3-requeue limit | `test_recovery.py` (5 tests) | live OOM test: worker capped at 1 GB, 3 kills → failed (PROGRESS.md) |
 | Transcription: segment splitting, silence filtering, no-speech retry, friendly errors | `test_transcription.py` (48) | |
