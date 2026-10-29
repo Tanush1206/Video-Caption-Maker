@@ -1659,6 +1659,61 @@ const CHECKS = {
     await page.close();
   },
 
+  // The (i) beside the caption count and beside "Spoken audio" (v1.2.1): a
+  // real button that opens the accuracy note on click, tap or keyboard, as a
+  // labelled dialog that takes the focus; Escape and a click outside close
+  // it. Never shown by itself. Reads only (the language step is mocked).
+  async "caption-accuracy"(browser, base) {
+    const NOTE = /Captions are made by AI speech recognition.*Click any caption to fix it\./s;
+    async function exercise(page, at) {
+      const button = page.getByRole("button", { name: "About caption accuracy" });
+      const dialog = page.getByRole("dialog", { name: "About caption accuracy" });
+      ok(`${at}: one (i) button`, (await button.count()) === 1, `${await button.count()}`);
+      ok(`${at}: the note is not shown by itself`, (await dialog.count()) === 0);
+      const box = await button.boundingBox();
+      ok(`${at}: a touch target of at least 36 px (44 on a phone)`, box && box.width >= 36 && box.height >= 36, box && `${box.width}x${box.height}`);
+
+      await button.click();
+      ok(`${at}: a click opens the note`, await dialog.isVisible());
+      ok(`${at}: it says what to expect`, NOTE.test(await dialog.innerText()), (await dialog.innerText()).slice(0, 60));
+      ok(`${at}: it is announced: focus moves into the dialog`, await dialog.evaluate((el) => el === document.activeElement));
+      const described = await dialog.evaluate((el) => document.getElementById(el.getAttribute("aria-describedby"))?.textContent ?? "");
+      ok(`${at}: the dialog is described by the note`, NOTE.test(described));
+      await page.keyboard.press("Escape");
+      ok(`${at}: Escape closes it`, (await dialog.count()) === 0);
+      ok(`${at}: focus returns to the button`, await button.evaluate((el) => el === document.activeElement));
+
+      await page.keyboard.press("Enter");
+      ok(`${at}: the keyboard opens it`, await dialog.isVisible());
+      await page.mouse.click(5, 5);
+      ok(`${at}: a click outside closes it`, (await dialog.count()) === 0);
+    }
+
+    for (const width of [1440, 375]) {
+      const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: width === 375 });
+      let page = await context.newPage();
+      const id = await editorVideo(page, base);
+      await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+      // On a phone the caption list is in the lowered sheet.
+      if (width === 375) await page.getByRole("button", { name: "Raise the inspector" }).click();
+      await exercise(page, `caption-accuracy@editor ${width}`);
+      if (width === 375) {
+        await page.getByRole("button", { name: "About caption accuracy" }).tap();
+        ok("caption-accuracy@editor 375: a tap opens it", await page.getByRole("dialog", { name: "About caption accuracy" }).isVisible());
+      }
+      await page.close();
+
+      page = await context.newPage();
+      await mockHeldUpload(page, base, ["hi", 0.9]);
+      await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
+      await page.locator('input[type="file"]').first().setInputFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not really a video") });
+      await page.getByRole("heading", { name: "Spoken audio" }).waitFor();
+      await exercise(page, `caption-accuracy@language step ${width}`);
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await context.close();
+    }
+  },
+
   // A burn in progress says how long it has left (v1.2.0), from how fast its
   // percentage moves. The export list is answered here with a burn that gains
   // 1% a second, so the estimate must appear once there is enough to go on
