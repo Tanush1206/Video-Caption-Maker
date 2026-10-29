@@ -141,6 +141,34 @@ The original 10-milestone build plan is historical and lives in
   today's numbers; romanisation for scripts the aligner can't read
   (Devanagari and others); the v1.0.8 timing rules still hold.
 
+### large-v3 repetition loops over real speech
+- **What:** large-v3 sometimes loops on real Hinglish speech, writing one
+  word several times where something else was said. On new.mp4 (15-minute
+  Hinglish vlog, v1.2.1 testing): "सब्सक्राइब सब्सक्राइब सब्सक्राइब" at
+  8:15, where the Hinglish model hears "Nahin aati na but nahin aati na. Ab
+  main bataata hoon."; "डिलीशियर डिलीशियर डिलीशियर" ("Delicius. Delicius
+  snacks."); "एक एक एक एक समोसा" ("Yah kahe deconstructed samosa…").
+- **Why not in v1.2.1:** it isn't music, so the music fix doesn't apply, and
+  which captions loop changes from run to run.
+- **Risk:** real repetition. Collapsing a repeated word would also cut "nahin.
+  Nahin. Nahin." (2:47 of the same vlog, said three times) and "khelta jaoon,
+  khelta jaoon, …". Dropping the caption leaves real speech uncaptioned. Any
+  fix has to tell a loop from repetition that was said, for example from the
+  word timings or the audio, and keep both of those examples.
+- **Tanush, 2026-10-30:** leave for now.
+
+### Custom vocabulary / word corrections
+- **What:** a list of words the user wants spelled their way (names,
+  technical terms, brands), used when captions are made or applied to them
+  afterwards.
+- **Why:** the caption accuracy note (v1.2.1) names these as where captions
+  go wrong most.
+
+### Find and replace across all captions
+- **What:** change one word or phrase in every caption of a video at once,
+  instead of caption by caption.
+- **Why:** the same misheard name is usually wrong everywhere it occurs.
+
 ## Possible, not planned
 - **More caption languages.** Nine are offered (v1.0.11). Telugu is not in
   M2M100; Kannada, Gujarati and Punjabi came out of it unusable (samples in
