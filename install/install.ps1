@@ -54,11 +54,29 @@ $ErrorActionPreference = 'Continue'
     $dockerVersion = (docker version --format '{{.Server.Version}}') 2>$null
     Ok "Docker $dockerVersion is running"
 
+    # -- 1b. Processor --------------------------------------------------------
+    # Our images are Intel/AMD only; on an ARM PC the compose file asks for
+    # them by platform and Docker emulates them (v1.2.1).
+    $arch = (docker version --format '{{.Server.Arch}}') 2>$null
+    $emulated = $arch -in @('arm64', 'aarch64')
+    if ($emulated) {
+        Warn "This computer has an ARM processor ($arch)."
+        Info "The app's images are built for Intel and AMD processors, so Docker runs them"
+        Info 'under emulation. It works, but transcription and exports are slower.'
+        $machine = (docker run --rm --platform linux/amd64 busybox:1.37 uname -m) 2>$null
+        if ($machine -ne 'x86_64') {
+            Fail "Docker can't run Intel/AMD (amd64) containers on this PC yet." @(
+                'Update Docker Desktop to the latest version, then run this installer again.')
+        }
+        Ok 'Docker can run Intel/AMD containers here (emulated)'
+    }
+
     # -- 2. GPU ---------------------------------------------------------------
+    # Never on ARM: an emulated container can't use an NVIDIA GPU.
     $variant = 'cpu'
     if ($env:VCM_GPU -eq '1') {
         $variant = 'cuda'
-    } elseif ($env:VCM_GPU -ne '0' -and (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) {
+    } elseif ($env:VCM_GPU -ne '0' -and -not $emulated -and (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) {
         # Docker Desktop (WSL2) passes NVIDIA GPUs through on its own; check it
         # actually does before choosing the CUDA image.
         docker run --rm --gpus all busybox:1.37 true *> $null
@@ -180,8 +198,27 @@ $ErrorActionPreference = 'Continue'
     # -- 7. Pull, start, wait -------------------------------------------------
     Write-Host ""
     Write-Host "Downloading the app (first time: a few GB, this can take a while)..." -ForegroundColor White
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $vcm pull
-    if ($LASTEXITCODE -ne 0) { Fail "Couldn't download the images." @('Check your internet connection and run the installer again - it resumes.') }
+    # Docker's own words decide the message: "check your internet connection"
+    # for a missing platform sends someone looking in the wrong place (v1.2.1).
+    $pullLog = New-TemporaryFile
+    # Merged by cmd, not by PowerShell, so Docker's progress stays plain text
+    # rather than becoming error records on 5.1.
+    & cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File `"$vcm`" pull 2>&1" | Tee-Object -FilePath $pullLog
+    $pulled = $LASTEXITCODE
+    $said = Get-Content $pullLog -Raw -ErrorAction SilentlyContinue
+    Remove-Item $pullLog -ErrorAction SilentlyContinue
+    if ($pulled -ne 0) {
+        if ($said -match 'no matching manifest|does not match the specified platform|unsupported platform') {
+            Fail "The app's images aren't available for this computer's processor ($arch)." @(
+                'Docker said there is no image for this platform, which is not a network problem.',
+                "Please report it with the text above: $RepoUrl/issues")
+        } elseif ($said -match 'dial tcp|no such host|i/o timeout|tls handshake|connection refused|connection reset|network is unreachable|unexpected eof') {
+            Fail "Couldn't download the images: the connection to the image registry failed." @(
+                'Check your internet connection and run the installer again - it resumes.')
+        }
+        $last = (($said -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' / '
+        Fail "Couldn't download the images." @("Docker said: $last", 'Run the installer again; it resumes.')
+    }
     Write-Host "Starting..." -ForegroundColor White
     & powershell -NoProfile -ExecutionPolicy Bypass -File $vcm up
     if ($LASTEXITCODE -ne 0) { Fail 'The app failed to start.' @('See what happened with:  vcm logs') }

@@ -64,11 +64,64 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 ok "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null) is running"
 
+# ── 1b. Processor ───────────────────────────────────────────────────────────
+# Docker's own architecture decides which images it pulls (a shell running
+# under Rosetta would report x86_64 from uname). Our images are Intel/AMD
+# only; on ARM the compose file asks for them by platform and Docker
+# emulates them (v1.2.1).
+ARCH="$(docker version --format '{{.Server.Arch}}' 2>/dev/null || uname -m)"
+EMULATED=0
+case "$ARCH" in arm64|aarch64) EMULATED=1 ;; esac
+
+rosetta_setting() {  # prints true, false, or nothing if it can't be read
+    local dir="$HOME/Library/Group Containers/group.com.docker" file
+    for file in "$dir/settings-store.json" "$dir/settings.json"; do
+        [ -f "$file" ] || continue
+        grep -Eo '"UseVirtualizationFrameworkRosetta"[[:space:]]*:[[:space:]]*(true|false)' "$file" \
+            | grep -Eo 'true|false' | head -1
+        return
+    done
+}
+
+if [ "$EMULATED" = 1 ]; then
+    warn "This computer has an ARM processor ($ARCH)."
+    info "The app's images are built for Intel and AMD processors, so Docker runs them"
+    info "under emulation. It works, but transcription and exports are slower."
+    if [ "$OS" = "Darwin" ]; then
+        case "$(rosetta_setting)" in
+            true) ok "Rosetta emulation is on in Docker Desktop" ;;
+            false)
+                warn "Rosetta emulation is off in Docker Desktop, so emulation is much slower."
+                info "Turn it on: Docker Desktop > Settings > General > \"Use Rosetta for"
+                info "x86_64/amd64 emulation on Apple Silicon\" > Apply & restart."
+                info "If macOS asks to install Rosetta, allow it (or run:"
+                info "  softwareupdate --install-rosetta --agree-to-license)" ;;
+            *)
+                info "Couldn't read Docker Desktop's Rosetta setting. For the best speed, check that"
+                info "Settings > General > \"Use Rosetta for x86_64/amd64 emulation on Apple Silicon\" is on." ;;
+        esac
+    fi
+    if [ "$(docker run --rm --platform linux/amd64 busybox:1.37 uname -m 2>/dev/null)" != "x86_64" ]; then
+        if [ "$OS" = "Darwin" ]; then
+            die "Docker can't run Intel/AMD (amd64) containers on this Mac yet." \
+                "In Docker Desktop: Settings > General > turn on \"Use Rosetta for x86_64/amd64" \
+                "emulation on Apple Silicon\", then Apply & restart, and run this installer again." \
+                "If that option is missing, update Docker Desktop first."
+        fi
+        die "Docker can't run Intel/AMD (amd64) containers on this machine yet." \
+            "Turn on amd64 emulation once (it lasts until the next reboot on some systems):" \
+            "  docker run --privileged --rm tonistiigi/binfmt --install amd64" \
+            "then run this installer again."
+    fi
+    ok "Docker can run Intel/AMD containers here (emulated)"
+fi
+
 # ── 2. GPU ──────────────────────────────────────────────────────────────────
+# Never on ARM: an emulated container can't use an NVIDIA GPU.
 VARIANT=cpu
 if [ "${VCM_GPU:-}" = "1" ]; then
     VARIANT=cuda
-elif [ "${VCM_GPU:-}" != "0" ] && [ "$OS" = "Linux" ] && command -v nvidia-smi >/dev/null 2>&1 \
+elif [ "${VCM_GPU:-}" != "0" ] && [ "$EMULATED" = 0 ] && [ "$OS" = "Linux" ] && command -v nvidia-smi >/dev/null 2>&1 \
      && nvidia-smi >/dev/null 2>&1; then
     # A driver on the host is not enough: Docker needs the NVIDIA Container
     # Toolkit to hand the GPU to a container. Ask for one and see.
@@ -188,8 +241,26 @@ esac
 # ── 7. Pull, start, wait ────────────────────────────────────────────────────
 echo
 bold "Downloading the app (first time: a few GB, this can take a while)…"
-"$VCM_HOME/vcm" pull || die "Couldn't download the images." \
-    "Check your internet connection and run the installer again — it resumes."
+# Docker's own words decide the message: "check your internet connection"
+# for a missing platform sent an Apple-silicon Mac looking in the wrong place
+# (v1.2.1).
+pull_log="$(mktemp)"
+if ! "$VCM_HOME/vcm" pull 2>&1 | tee "$pull_log"; then
+    if grep -qiE 'no matching manifest|does not match the specified platform|unsupported platform' "$pull_log"; then
+        rm -f "$pull_log"
+        die "The app's images aren't available for this computer's processor ($ARCH)." \
+            "Docker said there is no image for this platform, which is not a network problem." \
+            "Please report it with the text above: $REPO_URL/issues"
+    elif grep -qiE 'dial tcp|no such host|i/o timeout|tls handshake|connection refused|connection reset|network is unreachable|temporary failure in name resolution|unexpected eof' "$pull_log"; then
+        rm -f "$pull_log"
+        die "Couldn't download the images: the connection to the image registry failed." \
+            "Check your internet connection and run the installer again — it resumes."
+    fi
+    said="$(grep -v '^[[:space:]]*$' "$pull_log" | tail -n 3)"
+    rm -f "$pull_log"
+    die "Couldn't download the images." "Docker said:" "$said" "Run the installer again; it resumes."
+fi
+rm -f "$pull_log"
 bold "Starting…"
 "$VCM_HOME/vcm" up || die "The app failed to start." "See what happened with:  vcm logs"
 
