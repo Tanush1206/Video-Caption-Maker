@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,11 @@ import { cn } from "@/lib/utils";
  * slider, the speed list. Floating, so it has the one shadow. Escape and a
  * click outside close it, and focus goes back to the button. `children`
  * gets `close` so a choice inside can dismiss it.
+ *
+ * `panelLabel` (v1.2.1) is for a panel that only says something, like the
+ * caption accuracy note: it becomes a labelled dialog, described by its
+ * text, and takes the focus itself, so a screen reader reads it out when it
+ * opens.
  */
 export function Popover({
   label,
@@ -19,6 +24,7 @@ export function Popover({
   className,
   triggerClassName,
   panelClassName,
+  panelLabel,
 }: {
   /** The button's accessible name. */
   label: string;
@@ -30,22 +36,37 @@ export function Popover({
   className?: string;
   triggerClassName?: string;
   panelClassName?: string;
+  /** Makes the panel a dialog with this name, focused when it opens. */
+  panelLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const id = useId();
 
+  // Kept 16 px inside the window, before it paints: a panel opened from a
+  // button mid-line on a phone (the accuracy note beside "Spoken audio")
+  // otherwise ran off the right edge.
+  useLayoutEffect(() => {
+    const panel = container.current?.querySelector<HTMLElement>("[data-popover-panel]");
+    if (!open || !panel) return;
+    const { left, right } = panel.getBoundingClientRect();
+    const margin = 16;
+    const shift = Math.max(margin - left, Math.min(0, window.innerWidth - margin - right));
+    panel.style.translate = shift ? `${shift}px 0` : "";
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    container.current?.querySelector<HTMLElement>("[data-popover-panel] input, [data-popover-panel] button")?.focus();
+    const panel = container.current?.querySelector<HTMLElement>("[data-popover-panel]");
+    (panel?.querySelector<HTMLElement>("input, button") ?? (panelLabel ? panel : null))?.focus();
 
     function onPointerDown(event: PointerEvent) {
       if (!container.current?.contains(event.target as Node)) setOpen(false);
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
+  }, [open, panelLabel]);
 
   function close() {
     setOpen(false);
@@ -83,6 +104,12 @@ export function Popover({
         <div
           id={id}
           data-popover-panel=""
+          {...(panelLabel && {
+            role: "dialog",
+            "aria-label": panelLabel,
+            "aria-describedby": `${id}-body`,
+            tabIndex: -1,
+          })}
           className={cn(
             "absolute z-50 animate-fade-in rounded-xl border border-border/60 p-2 shadow-overlay",
             "bg-background/95 backdrop-blur-xl dark:bg-surface-3/95",
@@ -91,7 +118,7 @@ export function Popover({
             panelClassName
           )}
         >
-          {children(close)}
+          {panelLabel ? <div id={`${id}-body`}>{children(close)}</div> : children(close)}
         </div>
       )}
     </div>
