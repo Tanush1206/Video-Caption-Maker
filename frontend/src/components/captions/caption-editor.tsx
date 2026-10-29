@@ -4,6 +4,7 @@ import { FileText, Loader2, Plus, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AccuracyInfo } from "@/components/captions/accuracy-info";
 import { CaptionRow } from "@/components/captions/caption-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -278,9 +279,12 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
   return (
     <div className="flex min-h-0 flex-col">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="label-caps shrink-0">
-          {captions.length} caption{captions.length === 1 ? "" : "s"}
-        </span>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="label-caps">
+            {captions.length} caption{captions.length === 1 ? "" : "s"}
+          </span>
+          <AccuracyInfo />
+        </div>
 
         <div className="flex items-center gap-1.5">
           {updateCaption.isPending && (

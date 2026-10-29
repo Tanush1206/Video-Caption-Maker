@@ -3,6 +3,7 @@
 import { AudioLines, Check, FileVideo, Loader2, Search, X } from "lucide-react";
 import { useState } from "react";
 
+import { AccuracyInfo } from "@/components/captions/accuracy-info";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -90,9 +91,12 @@ export function LanguageStep({
   return (
     <div className="mx-auto flex w-full max-w-[880px] animate-fade-in flex-col gap-12">
       <section aria-labelledby="spoken-audio-heading">
-        <h3 className="text-xl font-semibold" id="spoken-audio-heading">
-          Spoken audio
-        </h3>
+        <div className="flex items-center gap-0.5">
+          <h3 className="text-xl font-semibold" id="spoken-audio-heading">
+            Spoken audio
+          </h3>
+          <AccuracyInfo />
+        </div>
         <div className="group-inset mt-3 flex items-center gap-3 px-4 py-3" role="status" aria-live="polite">
           {detection.listening || (!heard && upload) ? (
             <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
