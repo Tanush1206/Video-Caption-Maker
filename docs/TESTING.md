@@ -263,6 +263,22 @@ repeated; WER (loose) moved 56.4 → 55.3% (large-v3), 53.8 → 51.9% and
 on the CPU (turbo 115 → 147 s for the 228 s clip). On the dev stack, two
 uploads (Hinglish and Devanagari) pass this and `timing_check.py`.
 
+### What a model says over music: `backend/scripts/music_check.py` (v1.2.1)
+
+```bash
+docker compose exec -T worker python scripts/music_check.py <id> [<id> ...] \
+  --keep "khelta jaoon, khelta jaoon, khelta jaoon, khelta jaoon" --keep "nahin. Nahin. Nahin."
+```
+
+Fails a video with a caption that is mostly one repeated word (one word more
+than half of it, 3 or more times), still holds a model's non-speech marker
+("nan"), or is nothing but Whisper's filler over music ("कर दो करते हैं");
+and fails if a `--keep` phrase is missing. A caption holding a kept phrase is
+not counted as repeating. Run it with `coverage_check.py`: dropping music
+leaves its voiced time uncaptioned, so compare that check before and after
+rather than expecting 0 on a video with music. Measured on new.mp4 (15 min
+Hinglish vlog, in `test-assets/`) in PROGRESS.md v1.2.1.
+
 ### Caption starts against the speech (v1.0.9)
 
 The rule: a caption appears no later than 100 ms after its first word is
@@ -401,6 +417,7 @@ Full layer digests are in PROGRESS.md.
 | A first font download doesn't hold up the API (v1.2.0) | `test_font_library.py` (`test_a_slow_font_download_does_not_hold_up_other_requests`) | the Font field's download and failure messages, Reset then Undo, by browser on the dev stack |
 | Uploads through the frontend (v1.2.0): `/api/videos` is streamed by a route handler, not Next's rewrite proxy; the preload overwrites `X-Forwarded-Host` and turns off Node's 5-minute `requestTimeout`; a dropped upload's temporary file is closed at once | `frontend/tests/forwarded-for.test.js`; `test_upload_cancel.py` (fails without `app/multipart.py`) | `checks.js upload-proxy`; measured on the built image: 2.05 GB in 9.8 s, frontend peak 79 MiB (Next 14: 34 → 241 MiB for 192 MB); 360 MB at 1 MB/s in 358 s (the 1.1.0 frontend cut it off at 5 minutes); Cancel in the browser at 360 MB: the API's request ended, its temporary file freed at once, no video or file left |
 | Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
+| Music is no caption (v1.2.1): the Hinglish model's "nan" is never a caption, a caption running from music into speech keeps its words timed to them, the marker runs still split music for re-decoding, Whisper's Hindi filler over music ("कर दो", "करते हैं", "हुआ है") is dropped only as a whole segment Whisper thought was not speech; "khelta jaoon" ×4, the same words said, and English "nan" are kept | `test_transcription.py` (`test_the_hinglish_models_nan_over_music_is_no_caption`, `test_a_caption_running_from_music_into_speech_keeps_the_speech`, `test_music_is_kept_flagged_until_the_gaps_are_filled`, `test_whispers_own_filler_over_music_is_no_caption`, …) | `music_check.py` and `coverage_check.py` on new.mp4, Apex and large-v3, before and after (PROGRESS.md v1.2.1) |
 | A burn never hangs on FFmpeg's own output (v1.2.0): over 1 MB of stderr, a failure's reason kept after it, the 3-hour limit actually stops a hung FFmpeg; the export shows time left | `test_exports.py` (`test_a_burn_survives_ffmpeg_writing_more_than_a_pipe_holds`, `test_a_failed_burn_still_says_why_after_a_flood_of_warnings`, `test_a_hung_burn_is_stopped_at_the_render_timeout`; all three fail on 1.1.1) | `checks.js export-eta`; `scripts/burn_time.py` on a 15-minute 1080p video: 1.1.0 and 1.1.1 stop at 80% for good, the fix burns it in 72 s with NVENC, 397 s on 4 CPU cores |
 | Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |
 | Reset and presets centre the box with the default width and lines | `test_caption_styles.py` (`test_reset_and_presets_clear_a_hand_placement`) | |
