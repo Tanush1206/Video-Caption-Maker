@@ -850,7 +850,7 @@ private security reporting), no email.
 - S7: least-privilege `permissions:` in every workflow.
 - Skipped: robots.txt (SEO3); it needs a separate root repo, small gain.
 
-## v1.2.0 (in progress)
+## v1.2.0 (released 2026-10-29, tag on 5eebc6d)
 Brief: the phase-2 list above (Next 15.5, long videos, virtual caption list,
 CLS, weekly check, `vcm doctor`, model mirror, S7), with three items from
 Tanush's testing first (2026-10-28).
