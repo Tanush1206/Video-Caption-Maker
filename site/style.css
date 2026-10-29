@@ -132,8 +132,9 @@ code { font-family: var(--mono); font-size: 0.93em; }
 .segmented label:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* Only the chosen system's command and note (where :has is supported). */
-.install:has(input[value="windows"]:checked) .os-linux,
-.install:has(input[value="linux"]:checked) .os-windows { display: none; }
+.install:has(input[value="windows"]:checked) :is(.os-macos, .os-linux),
+.install:has(input[value="macos"]:checked) :is(.os-windows, .os-linux),
+.install:has(input[value="linux"]:checked) :is(.os-windows, .os-macos) { display: none; }
 
 .command {
   display: flex; align-items: center; gap: 12px;

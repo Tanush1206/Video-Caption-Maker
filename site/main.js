@@ -1,4 +1,4 @@
-// The copy buttons, and Linux preselected on Linux and macOS. The toggle itself is plain CSS.
+// The copy buttons, and the visitor's own system preselected. The toggle itself is plain CSS.
 const status = document.getElementById("copy-status");
 document.querySelectorAll("[data-copy]").forEach((button) => {
   button.addEventListener("click", async () => {
@@ -12,6 +12,7 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
     setTimeout(() => { button.textContent = "Copy"; status.textContent = ""; }, 2000);
   });
 });
-if (/Linux|Mac/.test(navigator.platform) && !/Android|iPhone|iPad/.test(navigator.userAgent)) {
-  document.querySelector('input[value="linux"]').checked = true;
-}
+// An iPad reports "MacIntel" too; it's the one with a touch screen.
+const mobile = /Android|iPhone|iPad/.test(navigator.userAgent) || navigator.maxTouchPoints > 1;
+const os = /Mac/.test(navigator.platform) ? "macos" : /Linux/.test(navigator.platform) ? "linux" : null;
+if (os && !mobile) document.querySelector(`input[value="${os}"]`).checked = true;

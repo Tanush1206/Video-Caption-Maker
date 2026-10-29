@@ -76,6 +76,7 @@
         <fieldset class="segmented">
           <legend class="sr-only">Your operating system</legend>
           <label><input type="radio" name="os" value="windows" checked data-goatcounter-click="os-windows" data-goatcounter-title="Toggle: Windows"> Windows</label>
+          <label><input type="radio" name="os" value="macos" data-goatcounter-click="os-macos" data-goatcounter-title="Toggle: macOS"> macOS</label>
           <label><input type="radio" name="os" value="linux" data-goatcounter-click="os-linux" data-goatcounter-title="Toggle: Linux"> Linux</label>
         </fieldset>
 
@@ -84,6 +85,11 @@
           <button type="button" class="button primary copy" data-copy="cmd-windows" aria-label="Copy the Windows command"
                   data-goatcounter-click="copy-windows" data-goatcounter-title="Copy: Windows command">Copy</button>
         </div>
+        <div class="command os-macos" id="cmd-macos">
+          <code>curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash</code>
+          <button type="button" class="button primary copy" data-copy="cmd-macos" aria-label="Copy the macOS command"
+                  data-goatcounter-click="copy-macos" data-goatcounter-title="Copy: macOS command">Copy</button>
+        </div>
         <div class="command os-linux" id="cmd-linux">
           <code>curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash</code>
           <button type="button" class="button primary copy" data-copy="cmd-linux" aria-label="Copy the Linux command"
@@ -91,7 +97,8 @@
         </div>
 
         <p class="note os-windows">Paste it into PowerShell. You need <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>, which is free, running first.</p>
-        <p class="note os-linux">Paste it into a terminal. You need <a href="https://docs.docker.com/get-docker/">Docker Engine</a>, which is free, running first. On macOS it's the same command, but macOS is untested.</p>
+        <p class="note os-macos">Paste it into Terminal. macOS hasn't been tested yet. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a> and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) it's currently slow, because the app's images are built for Intel and AMD processors.</p>
+        <p class="note os-linux">Paste it into a terminal. You need <a href="https://docs.docker.com/get-docker/">Docker Engine</a>, which is free, running first.</p>
         <p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
       </div>
 
