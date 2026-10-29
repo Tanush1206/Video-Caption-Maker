@@ -6,6 +6,20 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **No more "nan nan nan" captions over music.** The Hinglish speech model
+  writes "nan" where there is music and no speech, confidently enough that
+  no existing filter caught it: on a 15-minute vlog, 33 of 515 captions were
+  only "nan", and others began or ended with it. Music now has no captions,
+  and a caption that ran from music into speech keeps its words and starts
+  when they're said. Real repetition ("khelta jaoon, khelta jaoon, …") stays.
+- **Less filler over music with the standard speech model** in Hindi: the
+  short phrases Whisper writes there ("कर दो", "करते हैं", "हुआ है") are
+  dropped when that is all a line says and Whisper itself thought it was
+  probably not speech.
+
 ## [1.2.0] - 2026-10-29
 
 Next.js 15.5, uploads that stream, long exports that finish, and fixes from

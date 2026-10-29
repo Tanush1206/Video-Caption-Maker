@@ -234,6 +234,20 @@ Rules the code enforces:
   more with no caption is cut out and decoded again on its own, repeatedly
   inside what that finds, three levels deep (`_fill_skipped`). Invented text
   over silence is dropped by the same silence check as the rest.
+- **Music is no caption** (v1.2.1, `_speech_runs`). Music isn't silence, so
+  the silence check can't see it, and Whisper's own no-speech skip needs a
+  log-probability under -1.0 that a confident model never reaches:
+  - the Hinglish model writes **"nan"** over music (its training data's
+    missing transcripts), at word probability 0.8-0.98 and no-speech
+    probability 0.00 (`NON_SPEECH_WORDS`). Its runs are cut out of each
+    segment; the speech either side keeps its own words and timings;
+  - Whisper (large-v3 and the rest) writes short filler in Hindi ("कर दो",
+    "करते हैं", "हुआ है"; `NON_SPEECH_PHRASES`). A segment that is only that,
+    with a no-speech probability of at least 0.5, is music;
+  - both become `non_speech` segments, kept through `_fill_skipped`, where
+    they split a long stretch of music into the shorter ones decoded again
+    (dropped at once, a line inside 24 s of music was lost), then removed
+    before anything is captioned.
 - **Silence that would swallow the speech is re-measured** (v1.0.11,
   `silence_for`): FFmpeg's `silencedetect` under -40 dB as before, unless
   more than half of the file's voiced envelope windows (speech band within

@@ -1032,6 +1032,54 @@ Tanush's testing first (2026-10-28).
         containers removed. Not done this time: a Linux/CPU install (none
         here; the CPU path was covered by E2E before tagging).
 
+## v1.2.1 (in progress)
+Brief (Tanush, 2026-10-29): the (i) button (brief to come), and "nan nan
+nan" captions in music sections: test-assets/new.mp4 (15-min Hinglish vlog,
+gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
+
+- [x] **Music captions** (dev stack, GPU):
+      - Cause: only the Hinglish model (Apex) says "nan" (large-v3 never).
+        Over music each "nan" has word probability 0.80-0.98, avg logprob
+        -0.3 to -0.6, no-speech probability 0.00 and, a word to a segment,
+        compression ratio 0.27: Whisper skips a window only when no-speech
+        > 0.6 *and* logprob < -1.0, the ratio check needs > 2.4, and the
+        silence check can't see music. "nan" is NaN as text: the model's
+        training data's missing transcripts. Isolated, Apex said nothing
+        over 14.5-27.2 s; the runs come from `_fill_skipped` decoding the
+        gap alone.
+      - large-v3 has its own: over music it writes "कर दो", "करते हैं",
+        "हुआ है" (22 of its 25 segments there), at no-speech 0.56-0.90 and
+        logprob -0.23 to -0.58. Scores alone don't separate them from speech
+        (any cut that drops most of them drops 6-23 speech segments).
+      - Fix (`_speech_runs`): Apex's "nan" runs cut out of each segment,
+        the speech either side timed to its own words; a large-v3 segment
+        that is only that filler, at no-speech >= 0.5, is music. Both kept
+        as `non_speech` segments through `_fill_skipped`, then removed. A
+        first version dropped them at once and lost "log yaad karo
+        bhaiyon…" (806 s), found only by re-decoding the shorter stretches
+        between the "nan" runs.
+      - Apex, before (7674, old code) → after (7680): `music_check.py`
+        56 failures → 0; "nan" words 275 (Tanush's export) → 0; captions
+        513 → 474; "khelta jaoon ×4" and "nahin. Nahin. Nahin." kept.
+        Coverage: every newly uncaptioned stretch (22) is where only "nan"
+        was; none elsewhere. Real words against the export: 3208 vs 3191
+        (an earlier fixed run, 7678: 3208 vs 3208); the differences are all
+        in 486-539 s, which Apex decodes differently run to run (the old
+        code's run 7674 differs from the export there too).
+      - large-v3, before (7676) → after (7679): music captioned 48.8 → 15.4
+        of 64 s. Recording every raw segment of a final-code run: the rule
+        flagged 33, 16 over music and 17 where large-v3's phrase was not
+        what was said (Apex heard other words or nothing); none of the
+        coverage changes came from it (large-v3 alone varies 8-24 uncaptioned
+        stretches between runs). One filler under the 0.5 guard kept.
+      - Not changed: large-v3 repetition loops over real Hinglish speech
+        ("सब्सक्राइब ×3" where Apex hears "nahin aati na…", "डिलीशियर ×3",
+        "एक एक एक एक समोसा"); not music, so not this fix. Raised with Tanush.
+      - Tests: 8 in `test_transcription.py` (the nan, mixed and filler ones
+        fail on the old code; the khelta, same-words and English "nan" ones
+        guard real speech). Backend 622 passed. `backend/scripts/
+        music_check.py`. Test videos 7674-7680 deleted.
+
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
 facts in README, PRD and LANGUAGE_QUALITY.md only; the app's design system;
