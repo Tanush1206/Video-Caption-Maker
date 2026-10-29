@@ -995,6 +995,42 @@ Tanush's testing first (2026-10-28).
   phrasing and honest progress, the virtualised caption list, CLS, the
   weekly workflow, `vcm doctor` with the issue template, S7, and the model
   mirror move to the next version.
+- [x] **Released and checked (2026-10-29).** CI and `release` green on
+      5eebc6d (images: backend cpu and cuda, frontend; release); 8 assets,
+      each matching `SHA256SUMS` and the tag; all six GHCR tags pull
+      anonymously.
+      - Backup before the update (DATABASE.md §7, tar by the install's own
+        image): `C:\Users\Admin\AppData\Local\VideoCaptionMaker-backup-1.1.1`,
+        `vcm.dump` (all 7 tables), `vcm-media.tgz` (9 of 9 files), `.env`
+        copied unread; 14 s down. Kept until Tanush confirms.
+      - `vcm update` in 47 s: backend 9/19 layers, 0.5 MB; frontend 7/13,
+        11.0 MB. Version 1.2.0; alembic head `e8b3d5f19a42`; videos 84 and
+        140, 674 captions, 2 exports, 2 styles, all as before.
+      - Images: backend and worker uid 10001, frontend uid 100, CapEff 0,
+        NoNewPrivs 1; `/licenses` complete; pip's certifi links to the
+        system list, `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH` set; no sharp;
+        Next 15.5.28.
+      - At localhost:3000 and 127.0.0.1:3000: framing, frontend-guard, csp,
+        `upload-proxy` (62 MB upload whole; 4 probes 403 on /api/videos;
+        own request passes), `export-eta`: 40 PASS, 0 FAIL. `flow.js`:
+        delete, settings and back, SRT and MP4 export, nothing refused: PASS
+        at both. "GPU encoding." shows in the export panel
+        (`hardware_encoder: h264_nvenc`).
+      - E2E on the install (same, en, hi, fr; SRT, VTT, MP4): ALL PASSED.
+      - Large upload: 2,209,733,837 bytes, held, in 10.4 s, stored whole
+        (owner vcm); frontend 62 → 111 MiB peak.
+      - `burn_time.py`, new.mp4 (15 min, 1080p, a YouTube download): 74 s
+        end to end, ffmpeg 72 s (12.5x) with h264_nvenc; the worker healthy
+        at all 56 samples over 9.5 min (464 s transcription and the burn);
+        `vcm status`: all six healthy.
+      - Secrets: none in git history (`docs/learning-guide.md` was committed
+        and removed on 2026-08-06; no secret in it); none in the images (the
+        extra-CA folder in the running backend is the install's own
+        `proxy-root.crt` mount; the image has none).
+      - Test videos on the install: 141-152 (mine), all deleted; videos 84
+        and 140 remain. Scratch files, the extra `1.2.0-cuda` tag and test
+        containers removed. Not done this time: a Linux/CPU install (none
+        here; the CPU path was covered by E2E before tagging).
 
 ## Website on GitHub Pages (2026-10-27)
 Brief (Tanush): a landing page separate from the app, on GitHub Pages, from
