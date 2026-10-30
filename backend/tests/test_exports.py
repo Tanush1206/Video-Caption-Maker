@@ -772,7 +772,7 @@ def _fake_ffmpeg(tmp_path, monkeypatch, body: str):
     )
     fake.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake.parent}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setattr(rendering, "_video_encoder_args", lambda: ["-c:v", "libx264"])
+    monkeypatch.setattr(rendering, "_video_encoder_args", lambda cap=None: ["-c:v", "libx264"])
     return source
 
 
@@ -1425,3 +1425,191 @@ def test_the_burn_shows_each_caption_within_a_frame_of_its_start(tmp_path):
         assert -200 <= at - start <= 100, f"{text!r} appears {at - start:+.0f} ms from its start"
         # And on the first frame at or after it: nothing later than one frame.
         assert at - start < 1000 / fps
+
+
+# ── Quality: a burn no larger than the source needs (v1.2.2) ─────────────
+
+
+def _media(path, entries: str, stream: str = "v") -> dict:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", stream, "-show_entries", entries, "-of", "json", str(path)],
+        capture_output=True, timeout=120, check=True,
+    ).stdout
+    return json.loads(out)["streams"][0]
+
+
+def _audio_packets(path) -> str:
+    """The audio stream's packets, hashed without decoding them."""
+    return subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:a", "-c", "copy", "-f", "md5", "-"],
+        capture_output=True, timeout=120, check=True,
+    ).stdout.decode().strip()
+
+
+async def _burn_source(video_id: int, path) -> None:
+    """Replace a test video's file with `path`, as if that had been uploaded."""
+    from app.models.video import Video
+    from app.services import storage
+
+    async with AsyncSessionLocal() as session:
+        video = await session.get(Video, video_id)
+        storage.resolve(video.storage_path).write_bytes(path.read_bytes())
+
+
+async def _burned(client, auth_headers, video_id: int, **body):
+    from app.models.export import Export
+    from app.services import storage
+    from app.workers.export import _run
+
+    created = (
+        await client.post(f"/api/videos/{video_id}/exports", headers=auth_headers, json={"format": "mp4", **body})
+    ).json()
+    assert "error" not in await _run(created["id"])
+    async with AsyncSessionLocal() as session:
+        export = await session.get(Export, created["id"])
+        return export, storage.resolve(export.storage_path)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("encoder", ["libx264", "h264_nvenc"])
+async def test_each_quality_caps_the_burn_against_the_source(
+    client, auth_headers, exportable, tmp_path, monkeypatch, encoder
+):
+    """
+    A grainy 400 kbit/s source, as a phone or a messaging app would leave it.
+    The quality targets alone spend several times that copying the grain
+    (NVENC made 3.9x of a real upload); each quality must stay within its
+    multiple of the source, plus a quarter for the VBV buffer, which lets the
+    first seconds of a short clip run over: on these 12 seconds x264 made
+    0.74x, 1.28x and 2.13x, NVENC 0.81x for the 0.7x cap. Uncapped, many
+    times the source. The real-video check holds "Same" to 1.25x of a
+    15-minute file (scripts/quality_check.py).
+    """
+    from app.services import rendering
+
+    if encoder == "libx264":
+        monkeypatch.setattr(rendering, "nvenc_available", lambda: False)
+    elif not rendering.nvenc_available():
+        pytest.skip("no NVENC on this machine")
+
+    source = tmp_path / "grain.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=12,noise=alls=25:allf=t",
+         "-f", "lavfi", "-i", "sine=duration=12",
+         "-c:v", "libx264", "-b:v", "400k", "-maxrate", "400k", "-bufsize", "800k",
+         "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(source)],
+        capture_output=True, timeout=120, check=True,
+    )
+    await _burn_source(exportable, source)
+    source_rate = int(_media(source, "stream=bit_rate")["bit_rate"])
+
+    for quality, factor in {"smaller": 0.7, "same": 1.2, "higher": 2.0}.items():
+        export, path = await _burned(client, auth_headers, exportable, quality=quality)
+        rate = int(_media(path, "stream=bit_rate")["bit_rate"])
+        assert rate <= source_rate * factor * 1.25, (encoder, quality, rate / source_rate)
+        assert export.quality == quality
+
+
+@pytest.mark.asyncio
+async def test_aac_sound_is_copied_bit_for_bit(client, auth_headers, exportable):
+    """The sample's sound is AAC: the burn carries the same packets, not a re-encode."""
+    from app.models.video import Video
+    from app.services import storage
+
+    async with AsyncSessionLocal() as session:
+        source = storage.resolve((await session.get(Video, exportable)).storage_path)
+    _, path = await _burned(client, auth_headers, exportable)
+
+    assert _media(path, "stream=codec_name", "a")["codec_name"] == "aac"
+    assert _audio_packets(path) == _audio_packets(source)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("container,codec", [("mkv", "libvorbis"), ("mkv", "pcm_s16le"), ("webm", "libopus")])
+async def test_sound_an_mp4_player_may_not_play_becomes_aac(
+    client, auth_headers, exportable, tmp_path, container, codec
+):
+    """
+    FFmpeg puts Vorbis, PCM or Opus in an MP4 without complaint, and many
+    players then show the picture in silence. Until v1.2.2 every burn copied
+    the sound whatever it was.
+    """
+    source = tmp_path / f"source.{container}"
+    video_codec = "libvpx-vp9" if container == "webm" else "libx264"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10:duration=2",
+         "-f", "lavfi", "-i", "sine=duration=2:sample_rate=48000",
+         "-c:v", video_codec, "-c:a", codec, "-shortest", str(source)],
+        capture_output=True, timeout=120, check=True,
+    )
+    await _burn_source(exportable, source)
+    _, path = await _burned(client, auth_headers, exportable)
+
+    assert _media(path, "stream=codec_name", "a")["codec_name"] == "aac"
+
+
+def test_the_cap_follows_the_quality_and_shrinks_with_the_frame():
+    from app.models.export import ExportQuality
+    from app.services import rendering
+
+    full = (1920, 1080)
+    assert rendering.bitrate_cap(4_000_000, full, full, ExportQuality.SAME) == 4_800_000
+    assert rendering.bitrate_cap(4_000_000, full, full, ExportQuality.SMALLER) == 2_800_000
+    assert rendering.bitrate_cap(4_000_000, full, full, ExportQuality.HIGHER) == 8_000_000
+    # 720p is 0.44 of the area: 0.54 of the bitrate.
+    assert rendering.bitrate_cap(4_000_000, full, (1280, 720), ExportQuality.SAME) == int(
+        4_800_000 * (4 / 9) ** 0.75
+    )
+    # Unknown source rate: no cap, rather than a guess.
+    assert rendering.bitrate_cap(None, full, full, ExportQuality.SAME) is None
+
+
+@pytest.mark.asyncio
+async def test_options_offer_three_qualities_with_an_estimate_each(client, auth_headers, exportable):
+    body = (await client.get(f"/api/videos/{exportable}/exports/options", headers=auth_headers)).json()
+
+    assert [q["value"] for q in body["qualities"]] == ["smaller", "same", "higher"]
+    assert [q["label"] for q in body["qualities"]] == ["Smaller file", "Same as original", "Higher quality"]
+    assert body["default_quality"] == "same"
+    native = next(r for r in body["resolutions"] if r["native"])
+    estimates = native["estimated_bytes"]
+    assert 0 < estimates["smaller"] < estimates["same"] < estimates["higher"]
+
+
+@pytest.mark.asyncio
+async def test_quality_is_kept_on_a_burn_and_dropped_from_a_sidecar(client, auth_headers, exportable):
+    burn = (
+        await client.post(
+            f"/api/videos/{exportable}/exports", headers=auth_headers, json={"format": "mp4", "quality": "higher"}
+        )
+    ).json()
+    default = (
+        await client.post(f"/api/videos/{exportable}/exports", headers=auth_headers, json={"format": "mp4"})
+    ).json()
+    sidecar = (
+        await client.post(
+            f"/api/videos/{exportable}/exports", headers=auth_headers, json={"format": "srt", "quality": "higher"}
+        )
+    ).json()
+    refused = await client.post(
+        f"/api/videos/{exportable}/exports", headers=auth_headers, json={"format": "mp4", "quality": "best"}
+    )
+
+    assert (burn["quality"], default["quality"], sidecar["quality"]) == ("higher", "same", None)
+    assert refused.status_code == 422
+
+
+def test_a_typed_name_still_says_it_is_the_burn():
+    """
+    v1.2.2: typed as "holiday", the burn and the original both came down as
+    "holiday.mp4". Subtitle files keep a typed name exactly.
+    """
+    from app.api.exports import download_filename
+    from app.models.export import ExportFormat
+
+    assert download_filename("holiday", ExportFormat.MP4, 1080) == "holiday – captions 1080p.mp4"
+    assert download_filename("holiday – Captions 1080p", ExportFormat.MP4, 1080) == "holiday – Captions 1080p.mp4"
+    assert download_filename("holiday", ExportFormat.SRT) == "holiday.srt"
+    assert download_filename("holiday", ExportFormat.VTT) == "holiday.vtt"

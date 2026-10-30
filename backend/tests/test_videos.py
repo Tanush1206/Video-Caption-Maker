@@ -407,16 +407,21 @@ async def test_a_saved_original_says_original_and_is_never_cached(
     video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
     token = await stream_token(client, auth_headers, video_id)
 
-    playback = await client.get(f"/api/videos/{video_id}/stream?token={token}")
-    saved = await client.get(f"/api/videos/{video_id}/stream?token={token}&download=1")
-    named = await client.get(f"/api/videos/{video_id}/stream?token={token}&download=1&name=holiday")
+    def saved_as(query: str) -> str:
+        return unquote(responses[query].headers["content-disposition"].split("''", 1)[1])
 
-    disposition = saved.headers["content-disposition"]
-    assert unquote(disposition.split("''", 1)[1]) == "clip – original.mp4"
-    assert saved.headers["cache-control"] == "no-store"
-    assert saved.content == sample_video_bytes
-    # A name the user typed is theirs, unchanged.
-    assert 'filename="holiday.mp4"' in named.headers["content-disposition"]
+    playback = await client.get(f"/api/videos/{video_id}/stream?token={token}")
+    responses = {
+        query: await client.get(f"/api/videos/{video_id}/stream?token={token}&download=1{query}")
+        for query in ("", "&name=holiday", "&name=holiday%20%E2%80%93%20Original.mp4")
+    }
+
+    assert saved_as("") == "clip – original.mp4"
+    assert responses[""].headers["cache-control"] == "no-store"
+    assert responses[""].content == sample_video_bytes
+    # A typed name still says what it is (v1.2.2), but not twice.
+    assert saved_as("&name=holiday") == "holiday – original.mp4"
+    assert saved_as("&name=holiday%20%E2%80%93%20Original.mp4") == "holiday – Original.mp4"
     assert "cache-control" not in playback.headers
 
 
