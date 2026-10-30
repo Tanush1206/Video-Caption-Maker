@@ -479,12 +479,14 @@ def test_existing_videos_burn_exactly_as_in_1_0_7():
     byte. A left-aligned style is moved as e8b3d5f19a42 (v1.2.0) moves it.
     """
     from tests.test_caption_anchor import migration
+    from tests.test_caption_anchor import reference as reference_script
 
     reference = json.loads((Path(__file__).parent / "data" / "burn-1.0.7.json").read_text(encoding="utf-8"))
     for name, overrides in reference["styles"].items():
         captions = [_caption(t, i) for i, t in enumerate(reference["texts"])]
         for width, height in reference["frames"]:
-            fields = {**default_style_fields(), **overrides}
+            # On the default these videos were saved with (migration c3e7a9d15b42).
+            fields = {**default_style_fields(), **reference_script.PRE_1_3_DEFAULT, **overrides}
             box = fields["box_width"] or default_width(width, height)
             fields["pos_x"] = migration.anchor(fields["pos_x"], getattr(fields["alignment"], "value", fields["alignment"]), box)
             style = CaptionStyle(video_id=1, **fields)

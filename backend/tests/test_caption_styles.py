@@ -381,12 +381,13 @@ async def test_preset_and_reset(client, auth_headers, sample_video_bytes):
     )
     assert applied.status_code == 200
     assert applied.json()["pos_y"] == style_service.PLACEMENT_Y["middle"]
-    assert applied.json()["outline_width"] == 5
+    assert applied.json()["outline_width"] == 6
 
     reset = await client.delete(f"/api/videos/{video_id}/style", headers=auth_headers)
     assert reset.status_code == 200
     assert reset.json()["pos_y"] == style_service.PLACEMENT_Y["bottom"]
-    assert reset.json()["font_size"] == 54
+    # The readable default since v1.3.0 (the sample is landscape).
+    assert reset.json()["font_size"] == 100
 
 
 @pytest.mark.asyncio
@@ -638,3 +639,106 @@ async def test_old_placements_convert_to_the_box_centre(client, auth_headers, sa
     assert (got[2]["pos_x"], got[2]["pos_y"]) == pytest.approx((0.3, 0.2))
     assert (got[3]["pos_x"], got[3]["pos_y"]) == pytest.approx((0.1, 0.6))
     assert all(g["box_width"] is None and g["max_lines"] == 2 for g in got)
+
+
+# ── A readable default (v1.3.0) ─────────────────────────────────────────────
+
+
+def _em_share(fields: dict) -> float:
+    """The em as a share of the frame's height: Fontsize ÷ the face's win span ÷ 1080."""
+    return fields["font_size"] / style_service.font_win_span(fields["font_key"], fields["bold"]) / 1080
+
+
+def test_the_default_reads_at_5_to_6_percent_of_the_height_with_a_heavy_edge():
+    """
+    Until v1.3.0 the default's em was 2.8% of the frame (capitals 22 px on
+    1080p) with a 3-pixel outline that a bright shirt swallowed.
+    """
+    fields = style_service.default_style_fields()
+    assert 0.05 <= _em_share(fields) <= 0.06
+    em = fields["font_size"] / style_service.font_win_span(fields["font_key"], fields["bold"])
+    assert fields["outline_width"] >= 0.1 * em
+    assert fields["shadow"] > 0
+    assert (fields["text_color"], fields["outline_color"]) == ("#FFFFFF", "#000000")
+
+
+@pytest.mark.parametrize("name", list(style_service.PRESETS))
+def test_every_preset_reads_at_4_5_percent_or_more(name):
+    fields = {**style_service.default_style_fields(), **style_service.PRESETS[name]}
+    assert _em_share(fields) >= 0.045, name
+
+
+def test_a_portrait_frame_scales_the_sizes_by_its_width():
+    """A 9:16 frame: the default at the share of the width a landscape one has of its height."""
+    portrait = style_service.default_style_fields((1080, 1920))
+    assert (portrait["font_size"], portrait["outline_width"], portrait["shadow"]) == (56, 3, 2)
+    assert portrait["box_padding"] == 8
+    assert style_service.for_frame(style_service.PRESETS["tiktok"], (1080, 1920))["font_size"] == 63
+    # Landscape and square are left as they are.
+    assert style_service.default_style_fields((1920, 1080))["font_size"] == 100
+    assert style_service.default_style_fields((1080, 1080))["font_size"] == 100
+
+
+@pytest.mark.asyncio
+async def test_a_new_portrait_video_gets_the_scaled_default(client, auth_headers, tmp_path):
+    import subprocess
+
+    clip = tmp_path / "portrait.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=240x320:rate=10:duration=1",
+         "-f", "lavfi", "-i", "sine=duration=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+         "-shortest", str(clip)],
+        capture_output=True, timeout=120, check=True,
+    )
+    video_id = (await upload(client, auth_headers, clip.read_bytes())).json()["id"]
+
+    style = (await client.get(f"/api/videos/{video_id}/style", headers=auth_headers)).json()
+    preset = (
+        await client.post(f"/api/videos/{video_id}/style/preset", headers=auth_headers, json={"name": "youtube"})
+    ).json()
+    reset = (await client.delete(f"/api/videos/{video_id}/style", headers=auth_headers)).json()
+
+    assert style["font_size"] == reset["font_size"] == 75  # 100 × 240/320
+    assert preset["font_size"] == 60  # 80 × 240/320
+
+
+@pytest.mark.asyncio
+async def test_existing_videos_keep_the_style_they_burned_with(client, auth_headers, sample_video_bytes):
+    """
+    The migration gives a video nobody styled the old default as a row of its
+    own, so its next burn doesn't change; a saved style isn't touched, and a
+    video uploaded afterwards gets the new default.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+
+    path = Path(__file__).parents[1] / "alembic/versions/c3e7a9d15b42_keep_the_old_default_style.py"
+    spec = importlib.util.spec_from_file_location("keep_old_default", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    unstyled = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    styled = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    await client.patch(f"/api/videos/{styled}/style", headers=auth_headers, json={"font_size": 70})
+
+    async with AsyncSessionLocal() as session:
+        await session.run_sync(lambda s: migration.freeze(s.connection()))
+        await session.commit()
+        rows = {
+            row.video_id: row
+            for row in (await session.execute(
+                select(CaptionStyle).where(CaptionStyle.video_id.in_([unstyled, styled]))
+            )).scalars()
+        }
+    later = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    new = (await client.get(f"/api/videos/{later}/style", headers=auth_headers)).json()
+
+    old = rows[unstyled]
+    assert (old.font_size, old.outline_width, old.shadow, old.font_key, old.bold) == (54, 3, 0, "poppins", True)
+    assert (old.pos_y, old.alignment, old.max_lines) == (0.88, Alignment.CENTER, 2)
+    assert rows[styled].font_size == 70
+    assert (new["font_size"], new["outline_width"], new["shadow"]) == (100, 6, 3)

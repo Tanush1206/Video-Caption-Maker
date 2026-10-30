@@ -44,13 +44,18 @@ def styles() -> dict[str, dict]:
     return out
 
 
+# The default the references were made with: v1.3.0 changed it, and the
+# videos saved before keep it (migration c3e7a9d15b42).
+PRE_1_3_DEFAULT = {"font_size": 54, "outline_width": 3, "shadow": 0}
+
+
 def document(overrides: dict, width: int, height: int) -> str:
     """The Dialogue lines of one style's burn, as the reference hashes them."""
     captions = [
         Caption(video_id=1, sequence=i, start_ms=i * 1000, end_ms=i * 1000 + 900, text=t, confidence=-0.1)
         for i, t in enumerate(TEXTS)
     ]
-    style = CaptionStyle(video_id=1, **{**default_style_fields(), **overrides})
+    style = CaptionStyle(video_id=1, **{**default_style_fields(), **PRE_1_3_DEFAULT, **overrides})
     doc = subtitles.to_ass(captions, style, width, height)
     return "\n".join(line for line in doc.splitlines() if line.startswith("Dialogue:"))
 
