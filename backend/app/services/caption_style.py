@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.caption_style import (
+    BOX_PADDING_MIN,
     REFERENCE_HEIGHT,
     Alignment,
     CaptionStyle,
@@ -292,7 +293,9 @@ PRESETS: dict[str, dict] = {
         # Humanist, quiet, and easy over a long stretch of dialogue — which is
         # what a boxed subtitle at the bottom of a talking-head video is.
         "font_key": "lato",
-        "font_size": 48,
+        # Sizes for an em of about 5% of the frame's height (v1.3.0; this
+        # was 48, an em of 3.1%), like the default.
+        "font_size": 80,
         "bold": False,
         "italic": False,
         "text_color": "#FFFFFF",
@@ -308,7 +311,9 @@ PRESETS: dict[str, dict] = {
         # A black display face is most of this look, and the one part a size or
         # colour cannot approximate.
         "font_key": "anton",
-        "font_size": 64,
+        # Big, as the look is (v1.3.0, was 64): an em of 6% on landscape, and
+        # 63 on a 9:16 frame (`for_frame`), where it was 64.
+        "font_size": 112,
         # Not bold: Anton is already black, and it ships as a single weight, so
         # both renderers would synthesise a fake bold on top of it. They would
         # agree — that is why the @font-face declares 400 only — but agreeing
@@ -320,7 +325,7 @@ PRESETS: dict[str, dict] = {
         "uppercase": True,
         "text_color": "#FFFFFF",
         "outline_color": "#000000",
-        "outline_width": 5,
+        "outline_width": 6,
         "box_color": "#000000",
         "box_opacity": 0.0,
         # Centred vertically, because the bottom of a phone screen is covered
@@ -331,12 +336,14 @@ PRESETS: dict[str, dict] = {
     "minimal": {
         **_PRESET_BASELINE,
         "font_key": "poppins",
-        "font_size": 44,
+        # v1.3.0, was 44 with a 2-pixel outline: an em of 2.3%, and lost on a
+        # bright frame.
+        "font_size": 88,
         "bold": False,
         "italic": False,
         "text_color": "#FFFFFF",
         "outline_color": "#000000",
-        "outline_width": 2,
+        "outline_width": 3,
         # A hair of shadow instead of a heavier outline: it lifts the text off
         # a busy frame without the stroke reading as a border.
         "shadow": 3,
@@ -348,7 +355,43 @@ PRESETS: dict[str, dict] = {
 }
 
 
-def default_style_fields() -> dict:
+# The fields that are sizes in reference pixels. Every style the app sets
+# (the default, Reset, a preset) is made for a landscape frame; on a portrait
+# one these are scaled by width / height, so a caption takes the same share of
+# the frame's *width* (v1.3.0). Without it the new default's em, 5.3% of the
+# height, would be 9.4% of a 9:16 frame's width, four or five words a line.
+# Scaled, a 9:16 video gets about the sizes every video had before.
+SIZE_FIELDS = ("font_size", "outline_width", "shadow", "box_padding", "letter_spacing")
+
+
+def for_frame(fields: dict, frame: tuple[int, int] | None) -> dict:
+    """`fields` for a video of this frame size: as they are, or scaled for portrait."""
+    if not frame or not frame[0] or not frame[1] or frame[1] <= frame[0]:
+        return dict(fields)
+    k = frame[0] / frame[1]
+    scaled = dict(fields)
+    for key in SIZE_FIELDS:
+        value = fields.get(key)
+        if isinstance(value, int) and value:
+            # A thin outline or shadow stays drawn, at a pixel at least.
+            scaled[key] = max(1, round(value * k)) if value > 0 else round(value * k)
+    if "box_padding" in scaled:
+        scaled["box_padding"] = max(BOX_PADDING_MIN, scaled["box_padding"])
+    return scaled
+
+
+async def frame_of(db: AsyncSession, video_id: int) -> tuple[int, int] | None:
+    """The video's frame size, read from its file as the burn reads it; None if unreadable."""
+    from app.models.video import Video
+    from app.services import media, storage
+
+    video = await db.get(Video, video_id)
+    if video is None or not video.storage_path:
+        return None
+    return await media.probe_dimensions(storage.resolve(video.storage_path))
+
+
+def default_style_fields(frame: tuple[int, int] | None = None) -> dict:
     """
     The model's own column defaults, read back off the columns.
 
@@ -365,11 +408,11 @@ def default_style_fields() -> dict:
     `default=None` as no default at all.
     """
     skip = {"id", "video_id", "created_at", "updated_at"}
-    return {
+    return for_frame({
         column.name: column.default.arg if column.default is not None else None
         for column in CaptionStyle.__table__.columns
         if column.name not in skip and (column.default is not None or column.nullable)
-    }
+    }, frame)
 
 
 async def get_style(db: AsyncSession, video_id: int) -> CaptionStyle | None:
@@ -391,7 +434,8 @@ async def get_or_create_style(db: AsyncSession, video_id: int) -> CaptionStyle:
     if style is not None:
         return style
 
-    style = CaptionStyle(video_id=video_id)
+    # The default for this video's frame: scaled down on a portrait one.
+    style = CaptionStyle(video_id=video_id, **default_style_fields(await frame_of(db, video_id)))
     db.add(style)
     await db.commit()
     await db.refresh(style)
@@ -409,7 +453,7 @@ async def update_style(db: AsyncSession, style: CaptionStyle, changes: dict) -> 
 async def apply_preset(db: AsyncSession, style: CaptionStyle, name: str) -> CaptionStyle:
     if name not in PRESETS:
         raise ValueError(f"Unknown preset: {name}")
-    return await update_style(db, style, dict(PRESETS[name]))
+    return await update_style(db, style, for_frame(PRESETS[name], await frame_of(db, style.video_id)))
 
 
 # ── ASS conversion ───────────────────────────────────────────────────────

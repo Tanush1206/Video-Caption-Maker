@@ -80,7 +80,14 @@ class CaptionStyle(Base):
     # system face on purpose: a fallback should need nothing to be present.
     font_key: Mapped[str] = mapped_column(String(32), nullable=False, default="poppins")
 
-    font_size: Mapped[int] = mapped_column(Integer, nullable=False, default=54)
+    # The default is readable on any footage (v1.3.0): an em of 5.3% of the
+    # frame's height in Poppins Bold (size 100 ÷ its win span 1.762), a
+    # 6-pixel outline and a 3-pixel shadow. Until then 54, 3 and 0: an em of
+    # 2.8%, capitals 22 px tall on 1080p, and an outline that vanished on a
+    # bright shirt. Sizes are for landscape; a portrait frame scales them
+    # (services/caption_style.py `for_frame`). Rows saved before keep theirs
+    # (migration c3e7a9d15b42).
+    font_size: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     bold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     italic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -89,7 +96,7 @@ class CaptionStyle(Base):
     text_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#FFFFFF")
 
     outline_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
-    outline_width: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    outline_width: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
 
     # Drop shadow, in reference pixels. ASS offsets it down-and-right by this
     # distance with no blur, which is exactly what a CSS `text-shadow` with a
@@ -97,7 +104,7 @@ class CaptionStyle(Base):
     #
     # Its own colour rather than reusing the outline's, because a shadow is
     # usually a softer version of the text and an outline usually is not.
-    shadow: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    shadow: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     shadow_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
 
     box_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")

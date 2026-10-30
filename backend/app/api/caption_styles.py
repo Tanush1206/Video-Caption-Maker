@@ -105,6 +105,6 @@ async def reset_style(
     style = await style_service.get_or_create_style(db, video_id)
 
     updated = await style_service.update_style(
-        db, style, style_service.default_style_fields()
+        db, style, style_service.default_style_fields(await style_service.frame_of(db, video_id))
     )
     return CaptionStyleRead.model_validate(updated)

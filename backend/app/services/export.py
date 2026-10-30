@@ -147,7 +147,7 @@ async def style_for(db: AsyncSession, video_id: int) -> CaptionStyle:
     effect — a GET-shaped operation that writes is a surprise. The defaults are
     read off the columns because an unsaved instance has None in every field.
     """
-    from app.services.caption_style import default_style_fields
+    from app.services.caption_style import default_style_fields, frame_of
 
     result = await db.execute(
         select(CaptionStyle).where(CaptionStyle.video_id == video_id)
@@ -156,4 +156,4 @@ async def style_for(db: AsyncSession, video_id: int) -> CaptionStyle:
     if existing is not None:
         return existing
 
-    return CaptionStyle(video_id=video_id, **default_style_fields())
+    return CaptionStyle(video_id=video_id, **default_style_fields(await frame_of(db, video_id)))
