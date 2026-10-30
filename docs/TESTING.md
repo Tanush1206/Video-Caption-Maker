@@ -426,6 +426,7 @@ Baselines:
 | 1.0.11 → 1.1.0 | CUDA 3/15 layers, 0.2 MB (app code only) | 4/10, 7.0 MB (the redesign; no webfonts) |
 | 1.1.1 → 1.2.0 | CUDA 9/19 layers, 0.5 MB (app code, the emSign layer); the 2 GB dependency layer reused | 7/13, 11.0 MB (Next.js 15.5) |
 | 1.2.0 → 1.2.1 | CUDA 3/19 layers, 0.2 MB (app code only) | 7/13, 11.0 MB |
+| 1.2.1 → 1.2.2 | CUDA 4/19 layers, 0.2 MB (app code only; one migration) | 7/13, 11.0 MB |
 
 Full layer digests are in PROGRESS.md.
 

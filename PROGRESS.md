@@ -1178,8 +1178,42 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
       - Test videos on the install: 153-161, 193-199 (mine), all deleted;
         84 and 140 remain; export files match the table (3).
 
-## v1.2.2 (in progress)
+## v1.2.2 (released 2026-10-30, tag on 7e570d0)
 Asked by Tanush, 2026-10-30: first the download mix-up, then the MP4 size fix.
+
+- [x] **Released and checked** (2026-10-30/31). `ci` and `release` (4/4)
+      green on 7e570d0; 8 assets matching `SHA256SUMS` and the tag (the two
+      `.ps1` differ from the blobs only by CRLF, `.gitattributes`); all
+      eight GHCR tags pull anonymously.
+      - Backup before the update: `VideoCaptionMaker-backup-1.2.1` next to
+        the install folder (dump with all 7 tables, media 10 of 10 files,
+        2.1 GB, `.env` copied unread; 60 s down). The 1.1.1 and 1.2.0
+        backups are kept too, until Tanush confirms.
+      - The first `vcm update` sat in `compose pull` for 15+ minutes: GHCR's
+        blob storage (pkg-containers.githubusercontent.com) sent 3-8 KB/s to
+        this machine while Cloudflare gave 14 MB/s and GitHub's status was
+        green. The install stayed on 1.2.1 and up throughout (the pull comes
+        before any restart). The session then ended and Docker restarted.
+        Run again the next day at 33 KB/s: `vcm update` in 27 s, backend
+        4/19 layers 0.2 MB, frontend 7/13 11.0 MB.
+      - 1.2.2; alembic head `a6d2f0c8b913`; videos 84 and 140, 672 captions
+        (caption-text md5 unchanged), 3 exports (quality null, as meant),
+        2 styles. Images amd64, uid 10001 / 100, CapEff 0, NoNewPrivs 1;
+        `/licenses` complete; only CA bundles in the images; no secret file
+        in git history (only the learning guide, added and removed on
+        2026-08-06).
+      - At localhost and 127.0.0.1: framing, frontend-guard, csp,
+        upload-proxy, export-eta, caption-accuracy, export-quality: 77 PASS
+        each; `flow.js` PASS at both ("hinglish – captions 1080p.mp4").
+      - E2E (hinglish.mp4; same, en, hi, fr; SRT, VTT, MP4): ALL PASSED,
+        burns 72.4 MB from 62.2 MB.
+      - `download_check.py` with big.mp4 (1.13 GB): ALL PASSED, burn
+        1,356,893,449 bytes, every body its own file, `no-store`.
+      - `quality_check.py` on new.mp4: Smaller 0.70× SSIM 0.9805, Same
+        1.18× 0.9883, Higher 1.94× 0.9925, each 73 s with NVENC, AAC
+        copied; worker healthy at 69 of 69 samples.
+      - Test videos on the install: 201-212 (mine), all deleted; 84 and
+        140 remain; export files match the table (3).
 
 - [x] **The burned MP4's Download "gave the original".** Reported on the
       1.2.1 install, video 140: "new (1).mp4", 421 MB, the original.
