@@ -32,7 +32,7 @@ import { formatFileSize, formatRelativeTime } from "@/lib/format";
 import { languageName } from "@/lib/languages";
 import { useEta } from "@/lib/stages";
 import { cn } from "@/lib/utils";
-import type { ExportFormat, VideoExport } from "@/types/export";
+import type { ExportFormat, ExportQuality, ExportQualityOption, VideoExport } from "@/types/export";
 import type { LanguageOptions } from "@/types/video";
 import { useState } from "react";
 
@@ -86,7 +86,7 @@ function LanguageLine({ item, options }: { item: VideoExport; options: LanguageO
   );
 }
 
-function StatusLine({ item }: { item: VideoExport }) {
+function StatusLine({ item, qualities }: { item: VideoExport; qualities: ExportQualityOption[] }) {
   if (item.status === "failed") {
     return (
       <span className="flex items-center gap-1 text-[13px] text-destructive">
@@ -108,6 +108,8 @@ function StatusLine({ item }: { item: VideoExport }) {
   return (
     <span className="text-[13px] text-muted-foreground">
       {item.height ? `${item.height}p · ` : ""}
+      {/* Two burns at one height differ only by this (v1.2.2). */}
+      {item.quality ? `${qualities.find((q) => q.value === item.quality)?.label ?? item.quality} · ` : ""}
       {item.size_bytes ? formatFileSize(item.size_bytes) : "—"} ·{" "}
       {formatRelativeTime(item.created_at)}
     </span>
@@ -143,6 +145,8 @@ export function ExportPanel({
    * source's own size, since nothing larger is offered (v1.1.0).
    */
   const [height, setHeight] = useState<number | null>(null);
+  /** The burn's quality; null means the server's default, "Same as original". */
+  const [quality, setQuality] = useState<ExportQuality | null>(null);
 
   /**
    * What the saved file will be called.
@@ -165,6 +169,9 @@ export function ExportPanel({
   const recommended = options?.recommended_height ?? null;
   const chosen = height ?? recommended ?? options?.source_height ?? null;
   const chosenOption = resolutions.find((r) => r.height === chosen);
+  const qualities = options?.qualities ?? [];
+  const chosenQuality = quality ?? options?.default_quality ?? "same";
+  const estimate = chosenOption?.estimated_bytes[chosenQuality];
 
   const items = data?.items ?? [];
   // One burn at a time is enough; a second would queue behind it and produce a
@@ -189,6 +196,7 @@ export function ExportPanel({
         // Only a burn has a frame size; the server drops it for the
         // sidecars anyway, but not sending it is clearer.
         height: choice === "mp4" && chosen ? chosen : undefined,
+        quality: choice === "mp4" ? chosenQuality : undefined,
       });
   }
 
@@ -287,10 +295,27 @@ export function ExportPanel({
                 />
               </div>
             )}
+
+            {/* The bitrate cap against the source's (v1.2.2); served, like the heights. */}
+            {choice === "mp4" && qualities.length > 0 && (
+              <div className="group-row flex-wrap gap-y-2">
+                <span className="text-[15px]">Quality</span>
+                <Segmented
+                  kind="radio"
+                  label="Quality"
+                  segments={qualities.map((q) => ({ value: q.value, label: q.label }))}
+                  value={chosenQuality}
+                  onChange={setQuality}
+                  className="w-full sm:w-auto dark:bg-black/30"
+                  // Two lines a label on a phone: the three don't fit side by side.
+                  segmentClassName="flex-1 px-2.5 max-sm:whitespace-normal max-sm:py-1 max-sm:text-center max-sm:leading-tight sm:flex-none"
+                />
+              </div>
+            )}
           </div>
           <p className="mt-1.5 px-4 text-[13px] text-muted-foreground">
             {savedAs
-              ? `Downloads as "${savedAs}", with the extension for the format.`
+              ? `Downloads as "${savedAs}". Videos add "– captions" or "– original".`
               : "Leave blank to use the video's own filename."}
           </p>
           {choice === "mp4" && resolutions.length > 0 && (
@@ -303,6 +328,12 @@ export function ExportPanel({
               {options?.hardware_encoder ? " GPU encoding." : ""}
             </p>
           )}
+          {choice === "mp4" && estimate ? (
+            // An upper bound: the cap is a ceiling, and a clean source comes in under it.
+            <p className="mt-1 px-4 text-[13px] text-muted-foreground">
+              Estimated size: up to about {formatFileSize(estimate)}.
+            </p>
+          ) : null}
         </div>
 
         {burn && (
@@ -352,7 +383,7 @@ export function ExportPanel({
                       {item.height ? <span> · {item.height}p</span> : null}
                     </p>
                     <LanguageLine item={item} options={languages} />
-                    <StatusLine item={item} />
+                    <StatusLine item={item} qualities={qualities} />
                   </div>
                   <Button
                     variant="plain"

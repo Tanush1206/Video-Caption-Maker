@@ -1743,6 +1743,49 @@ const CHECKS = {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   },
+
+  // v1.2.2: a burn's Quality, its estimate, and what Export sends. The
+  // export request is answered here, so nothing is rendered.
+  async "export-quality"(browser, base) {
+    for (const width of [1440, 375]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const id = await editorVideo(page, base);
+      const sent = [];
+      await page.route(new RegExp(`/api/videos/${id}/exports$`), (route) => {
+        if (route.request().method() !== "POST") return route.fallback();
+        sent.push(route.request().postDataJSON());
+        return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ detail: "stopped by the check" }) });
+      });
+      await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Export", exact: true }).first().click();
+      const dialog = page.getByRole("dialog");
+      const group = dialog.getByRole("radiogroup", { name: "Quality" });
+      await group.waitFor();
+      const labels = await group.getByRole("radio").allInnerTexts();
+      ok(`export-quality@${width}: three qualities`, labels.join("|") === "Smaller file|Same as original|Higher quality", labels.join("|"));
+      ok(`export-quality@${width}: Same as original by default`,
+        (await group.getByRole("radio", { name: "Same as original" }).getAttribute("aria-checked")) === "true");
+      const estimate = dialog.getByText(/^Estimated size: up to about /);
+      const same = await estimate.innerText();
+      await group.getByRole("radio", { name: "Smaller file" }).click();
+      const smaller = await estimate.innerText();
+      ok(`export-quality@${width}: the estimate follows the choice`, same !== smaller, `${same} -> ${smaller}`);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth
+        || [...document.querySelectorAll("dialog [role=radiogroup]")].some((g) => g.scrollWidth > g.clientWidth + 1));
+      ok(`export-quality@${width}: no overflow`, !overflow);
+      if (process.env.VCM_SHOTS) {
+        await group.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `${process.env.VCM_SHOTS}/export-quality-${width}.png` });
+      }
+      await dialog.getByRole("button", { name: "Export .mp4" }).click();
+      await page.waitForTimeout(500);
+      ok(`export-quality@${width}: Export sends the quality`, sent.at(-1)?.quality === "smaller", JSON.stringify(sent.at(-1)));
+      await dialog.locator("label", { hasText: "Subtitle file" }).click();
+      ok(`export-quality@${width}: no quality for a subtitle file`, (await group.count()) === 0);
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await page.close();
+    }
+  },
 };
 
 (async () => {

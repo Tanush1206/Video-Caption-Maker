@@ -1,5 +1,7 @@
 export type ExportFormat = "srt" | "vtt" | "json" | "mp4";
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";
+/** A burn's bitrate against the source's (v1.2.2). */
+export type ExportQuality = "smaller" | "same" | "higher";
 
 export interface VideoExport {
   id: number;
@@ -17,6 +19,8 @@ export interface VideoExport {
    * before the resolution option existed is.
    */
   height: number | null;
+  /** A burn's quality; null for a sidecar and for a burn from before v1.2.2. */
+  quality: ExportQuality | null;
   /**
    * The caption language it was made in ("same" or a code); null for an
    * export from before v1.0.8, which didn't record it.
@@ -45,6 +49,20 @@ export interface ExportResolution {
   label: string;
   /** The source's own size, and so the only choice that resamples nothing. */
   native: boolean;
+  /**
+   * The most a burn at this height should come to, by quality. An upper
+   * bound: a clean source can come in under it. Missing when the source's
+   * bitrate or length can't be told.
+   */
+  estimated_bytes: Partial<Record<ExportQuality, number>>;
+}
+
+/** One offer in the quality picker, as the server describes it. */
+export interface ExportQualityOption {
+  value: ExportQuality;
+  label: string;
+  /** The cap on the picture's bitrate, as a multiple of the source's. */
+  factor: number;
 }
 
 /**
@@ -65,4 +83,7 @@ export interface ExportOptions {
   /** The hardware encoder doing the work, or null when it is CPU x264. */
   hardware_encoder: string | null;
   resolutions: ExportResolution[];
+  /** Smallest first. */
+  qualities: ExportQualityOption[];
+  default_quality: ExportQuality;
 }

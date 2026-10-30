@@ -9,6 +9,7 @@ import type {
   ExportFormat,
   ExportList,
   ExportOptions,
+  ExportQuality,
   VideoExport,
 } from "@/types/export";
 
@@ -55,8 +56,8 @@ export function useCreateExport(videoId: number) {
     // An object rather than a bare format, because a burn now also carries the
     // height to render at. Omitting it means the source's own size, which is
     // what the sidecar formats always mean.
-    mutationFn: ({ format, height }: { format: ExportFormat; height?: number }) =>
-      api.post<VideoExport>(`/api/videos/${videoId}/exports`, { format, height }),
+    mutationFn: ({ format, height, quality }: { format: ExportFormat; height?: number; quality?: ExportQuality }) =>
+      api.post<VideoExport>(`/api/videos/${videoId}/exports`, { format, height, quality }),
     // Refetch rather than appending locally: a sidecar comes back completed
     // and a burn comes back pending, and the list has to start polling for the
     // second case. Letting the query decide keeps that in one place.
