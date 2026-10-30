@@ -1260,6 +1260,10 @@ Asked by Tanush, 2026-10-30: first the download mix-up, then the MP4 size fix.
         lint, types, 10 tests, production build; `checks.js export-quality`
         and `export-eta`; axe 0 on the dashboard, the editor and the open
         export dialog (light and dark, 1440 and 375).
+      - E2E on the GPU dev stack (hinglish.mp4, 62.2 MB; same, en, hi, fr;
+        SRT, VTT, MP4): ALL PASSED. Each burn 72.4 MB (1.16×); the same
+        size of WhatsApp video burned to 101 MB (1.6×) on Tanush's M2.
+        Videos 7690-7693, deleted.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.

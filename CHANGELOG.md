@@ -6,7 +6,11 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.2.2] - 2026-10-30
+
+Burned-in videos about the size of the original, with a Quality choice, and
+downloads named for what they are. One migration (`exports.quality`), run
+when the app starts; the update downloads the app layers only.
 
 ### Added
 - **A Quality choice for burned-in videos:** Smaller file, Same as original
