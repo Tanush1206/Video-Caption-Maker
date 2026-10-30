@@ -363,11 +363,21 @@ the speech model for every video until changed back.
   1080p source is offered 360p–1080p). A larger height is rejected with 422.
   The default (`recommended_height`) is the source height, capped at 2160.
 - Encoding uses NVENC when it is available, and x264 (CRF 18) otherwise.
+- A burn has a quality (v1.2.2): **Smaller file**, **Same as original**
+  (default) or **Higher quality**, capping the video bitrate at about 0.7×,
+  1.2× or 2× the source's (less for a smaller height). The dialog shows the
+  most the file should come to before exporting. "Same as original" of a
+  15-minute 1080p upload is within 1.25× its size.
+- The sound is copied unchanged when an MP4 plays it everywhere (AAC, MP3,
+  AC-3, E-AC-3, ALAC) and re-encoded to AAC otherwise.
+- A typed file name still gets " – captions 1080p" on a burn and
+  " – original" on the original, unless it already ends with it; subtitle
+  files keep a typed name exactly (v1.2.2).
 - A download needs a short-lived token (15 min) bound to one export.
 - Sidecars are named exactly after the video (`movie.srt`). A burn is
   `movie – captions 1080p.mp4` (its height) and the original
-  `movie – original.mp4` (v1.2.2). A name the user types replaces all of
-  them. Every download is sent with `Cache-Control: no-store`.
+  `movie – original.mp4` (v1.2.2). A name the user types replaces the
+  video's name in all of them. Every download is sent with `Cache-Control: no-store`.
 - Deleting a video deletes its export files as well as their rows.
 - Every export records the caption language it was made in and which set of
   captions it came from (v1.0.8). The list shows the language under each

@@ -711,6 +711,50 @@ Same 120 s on 4 cores: 51 s, with a file 5% larger. The whole 15-minute video:
 cut further than the time gained is worth at 4 cores. `medium` with a lower
 resolution by default: changes what the user gets without asking.
 
+## D22. A burn's bitrate is capped against the source's
+
+**Context.** Burns were encoded to a quality target with no bitrate limit
+(NVENC CQ 19, x264 CRF 18). A 15-minute 1080p30 upload of 421 MB (video
+3.8 Mbit/s) burned to 1.66 GB with NVENC (3.76×) and 949 MB with x264
+(2.15×). On Tanush's M2 Mac a 62 MB WhatsApp video burned to 101 MB (1.6×).
+The extra bits copied the source's own compression noise; they add no
+detail.
+
+**Decision (v1.2.2, Tanush's brief).** Keep the quality target and add a
+ceiling: `-maxrate` = the source's video bitrate × 0.7 (Smaller file),
+1.2 (Same as original, the default) or 2 (Higher quality), × (output area /
+source area)^0.75 below the source's size, `-bufsize` twice that. NVENC
+keeps `-b:v 0`, so it has no average target, only the quality and the
+ceiling. The source's rate comes from the headers, or from size and length
+less the sound (MKV, WebM). If it's unknown, there is no cap. The sound is
+copied if it's AAC, MP3, AC-3, E-AC-3 or ALAC, and re-encoded to 192 kbit/s
+AAC otherwise.
+
+Measured on the 15-minute upload: "SSIM" is against the source, over the
+top 70% of the frame; times are the RTX 5080 and 4 CPU cores
+(`scripts/quality_check.py`).
+
+| | NVENC size | SSIM | time | x264 size | SSIM | time |
+|---|---|---|---|---|---|---|
+| before (uncapped) | 3.76× | 0.9954 | 73 s | 2.15× | 0.9941 | 412 s |
+| Smaller file | 0.70× | 0.9805 | 73 s | 0.70× | 0.9796 | 313 s |
+| Same as original | 1.18× | 0.9883 | 73 s | 1.18× | 0.9896 | 350 s |
+| Higher quality | 1.94× | 0.9925 | 73 s | 1.90× | 0.9935 | 394 s |
+
+The ceiling only binds when the target would spend more. A 40 Mbit/s
+camera-style source burned at 16.7 Mbit/s against a 48 Mbit/s cap. So the
+dialog's estimate, (cap + sound) × length, says "up to". Here it was 1–4%
+above every real size.
+
+**Alternatives.**
+- **A higher CQ/CRF alone:** this lowers every source's quality alike. It
+  still lets a noisy source grow, and still gives an unclean source a fixed
+  size rather than one relative to what was uploaded.
+- **A fixed bitrate (`-b:v` = cap):** this pads a clean source up to the
+  cap.
+- **Scaling the cap by frame area linearly:** this starves smaller heights,
+  since each pixel then holds more detail.
+
 ---
 
 ## Decisions recorded

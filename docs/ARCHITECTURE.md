@@ -320,7 +320,15 @@ logged and never surfaced to the user.
      which Indic scripts were drawn unshaped (v1.0.7);
   3. encode with `h264_nvenc` (`-cq 19 -preset p6`) when it works, otherwise
      `libx264 -crf 18 -preset faster` (`services/rendering.py`; `medium`
-     until v1.2.0, see D21);
+     until v1.2.0, see D21). The quality target is capped (v1.2.2, D22):
+     `-maxrate` is the source's video bitrate × 0.7 / 1.2 / 2 for the
+     export's quality (Smaller file / Same as original / Higher quality),
+     × (output area / source area)^0.75 below the source's size, with a
+     two-second `-bufsize`. The source's rate comes from the container's
+     headers, or from size and length for MKV and WebM; unknown, no cap.
+     The sound is copied when it is AAC, MP3, AC-3, E-AC-3 or ALAC and
+     re-encoded to 192 kbit/s AAC otherwise: FFmpeg also writes Opus,
+     Vorbis, FLAC or PCM into an MP4, and many players then play it silent;
   4. write the progress from FFmpeg's `out_time_us`, read from stdout while
      a thread drains stderr (only its last lines are kept, for the error
      message). Until v1.2.0 stderr was read only after FFmpeg exited, so a

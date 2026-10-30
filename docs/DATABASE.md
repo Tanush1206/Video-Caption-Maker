@@ -145,6 +145,7 @@ erDiagram
         varchar512 storage_path "nullable"
         bigint size_bytes "nullable"
         int height "nullable"
+        varchar16 quality "nullable"
         varchar16 caption_language "nullable"
         timestamptz captions_from "nullable"
         int progress
@@ -277,6 +278,7 @@ not in the database.
 | `storage_path` | varchar(512) | yes | | relative, `user_N/exports/<uuid>.<fmt>`; NULL until written |
 | `size_bytes` | bigint | yes | | |
 | `height` | integer | yes | | output height of a burn; NULL = source size |
+| `quality` | varchar(16) | yes | | a burn's bitrate cap (v1.2.2): `smaller`, `same` or `higher`, checked by the API; NULL for sidecars and burns from before, which were uncapped |
 | `caption_language` | varchar(16) | yes | | the video's caption language when the export was made (v1.0.8); NULL before |
 | `captions_from` | timestamptz | yes | | when the captions it was made from were written (their oldest `created_at`); a Redo writes a new set, so an export whose value differs is from earlier captions |
 | `progress` | integer | no | `0` | |
@@ -360,7 +362,8 @@ date is the commit that introduced the file.
 | 16 | `f7c1d2e8a940` | 2026-10-18 | exports record their captions (v1.0.8): add `exports.caption_language` and `exports.captions_from` (when that set of captions was written: its oldest caption's `created_at`), both nullable and left null on existing rows |
 | 17 | `a4d8e2c6f130` | 2026-10-18 | add `videos.speech` (v1.0.8): the word timings captions are timed to; nullable, NULL until a video's next transcription |
 | 18 | `b6e0f4a9c2d1` | 2026-10-21 | add `videos.hindi_script`, `videos.detected_language`, `videos.detected_confidence` (all nullable, NULL on existing rows) and `videos.held` (`false`) (v1.0.9). Changes nothing already captioned |
-| 19 | `e8b3d5f19a42` | 2026-10-28 | caption anchor by alignment (v1.2.0, head): `pos_x` becomes the block's left edge (Left), centre (Centre) or right edge (Right). **Converts** Left/Right rows to the old box's edge, `pos_x ∓ width/2` clamped to 0..1, with a NULL `box_width` taken by the video's frame shape (read from its file, as the burn reads it; landscape if unreadable), so every video burns byte for byte as before (`tests/test_caption_anchor.py`, against `tests/data/burn-1.1.1.json`). Centre rows unchanged. Downgrade converts back |
+| 19 | `e8b3d5f19a42` | 2026-10-28 | caption anchor by alignment (v1.2.0): `pos_x` becomes the block's left edge (Left), centre (Centre) or right edge (Right). **Converts** Left/Right rows to the old box's edge, `pos_x ∓ width/2` clamped to 0..1, with a NULL `box_width` taken by the video's frame shape (read from its file, as the burn reads it; landscape if unreadable), so every video burns byte for byte as before (`tests/test_caption_anchor.py`, against `tests/data/burn-1.1.1.json`). Centre rows unchanged. Downgrade converts back |
+| 20 | `a6d2f0c8b913` | 2026-10-30 | add `exports.quality` (v1.2.2, head), nullable and left null on existing rows |
 
 ## 6. Migration rules
 

@@ -129,7 +129,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | POST* | `/api/videos/{video_id}/captions` | [CaptionCreate](#captioncreate) | `201` [CaptionRead](#captionread); queues re-index | 404 · 422 |
 | GET* | `/api/videos/{video_id}/thumbnail` | — | `200 image/jpeg` | 404 no thumbnail / file missing |
 | POST* | `/api/videos/{video_id}/stream-token` | — | `200` [StreamTicket](#streamticket) | 404 |
-| GET | `/api/videos/{video_id}/stream` | query `token` (required), `download` bool, `name` (used only with `download=1`) | `200`/`206` the original file; `Range` supported; `inline` (named as uploaded) or, with `download=1`, `attachment` named `<video> – original.<ext>` with `Cache-Control: no-store` | 401 invalid/expired token · 403 `This token is for a different video` · 404 |
+| GET | `/api/videos/{video_id}/stream` | query `token` (required), `download` bool, `name` (used only with `download=1`) | `200`/`206` the original file; `Range` supported; `inline` (named as uploaded) or, with `download=1`, `attachment` named `<video or typed name> – original.<ext>` (not added twice) with `Cache-Control: no-store` | 401 invalid/expired token · 403 `This token is for a different video` · 404 |
 | GET* | `/api/videos/{video_id}/waveform` | — | `200` [Waveform](#waveform) (cached beside the file) | 404 file missing |
 
 ### Captions (`backend/app/api/captions.py`)
@@ -155,13 +155,13 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| POST* | `/api/videos/{video_id}/exports` | [ExportCreate](#exportcreate): `format`, optional `height` 2–2160, at most the source's height (ignored for sidecars) | `201` [ExportRead](#exportread): `completed` for srt/vtt/json, `pending` for mp4 | 404 · 409 `This video has no captions to export yet` · 422 (also `An export can't be larger than the video (240p)`) · 503 render queue unreachable |
+| POST* | `/api/videos/{video_id}/exports` | [ExportCreate](#exportcreate): `format`, optional `height` 2–2160, at most the source's height, and `quality` (both ignored for sidecars) | `201` [ExportRead](#exportread): `completed` for srt/vtt/json, `pending` for mp4 | 404 · 409 `This video has no captions to export yet` · 422 (also `An export can't be larger than the video (240p)`) · 503 render queue unreachable |
 | GET* | `/api/videos/{video_id}/exports` | — | `200` [ExportList](#exportlist) (newest first) | 404 |
-| GET* | `/api/videos/{video_id}/exports/options` | — | `200` [ExportOptions](#exportoptions): resolution ladder, recommended height, `hardware_encoder` (`h264_nvenc` or null) | 404 |
+| GET* | `/api/videos/{video_id}/exports/options` | — | `200` [ExportOptions](#exportoptions): resolution ladder with a size estimate per quality, the qualities, recommended height, `hardware_encoder` (`h264_nvenc` or null) | 404 |
 | GET* | `/api/exports/{export_id}` | — | `200` [ExportRead](#exportread) (polled during a render) | 404 `Export not found` |
 | DELETE* | `/api/exports/{export_id}` | — | `204`; row and file removed | 404 |
 | POST* | `/api/exports/{export_id}/download-token` | — | `200` [DownloadTicket](#downloadticket) | 404 · 409 `This export failed. Make it again from Export.` or `This export is still being made. Download it when it's ready.` |
-| GET | `/api/exports/{export_id}/download` | query `token` (required), `name` (optional stem; extension added) | `200` file as `attachment`, `Cache-Control: no-store`. Default name: `<video>.srt`, or `<video> – captions 1080p.mp4` for a burn (its height) | 401 · 403 `This token is for a different export` · 404 · 409 `This export has no file` |
+| GET | `/api/exports/{export_id}/download` | query `token` (required), `name` (optional stem, used instead of the video's; extension added) | `200` file as `attachment`, `Cache-Control: no-store`. Named `<video>.srt`, or `<video> – captions 1080p.mp4` for a burn (its height). A typed name keeps the burn's suffix unless it already ends with it (v1.2.2); sidecars keep it exactly | 401 · 403 `This token is for a different export` · 404 · 409 `This export has no file` |
 
 ### Fonts (`backend/app/api/fonts.py`)
 
@@ -410,6 +410,21 @@ columns are NOT NULL.
 |---|---|---|---|
 | `format` | [ExportFormat](#exportformat) | yes |  |
 | `height` | integer \| null | no | minimum 2, maximum 2160 and the source's height |
+| `quality` | [ExportQuality](#exportquality) | no | default `same`; a burn's bitrate cap against the source's |
+
+### ExportQuality
+
+Enum: `smaller`, `same`, `higher` (v1.2.2). A burn's video bitrate is capped
+at 0.7×, 1.2× or 2× the source's, scaled by (output area / source area)^0.75
+for a smaller height; the encoder's quality target applies below the cap.
+
+### ExportQualityOption
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `value` | [ExportQuality](#exportquality) | yes |  |
+| `label` | string | yes | `Smaller file`, `Same as original`, `Higher quality` |
+| `factor` | number | yes | the cap as a multiple of the source's video bitrate |
 
 ### ExportFormat
 
@@ -431,6 +446,8 @@ Enum: `srt`, `vtt`, `json`, `mp4`
 | `recommended_height` | integer \| null | yes |  |
 | `hardware_encoder` | string \| null | yes | `h264_nvenc` when the worker found NVENC usable (its hardware report, v1.2.0), else null |
 | `resolutions` | [ExportResolution](#exportresolution)[] | yes |  |
+| `qualities` | [ExportQualityOption](#exportqualityoption)[] | no | smallest first |
+| `default_quality` | [ExportQuality](#exportquality) | no | `same` |
 
 ### ExportRead
 
@@ -445,6 +462,7 @@ Enum: `srt`, `vtt`, `json`, `mp4`
 | `error_message` | string \| null | yes |  |
 | `created_at` | string (date-time) | yes |  |
 | `height` | integer \| null | no |  |
+| `quality` | [ExportQuality](#exportquality) \| null | no | a burn's; null for a sidecar and for a burn from before v1.2.2 (uncapped) |
 | `caption_language` | string \| null | no | the video's caption language when it was made (`same` or a code); null for an export from before v1.0.8 |
 | `current` | boolean \| null | no | false once a Redo has replaced the captions it was made from; null when unknown |
 
@@ -456,6 +474,7 @@ Enum: `srt`, `vtt`, `json`, `mp4`
 | `width` | integer | yes |  |
 | `label` | string | yes |  |
 | `native` | boolean | yes |  |
+| `estimated_bytes` | object | no | quality → the most a burn at this height should come to: (cap + sound) × length. An upper bound; empty when the source's bitrate or length is unknown |
 
 ### ExportStatus
 
