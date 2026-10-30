@@ -7,17 +7,24 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
 from app.dependencies import CurrentUser, DbSession
-from app.models.export import INSTANT_FORMATS, MEDIA_TYPES, ExportFormat, ExportStatus
+from app.models.export import (
+    INSTANT_FORMATS,
+    MEDIA_TYPES,
+    ExportFormat,
+    ExportQuality,
+    ExportStatus,
+)
 from app.schemas.export import (
     DownloadTicket,
     ExportCreate,
     ExportList,
     ExportOptions,
+    ExportQualityOption,
     ExportRead,
     ExportResolution,
 )
 from app.services import export as export_service
-from app.utils.filenames import NO_STORE, safe_stem
+from app.utils.filenames import NO_STORE, safe_stem, with_suffix
 from app.services import app_settings, media, rendering
 from app.services import storage
 from app.services import video as video_service
@@ -69,7 +76,7 @@ def download_filename(stem: str, export_format: ExportFormat, height: int | None
     """
     if export_format is ExportFormat.MP4:
         size = f" {height}p" if height else ""
-        return f"{stem} – captions{size}.{export_format.value}"
+        return f"{with_suffix(stem, f' – captions{size}')}.{export_format.value}"
     return f"{stem}.{export_format.value}"
 
 
@@ -116,6 +123,7 @@ async def create_export(
     # one control for "export this" and it should not have to remember which
     # formats the resolution applies to.
     height = None if payload.format in INSTANT_FORMATS else payload.height
+    quality = None if payload.format in INSTANT_FORMATS else payload.quality.value
 
     # Never larger than the source (v1.1.0): the picker doesn't offer it, and
     # a client that asks anyway is told why rather than given a blown-up file.
@@ -127,7 +135,9 @@ async def create_export(
                 detail=f"An export can't be larger than the video ({dimensions[1]}p)",
             )
 
-    export = await export_service.create_export(db, video, payload.format, height=height)
+    export = await export_service.create_export(
+        db, video, payload.format, height=height, quality=quality
+    )
 
     if payload.format in INSTANT_FORMATS:
         export = await export_service.write_sidecar(db, export, video, captions)
@@ -168,8 +178,9 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
     """
     video = await _require_owned_video(db, video_id, user.id)
 
-    dimensions = await media.probe_dimensions(storage.resolve(video.storage_path))
-    source_width, source_height = dimensions if dimensions else (None, None)
+    streams = await media.probe(storage.resolve(video.storage_path))
+    source_width = streams.width if streams else None
+    source_height = streams.height if streams else None
 
     heights = rendering.available_heights(source_height or 0)
     resolutions = [
@@ -185,6 +196,7 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
             ),
             label=f"{height}p",
             native=bool(source_height and height == source_height),
+            estimated_bytes=_estimates(streams, height),
         )
         for height in heights
     ]
@@ -201,7 +213,26 @@ async def export_options(video_id: int, user: CurrentUser, db: DbSession) -> Exp
         recommended_height=recommended,
         hardware_encoder="h264_nvenc" if report and report.get("nvenc") else None,
         resolutions=resolutions,
+        qualities=[
+            ExportQualityOption(
+                value=quality,
+                label=rendering.QUALITY_LABELS[quality],
+                factor=rendering.QUALITY_FACTORS[quality],
+            )
+            for quality in ExportQuality
+        ],
     )
+
+
+def _estimates(streams, height: int) -> dict[ExportQuality, int]:
+    """The most a burn at this height should come to, for each quality."""
+    if streams is None or not streams.width or not streams.height:
+        return {}
+    size = rendering.target_dimensions(streams.width, streams.height, height)
+    estimates = {
+        quality: rendering.estimated_bytes(streams, size, quality) for quality in ExportQuality
+    }
+    return {quality: value for quality, value in estimates.items() if value}
 
 
 @router.get("/videos/{video_id}/exports", response_model=ExportList, tags=["exports"])
@@ -302,13 +333,11 @@ async def download_export(
     video = await video_service.get_owned_video(db, export.video_id, int(payload["sub"]))
     stem = Path(video.original_filename).stem if video else "captions"
 
-    # A name the user typed wins, and keeps no suffix of ours.
-    #
-    # `download_filename` adds "– captions" to a burn so it cannot collide
-    # with the original in a downloads folder — a real problem, but one this
-    # app invented on the user's behalf. Someone who has typed a name has
-    # answered that question themselves, and appending to their answer would be
-    # overruling it.
+    # A name the user typed replaces the video's, and a burn still says what
+    # it is (v1.2.2): typed as "holiday", the burn and the original both came
+    # down as "holiday.mp4", and the browser's "(1)" made one look like the
+    # other. The suffix isn't added twice to a name already ending with it;
+    # subtitle files keep a typed name exactly.
     chosen = safe_stem(name, extension=export.format.value) if name else ""
 
     return FileResponse(
@@ -316,11 +345,7 @@ async def download_export(
         media_type=MEDIA_TYPES[export.format],
         # Named after the source video so a folder of exports is navigable,
         # and attachment because this is a download, not something to play.
-        filename=(
-            f"{chosen}.{export.format.value}"
-            if chosen
-            else download_filename(stem, export.format, export.height)
-        ),
+        filename=download_filename(chosen or stem, export.format, export.height),
         content_disposition_type="attachment",
         headers=NO_STORE,
     )

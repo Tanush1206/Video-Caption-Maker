@@ -77,6 +77,7 @@ async def create_export(
     export_format: ExportFormat,
     *,
     height: int | None = None,
+    quality: str | None = None,
 ) -> Export:
     export = Export(
         video_id=video.id,
@@ -85,6 +86,8 @@ async def create_export(
         # None means "the source's own size", which is what every export before
         # this option existed meant, and still the default.
         height=height,
+        # A burn's ExportQuality value; None for a sidecar.
+        quality=quality,
         caption_language=video.caption_language,
         captions_from=await captions_from(db, video.id),
     )

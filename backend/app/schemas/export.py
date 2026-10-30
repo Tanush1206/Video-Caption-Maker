@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.export import ExportFormat, ExportStatus
+from app.models.export import ExportFormat, ExportQuality, ExportStatus
 from app.services.rendering import MAX_OUTPUT_HEIGHT
 
 
@@ -20,6 +20,8 @@ class ExportRead(BaseModel):
 
     # Null for a sidecar, and for a burn rendered at the source's own size.
     height: int | None = None
+    # A burn's quality; null for a sidecar and for a burn from before v1.2.2.
+    quality: ExportQuality | None = None
 
     # The caption language it was made in ("same", or a language code); null
     # for an export from before v1.0.8. `current` is false once a Redo has
@@ -51,6 +53,10 @@ class ExportCreate(BaseModel):
     # own height, checked against the file in the route (v1.1.0).
     height: int | None = Field(default=None, ge=2, le=MAX_OUTPUT_HEIGHT)
 
+    # A burn's bitrate against the source's (v1.2.2). Ignored for a sidecar,
+    # like the height.
+    quality: ExportQuality = ExportQuality.SAME
+
 
 class DownloadTicket(BaseModel):
     """Short-lived credential for the download URL — an <a> can't send headers."""
@@ -67,6 +73,18 @@ class ExportResolution(BaseModel):
     label: str
     #: The source's own size, and therefore the no-resampling choice.
     native: bool
+    #: The most a burn at this height should come to, by quality value
+    #: (v1.2.2); empty when the source's bitrate or length can't be told.
+    estimated_bytes: dict[ExportQuality, int] = {}
+
+
+class ExportQualityOption(BaseModel):
+    """One offer in the quality picker."""
+
+    value: ExportQuality
+    label: str
+    #: The cap on the picture's bitrate, as a multiple of the source's.
+    factor: float
 
 
 class ExportOptions(BaseModel):
@@ -91,3 +109,6 @@ class ExportOptions(BaseModel):
     #: The hardware encoder in use, or null when falling back to CPU x264.
     hardware_encoder: str | None
     resolutions: list[ExportResolution]
+    #: Smallest first; the default is `default_quality`.
+    qualities: list[ExportQualityOption] = []
+    default_quality: ExportQuality = ExportQuality.SAME

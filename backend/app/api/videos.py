@@ -27,7 +27,7 @@ from app.services import caption as caption_service
 from app.services import hinglish, languages
 from app.services import media, storage
 from app.services import video as video_service
-from app.utils.filenames import NO_STORE, safe_stem
+from app.utils.filenames import NO_STORE, safe_stem, with_suffix
 from app.utils.security import (
     TokenError,
     create_stream_token,
@@ -574,15 +574,14 @@ async def stream_video(
     # someone's file because they once typed a name into the export panel is
     # not what that menu item promises.
     #
-    # A save says "original" (v1.2.2). Under the upload's own name it landed
-    # beside the user's copy of that very file as "name (1).mp4", which reads
-    # as the newer file, the burn, and it has no captions in it.
+    # A save says "original" (v1.2.2), typed name or not. Under the upload's
+    # own name it landed beside the user's copy of that very file as
+    # "name (1).mp4", which reads as the newer file, the burn, and it has no
+    # captions in it.
     source = Path(video.original_filename)
     chosen = safe_stem(name, extension=source.suffix.lstrip(".")) if (download and name) else ""
-    if chosen:
-        filename = f"{chosen}{source.suffix}"
-    elif download:
-        filename = f"{source.stem} – original{source.suffix}"
+    if download:
+        filename = f"{with_suffix(chosen or source.stem, ' – original')}{source.suffix}"
     else:
         filename = video.original_filename
 

@@ -59,3 +59,14 @@ def safe_stem(raw: str, *, extension: str | None = None) -> str:
     # on Windows, and a leading dot hides the file on Unix. Trimmed again after
     # truncation, in case the cut landed on one.
     return stem.strip(" .")[:MAX_STEM].strip(" .")
+
+
+def with_suffix(stem: str, suffix: str) -> str:
+    """
+    `stem` with `suffix` after it, unless it already ends with it.
+
+    For the words a download carries to say what it is (" – captions 1080p",
+    " – original"): a name typed as "holiday – original" stays as it is
+    rather than becoming "holiday – original – original".
+    """
+    return stem if stem.casefold().endswith(suffix.casefold()) else f"{stem}{suffix}"
