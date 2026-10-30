@@ -15,7 +15,7 @@ import {
   type Frame,
   type Layout,
 } from "@/lib/caption-layout";
-import { captionLineStyle, captionPaintStyle } from "@/lib/caption-style";
+import { captionLineStyle, captionOutlineStyle, captionPaintStyle, captionShadowFilter } from "@/lib/caption-style";
 import { HINT_CLASS, useOnceHint } from "@/lib/hints";
 import { cn } from "@/lib/utils";
 import type { Caption } from "@/types/caption";
@@ -499,22 +499,40 @@ export function CaptionOverlay({
       )}
 
       {layout && caption && style && (
+        // The shadow is of everything inside, outline and text as one shape.
         <div
-          data-caption-box
-          data-caption-text
-          className="pointer-events-none"
-          style={captionPaintStyle(style, font, layout, scale, caption)}
+          className="pointer-events-none absolute inset-0"
+          style={{ filter: captionShadowFilter(style, layout, scale) }}
         >
-          {/* A space between lines, which collapses away between two blocks,
-              so the caption's text reads as a sentence to a screen reader. */}
-          {layout.lines.map((line, i) => (
-            <Fragment key={i}>
-              {i > 0 && " "}
-              <span data-caption-line style={captionLineStyle(line.pitch, scale)}>
-                {line.segments.map((s) => s.text).join("")}
-              </span>
-            </Fragment>
-          ))}
+          {/* The outline, under the text: the same lines, not read out. */}
+          {captionOutlineStyle(style, font, layout, scale, caption) && (
+            <div aria-hidden="true" style={captionOutlineStyle(style, font, layout, scale, caption)!}>
+              {layout.lines.map((line, i) => (
+                <span key={i} style={captionLineStyle(line.pitch, scale)}>
+                  {line.segments.map((s) => s.text).join("")}
+                </span>
+              ))}
+            </div>
+          )}
+          <div
+            data-caption-box
+            data-caption-text
+            // The outline's width in page pixels, drawn by the layer above: for
+            // checks that measure the painted rectangle (ui-check layout-parity).
+            data-outline={captionOutlineStyle(style, font, layout, scale, caption) ? layout.pad * scale : 0}
+            style={captionPaintStyle(style, font, layout, scale, caption)}
+          >
+            {/* A space between lines, which collapses away between two blocks,
+                so the caption's text reads as a sentence to a screen reader. */}
+            {layout.lines.map((line, i) => (
+              <Fragment key={i}>
+                {i > 0 && " "}
+                <span data-caption-line style={captionLineStyle(line.pitch, scale)}>
+                  {line.segments.map((s) => s.text).join("")}
+                </span>
+              </Fragment>
+            ))}
+          </div>
         </div>
       )}
 

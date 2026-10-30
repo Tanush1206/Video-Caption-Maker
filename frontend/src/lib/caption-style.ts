@@ -57,6 +57,22 @@ export function scaleFor(renderedHeight: number, referenceHeight: number): numbe
  * Its lines and position come from the layout as well; nothing here decides
  * where text breaks or where the box goes.
  */
+/**
+ * An outline of `radius` pixels as text shadows: the glyph offset round
+ * circles of that radius and smaller, so the corners come out round.
+ */
+export function outlineRing(radius: number, colour: string): string {
+  const shadows: string[] = [];
+  for (const r of [radius, radius * 0.66, radius * 0.33]) {
+    const steps = Math.max(8, Math.ceil(2 * Math.PI * r));
+    for (let i = 0; i < steps; i++) {
+      const a = (2 * Math.PI * i) / steps;
+      shadows.push(`${(r * Math.cos(a)).toFixed(2)}px ${(r * Math.sin(a)).toFixed(2)}px 0 ${colour}`);
+    }
+  }
+  return shadows.join(", ");
+}
+
 export function captionPaintStyle(
   style: CaptionStyle,
   font: Font | undefined,
@@ -116,26 +132,49 @@ export function captionPaintStyle(
     css.top = `${(layout.y + layout.pad) * scale}px`;
     css.width = `${(layout.width - 2 * layout.pad) * scale}px`;
     css.height = `${(layout.height - 2 * layout.pad) * scale}px`;
-    if (style.outline_width > 0) {
-      // ASS draws its outline *outside* the glyph. `-webkit-text-stroke` centres
-      // the stroke on the path, so half of it would be eaten by the fill and the
-      // letters would look thinner than the export. Doubling the width and
-      // painting the stroke first reproduces an outward outline.
-      css.WebkitTextStrokeWidth = `${layout.pad * 2 * scale}px`;
-      css.WebkitTextStrokeColor = style.outline_color;
-      css.paintOrder = "stroke fill";
-    }
-
-    if (layout.shadow > 0) {
-      // ASS offsets the shadow down and right by `Shadow` pixels with no blur,
-      // so the third length is 0 rather than a softening radius — a blurred
-      // shadow would look better here and be a lie about the export.
-      const offset = layout.shadow * scale;
-      css.textShadow = `${offset}px ${offset}px 0 ${style.shadow_color}`;
-    }
+    // The outline and the shadow are separate layers (`captionOutlineStyle`,
+    // `captionShadowFilter`), drawn under and round this one, as libass
+    // draws them.
   }
 
   return css;
+}
+
+/**
+ * The outline, as its own layer under the caption: the same text, transparent,
+ * with `outlineRing` as its shadows. ASS draws an outline outside the glyphs
+ * with round corners, under every fill, an underline's and strikeout's too.
+ * Until v1.3.0 a doubled `-webkit-text-stroke`: mitred, and Chrome ignores
+ * `stroke-linejoin` on text, so the 6-pixel default grew spikes off "v" and
+ * Anton's corners the burn never drew. On the caption itself, the ring of a
+ * line-through is painted over the letters; underneath, it can't be.
+ * Null when there is no outline (or a box replaces it).
+ */
+export function captionOutlineStyle(
+  style: CaptionStyle,
+  font: Font | undefined,
+  layout: Layout,
+  scale: number,
+  override?: Override
+): CSSProperties | null {
+  if (style.box_opacity > 0 || style.outline_width <= 0) return null;
+  return {
+    ...captionPaintStyle(style, font, layout, scale, override),
+    color: "transparent",
+    textShadow: outlineRing(layout.pad * scale, style.outline_color),
+  };
+}
+
+/**
+ * The shadow of the outlined caption as one shape, for a layer holding both:
+ * ASS offsets the outlined text down and right by `Shadow` pixels, unblurred.
+ * `text-shadow` on the text shadowed its fill above the outline (v1.3.0).
+ */
+export function captionShadowFilter(style: CaptionStyle, layout: Layout, scale: number): string | undefined {
+  if (style.box_opacity > 0 || layout.shadow <= 0) return undefined;
+  // No blur: a blurred shadow would look better here and be a lie about the export.
+  const offset = layout.shadow * scale;
+  return `drop-shadow(${offset}px ${offset}px 0 ${style.shadow_color})`;
 }
 
 /** One laid-out line: exactly its own height, which is libass's line pitch. */

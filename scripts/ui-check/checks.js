@@ -69,7 +69,7 @@ const previewSignature = (page) =>
     const s = getComputedStyle(text);
     const r = text.getBoundingClientRect();
     const w = document.querySelector("[data-caption-wrap-box]")?.getBoundingClientRect();
-    return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, w?.width].join("|");
+    return [s.fontSize, s.letterSpacing, text.dataset.outline, text.parentElement.style.filter, s.backgroundColor, s.padding, r.x, r.y, r.width, w?.width].join("|");
   });
 
 /** A pointer that can be a mouse or a finger, driving one drag gesture. */
@@ -170,8 +170,11 @@ const paintedBox = (page) =>
     const f = document.querySelector("video").parentElement.getBoundingClientRect();
     const r = box.getBoundingClientRect();
     const s = getComputedStyle(box);
-    const out = parseFloat(s.webkitTextStrokeWidth || "0") / 2;
-    const shadow = s.textShadow && s.textShadow !== "none" ? parseFloat(s.textShadow.match(/(-?[\d.]+)px/)?.[1] ?? "0") : 0;
+    // v1.3.0: the outline and the shadow are layers of their own; the
+    // overlay states the outline's width, and the shadow is its wrapper's filter.
+    const out = s.backgroundColor === "rgba(0, 0, 0, 0)" ? parseFloat(box.dataset.outline || "0") : 0;
+    const filter = box.parentElement.style.filter || "";
+    const shadow = filter.startsWith("drop-shadow") ? parseFloat(filter.match(/(-?[\d.]+)px/)?.[1] ?? "0") : 0;
     return {
       frame: { x: f.x, y: f.y, w: f.width, h: f.height },
       box: { x: r.x - out, y: r.y - out, w: r.width + 2 * out + shadow, h: r.height + 2 * out + shadow },
@@ -862,7 +865,7 @@ const CHECKS = {
           const updated = await page.waitForFunction((b) => {
             const t = document.querySelector("[data-caption-text]"); const s = getComputedStyle(t); const r = t.getBoundingClientRect();
             const w = document.querySelector("[data-caption-wrap-box]")?.getBoundingClientRect();
-            return [s.fontSize, s.letterSpacing, s.webkitTextStrokeWidth, s.textShadow, s.backgroundColor, s.padding, r.x, r.y, r.width, w?.width].join("|") !== b;
+            return [s.fontSize, s.letterSpacing, t.dataset.outline, t.parentElement.style.filter, s.backgroundColor, s.padding, r.x, r.y, r.width, w?.width].join("|") !== b;
           }, before, { timeout: 500 }).then(() => true, () => false);
           ok(`${at}: ${tab}/${name} preview updates`, updated);
         }
@@ -1637,7 +1640,8 @@ const CHECKS = {
               const s = getComputedStyle(box);
               // The rectangle the layout gave it: the element, plus the
               // outline that the element's own box leaves out.
-              const out = s.backgroundColor === "rgba(0, 0, 0, 0)" ? parseFloat(s.webkitTextStrokeWidth || "0") / 2 : 0;
+              // v1.3.0: drawn by its own layer, so the overlay says how wide.
+              const out = s.backgroundColor === "rgba(0, 0, 0, 0)" ? parseFloat(box.dataset.outline || "0") : 0;
               const r = box.getBoundingClientRect();
               return {
                 lines: [...box.querySelectorAll("[data-caption-line]")].map((l) => l.textContent),
@@ -1742,6 +1746,107 @@ const CHECKS = {
     ok("export-eta: it reads as a time", /^(less than a minute|about \d+ min) left$/.test(text), text);
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
+  },
+
+  // v1.3.0: the preview looks like the burn, option by option. Each style is
+  // saved, the editor is paused on a caption and its frame photographed, and
+  // backend/scripts/style_parity.py burns the same frame through the export's
+  // own filter chain at the same size and compares what each drew: where,
+  // and how much of it is text, outline, shadow and box colour. Needs
+  // VCM_PARITY_VIDEO, a dev video with captions whose file is a flat colour
+  // (README). Leaves its style as it found it (the default).
+  async "style-parity"(browser, base) {
+    const id = Number(process.env.VCM_PARITY_VIDEO);
+    if (!id) throw new Error("needs VCM_PARITY_VIDEO");
+    const { execFileSync } = require("node:child_process");
+    const path = require("node:path");
+    const variants = {
+      default: {},
+      "size 96": { font_size: 96 },
+      "not bold": { bold: false },
+      italic: { italic: true },
+      underline: { underline: true },
+      strikeout: { strikeout: true },
+      "yellow text": { text_color: "#FFD400" },
+      "no outline": { outline_width: 0 },
+      "thick red outline": { outline_width: 8, outline_color: "#E00000" },
+      "blue shadow": { outline_width: 0, shadow: 6, shadow_color: "#0030C0" },
+      "outline and shadow": { outline_width: 4, shadow: 4 },
+      "black box": { box_opacity: 0.6, box_padding: 16 },
+      "blue box": { box_color: "#1040A0", box_opacity: 0.85 },
+      "letter spacing": { letter_spacing: 6 },
+      uppercase: { uppercase: true },
+      "left, half width": { alignment: "left", box_width: 0.5 },
+      "right, half width": { alignment: "right", box_width: 0.5 },
+      top: { pos_y: 0.12 },
+      lato: { font_key: "lato" },
+      anton: { font_key: "anton", bold: false },
+    };
+    // Twice the pixels: a 3-pixel outline is 1.3 pixels at the editor's size,
+    // where Chrome and libass anti-alias a stroke differently enough to hide
+    // or invent a real difference.
+    const DPR = 2;
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: DPR });
+    const captions = await (await page.request.get(`${base}/api/videos/${id}/captions`)).json();
+    const caption = captions.items.find((c) => c.end_ms - c.start_ms > 1000) ?? captions.items[0];
+    const at = Math.round((caption.start_ms + caption.end_ms) / 2);
+    const ratio = (a, b) => (Math.max(a, b) < 60 ? 1 : (a + 1) / (b + 1));
+    try {
+      // VCM_PARITY_ONLY="default,italic" runs just those; VCM_PARITY_SAVE keeps
+      // both frames in the backend container's /tmp.
+      const only = process.env.VCM_PARITY_ONLY?.split(",");
+      for (const [name, change] of Object.entries(variants).filter(([n]) => !only || only.includes(n))) {
+        await page.request.delete(`${base}/api/videos/${id}/style`);
+        if (Object.keys(change).length) await page.request.patch(`${base}/api/videos/${id}/style`, { data: change });
+        const style = await styleOf(page, base, id);
+        await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+        await page.waitForFunction(() => document.querySelector("video")?.readyState >= 2);
+        // Until the seeked frame is painted: photographed earlier, the first
+        // page of a run showed the video still black.
+        await page.evaluate((s) => new Promise((done) => {
+          const v = document.querySelector("video");
+          v.pause();
+          v.addEventListener("seeked", () => requestAnimationFrame(() => requestAnimationFrame(done)), { once: true });
+          v.currentTime = s;
+        }), at / 1000);
+        await waitForCaption(page, style.uppercase ? caption.text.toUpperCase() : caption.text).catch(() => {});
+        await page.evaluate(() => document.fonts.ready);
+        await page.mouse.move(5, 5);
+        await page.waitForTimeout(400);
+        const frame = await page.evaluate(() => {
+          const r = document.querySelector("video").parentElement.getBoundingClientRect();
+          return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+        });
+        const shot = await page.screenshot({ clip: frame });
+        const out = execFileSync(
+          "docker",
+          ["compose", "exec", "-T", "backend", "python", "scripts/style_parity.py"],
+          {
+            cwd: path.resolve(__dirname, "../.."), encoding: "utf8", maxBuffer: 1 << 26,
+            env: { ...process.env, MSYS_NO_PATHCONV: "1" },
+            input: JSON.stringify({ style, text: caption.text, video_id: id, at_ms: at, width: frame.width * DPR, height: frame.height * DPR, preview_png: shot.toString("base64"), save: process.env.VCM_PARITY_SAVE ? `/tmp/parity-${name.replace(/\W+/g, "-")}` : null }),
+          }
+        );
+        // The last line: the dev stack can log above it.
+        const { burn, preview, overlap } = JSON.parse(out.trim().split("\n").at(-1));
+        const edge = Math.max(3 * DPR, frame.width * DPR * 0.015);
+        const off = burn.bbox && preview.bbox ? Math.max(...burn.bbox.map((v, i) => Math.abs(v - preview.bbox[i]))) : Infinity;
+        const parts = ["text", "outline", "shadow", "box"].map((k) => [k, ratio(preview[k], burn[k])]);
+        // A shadow is a few pixels wide and Chrome softens a filter's edge, so
+        // the preview's comes to 0.6-0.7 of the burn's dark pixels at 3 px
+        // while lying in the same place; within 2x either way, the others 1.43x.
+        const limit = (k) => (k === "shadow" || (k === "outline" && !style.outline_width) ? 2 : 1.43);
+        const wrong = parts.filter(([k, r]) => r < 1 / limit(k) || r > limit(k)).map(([k, r]) => `${k} ×${r.toFixed(2)}`);
+        const detail = `overlap ${overlap}, edges within ${off.toFixed(1)}px, ` +
+          parts.map(([k]) => `${k} ${preview[k]}/${burn[k]}`).join(" ");
+        // Anton, a condensed display face, overlaps 0.70-0.72 run after run: the
+        // two renderers hint its sharp corners a pixel apart.
+        ok(`style-parity: ${name}`, overlap >= 0.65 && off <= edge && wrong.length === 0, wrong.length ? `${wrong.join(", ")}; ${detail}` : detail);
+      }
+    } finally {
+      await page.request.delete(`${base}/api/videos/${id}/style`);
+      await page.close();
+    }
   },
 
   // v1.2.2: a burn's Quality, its estimate, and what Export sends. The
