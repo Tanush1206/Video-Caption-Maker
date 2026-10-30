@@ -22,6 +22,11 @@ from pathlib import Path
 # saved file actually lands where the user expects with the name they typed.
 _UNSAFE = re.compile(r'[\x00-\x1f\x7f/\\:*?"<>|]')
 
+#: Sent with every download: the exports and the original. Each link carries
+#: its own token, so no two are the same URL, but a download is never worth
+#: keeping, and nothing may answer one file's link with another's bytes.
+NO_STORE = {"Cache-Control": "no-store"}
+
 # Filesystems cap a name near 255 bytes. Well under that, because the name is
 # also read by a human in a downloads folder, and because a multi-byte script
 # costs several bytes per character.

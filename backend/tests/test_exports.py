@@ -245,25 +245,89 @@ async def test_download_round_trip(client, auth_headers, exportable):
     assert downloaded.status_code == 200
     assert downloaded.headers["content-disposition"].startswith("attachment")
     assert "clip.srt" in downloaded.headers["content-disposition"]
+    # Never kept by a browser, so one download can't be answered with another's bytes.
+    assert downloaded.headers["cache-control"] == "no-store"
     body = downloaded.text
     assert body.startswith("1\n")
     assert "the quick brown" in body
 
 
-def test_the_burn_is_not_named_after_the_source_video():
+def test_the_burn_says_it_has_captions_and_its_size():
     """
-    The two downloads must not land in a folder under the same name.
+    The burn and the original must not land in a folder under names that can
+    be confused.
 
     A burn shares the source's extension, so naming it after the video gave
     "clip.mp4" for both the original and the captioned copy. The browser saves
     the second as "clip (1).mp4" without saying so, and opening the obvious one
-    shows a video with no captions - the export was correct, it just was not
-    the file that got opened.
+    shows a video with no captions. v1.2.2 names both for what they are
+    (the original's half is in test_videos.py).
     """
     from app.api.exports import download_filename
     from app.models.export import ExportFormat
 
-    assert download_filename("clip", ExportFormat.MP4) == "clip-captions.mp4"
+    assert download_filename("clip", ExportFormat.MP4, 1080) == "clip – captions 1080p.mp4"
+    # Exports from before heights were recorded.
+    assert download_filename("clip", ExportFormat.MP4) == "clip – captions.mp4"
+
+
+@pytest.mark.asyncio
+async def test_every_download_is_its_own_file_under_its_own_name(
+    client, auth_headers, exportable
+):
+    """
+    The burn, the original and the sidecars, each through the route its button
+    uses: every body is the file on disk for that one row, the burn is not the
+    original, and no two come down under the same name (v1.2.2).
+    """
+    from urllib.parse import unquote
+
+    from app.models.export import Export
+    from app.models.video import Video
+    from app.services import storage
+    from app.workers.export import _run
+
+    def name(response) -> str:
+        disposition = response.headers["content-disposition"]
+        if "filename*=" in disposition:
+            return unquote(disposition.split("''", 1)[1])
+        return disposition.split('filename="', 1)[1].rstrip('"')
+
+    files: dict[str, bytes] = {}
+    names: dict[str, str] = {}
+    for fmt in ("srt", "vtt", "mp4"):
+        created = (
+            await client.post(
+                f"/api/videos/{exportable}/exports",
+                headers=auth_headers,
+                json={"format": fmt, "height": 240 if fmt == "mp4" else None},
+            )
+        ).json()
+        if fmt == "mp4":
+            assert "error" not in await _run(created["id"])
+        token = (
+            await client.post(f"/api/exports/{created['id']}/download-token", headers=auth_headers)
+        ).json()["token"]
+        response = await client.get(f"/api/exports/{created['id']}/download?token={token}")
+        async with AsyncSessionLocal() as session:
+            on_disk = storage.resolve((await session.get(Export, created["id"])).storage_path).read_bytes()
+        assert response.content == on_disk, fmt
+        assert response.headers["cache-control"] == "no-store", fmt
+        files[fmt], names[fmt] = response.content, name(response)
+
+    token = (await client.post(f"/api/videos/{exportable}/stream-token", headers=auth_headers)).json()["token"]
+    response = await client.get(f"/api/videos/{exportable}/stream?token={token}&download=1")
+    async with AsyncSessionLocal() as session:
+        assert response.content == storage.resolve((await session.get(Video, exportable)).storage_path).read_bytes()
+    files["original"], names["original"] = response.content, name(response)
+
+    assert files["mp4"] != files["original"]
+    assert names == {
+        "srt": "clip.srt",
+        "vtt": "clip.vtt",
+        "mp4": "clip – captions 240p.mp4",
+        "original": "clip – original.mp4",
+    }
 
 
 def test_sidecars_keep_the_video_name_exactly():

@@ -389,7 +389,35 @@ async def test_stream_names_the_file_for_playback_and_for_download(
 
     assert playback.headers["content-disposition"].startswith("inline")
     assert attachment.headers["content-disposition"].startswith("attachment")
-    assert "clip.mp4" in attachment.headers["content-disposition"]
+    assert "clip.mp4" in playback.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
+async def test_a_saved_original_says_original_and_is_never_cached(
+    client, auth_headers, sample_video_bytes
+):
+    """
+    Saved under the upload's own name, the original landed beside the user's
+    copy of that file as "clip (1).mp4", which reads as the newer file - the
+    burn - and has no captions in it (v1.2.2). Playback keeps the plain name:
+    it is what "Save video as…" offers, and it may be cached like any media.
+    """
+    from urllib.parse import unquote
+
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+    token = await stream_token(client, auth_headers, video_id)
+
+    playback = await client.get(f"/api/videos/{video_id}/stream?token={token}")
+    saved = await client.get(f"/api/videos/{video_id}/stream?token={token}&download=1")
+    named = await client.get(f"/api/videos/{video_id}/stream?token={token}&download=1&name=holiday")
+
+    disposition = saved.headers["content-disposition"]
+    assert unquote(disposition.split("''", 1)[1]) == "clip – original.mp4"
+    assert saved.headers["cache-control"] == "no-store"
+    assert saved.content == sample_video_bytes
+    # A name the user typed is theirs, unchanged.
+    assert 'filename="holiday.mp4"' in named.headers["content-disposition"]
+    assert "cache-control" not in playback.headers
 
 
 @pytest.mark.asyncio

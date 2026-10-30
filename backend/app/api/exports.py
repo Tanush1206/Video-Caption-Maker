@@ -17,7 +17,7 @@ from app.schemas.export import (
     ExportResolution,
 )
 from app.services import export as export_service
-from app.utils.filenames import safe_stem
+from app.utils.filenames import NO_STORE, safe_stem
 from app.services import app_settings, media, rendering
 from app.services import storage
 from app.services import video as video_service
@@ -47,11 +47,11 @@ async def _require_owned_export(db, export_id: int, user_id: int):
     return export
 
 
-def download_filename(stem: str, export_format: ExportFormat) -> str:
+def download_filename(stem: str, export_format: ExportFormat, height: int | None = None) -> str:
     """
     What the browser saves an export as.
 
-    The burn gets a suffix; the sidecars deliberately do not.
+    The burn says what it is; the sidecars deliberately do not.
 
     A sidecar is named after the video **exactly** on purpose — `movie.srt`
     beside `movie.mp4` is the convention every player uses to load subtitles
@@ -60,12 +60,16 @@ def download_filename(stem: str, export_format: ExportFormat) -> str:
     The burn is the opposite case. It shares the source's extension, so naming
     it after the video too produced two downloads with byte-identical names:
     the browser silently saved the second as "name (1).mp4", and opening the
-    obvious one showed a video with no captions in it. The file was always
-    correct — it just wasn't the file you opened. A suffix costs nothing and
-    makes the two distinguishable in a downloads folder.
+    obvious one showed a video with no captions in it. Since v1.2.2 it reads
+    "name – captions 1080p.mp4" and the original "name – original.mp4"
+    (api/videos.py), so neither can be mistaken for the other or for the
+    user's own copy of the source, which a "-captions" suffix alone did not
+    prevent: the original still came down as "name.mp4", landed as
+    "name (1).mp4" beside that copy, and looked like the newer file.
     """
     if export_format is ExportFormat.MP4:
-        return f"{stem}-captions.{export_format.value}"
+        size = f" {height}p" if height else ""
+        return f"{stem} – captions{size}.{export_format.value}"
     return f"{stem}.{export_format.value}"
 
 
@@ -300,7 +304,7 @@ async def download_export(
 
     # A name the user typed wins, and keeps no suffix of ours.
     #
-    # `download_filename` appends "-captions" to a burn so it cannot collide
+    # `download_filename` adds "– captions" to a burn so it cannot collide
     # with the original in a downloads folder — a real problem, but one this
     # app invented on the user's behalf. Someone who has typed a name has
     # answered that question themselves, and appending to their answer would be
@@ -315,7 +319,8 @@ async def download_export(
         filename=(
             f"{chosen}.{export.format.value}"
             if chosen
-            else download_filename(stem, export.format)
+            else download_filename(stem, export.format, export.height)
         ),
         content_disposition_type="attachment",
+        headers=NO_STORE,
     )
