@@ -1032,7 +1032,7 @@ Tanush's testing first (2026-10-28).
         containers removed. Not done this time: a Linux/CPU install (none
         here; the CPU path was covered by E2E before tagging).
 
-## v1.2.1
+## v1.2.1 (released 2026-10-30, tag on 3f5714f)
 Brief (Tanush, 2026-10-29): the (i) button (brief to come), and "nan nan
 nan" captions in music sections: test-assets/new.mp4 (15-min Hinglish vlog,
 gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
@@ -1145,6 +1145,38 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
         slower; "not fully tested". Site check again: axe 0, 375/1440,
         light/dark. Tanush is timing it on the M2 with
         DOCKER_DEFAULT_PLATFORM=linux/amd64 meanwhile.
+- [x] **Released and checked (2026-10-30).** ci, arm64 (the real installer
+      on `ubuntu-24.04-arm`: emulation noted, our containers amd64, the rest
+      arm64, `vcm stop`/`up` fine, 3 min) and pages green on 3f5714f;
+      `release` 4/4; 8 assets matching `SHA256SUMS` and the tag (the compose
+      file with both `platform: linux/amd64`); six GHCR tags pull
+      anonymously.
+      - Backup before the update: `VideoCaptionMaker-backup-1.2.0` next to
+        the install folder (dump with all 7 tables, media 10 of 10 files,
+        2.1 GB, `.env` copied unread; 50 s down). The 1.1.1 backup is kept
+        too, until Tanush confirms.
+      - `vcm update` in 26 s: backend 3/19 layers, 0.2 MB; frontend 7/13,
+        11.0 MB. 1.2.1; alembic head `e8b3d5f19a42` (no migration); videos
+        84 and 140, 672 captions, 3 exports. Our containers amd64, uid
+        10001 / 100, CapEff 0, NoNewPrivs 1; Postgres, Redis, ChromaDB not
+        recreated. Licences, emSign fix, no secrets in images or history.
+      - At localhost and 127.0.0.1: framing, frontend-guard, csp,
+        upload-proxy (62 MB), export-eta, caption-accuracy: 65 PASS each;
+        `flow.js` PASS at both; "GPU encoding." shown.
+      - E2E (same, en, hi, fr; SRT, VTT, MP4): ALL PASSED. 2.2 GB upload in
+        10.6 s, stored whole, frontend 46 → 113 MiB peak. `burn_time.py` on
+        new.mp4: 74 s end to end, ffmpeg 72 s (12.5x), h264_nvenc; worker
+        healthy at 59 of 59 samples (~10 min). `music_check.py` on new.mp4
+        in Hinglish: 476 captions, 0 failures, "khelta jaoon ×4" and
+        "nahin. Nahin. Nahin." kept, no captions over 0:14-0:27 or
+        10:30-10:41, "Hey guys, what's up?" from 0:27.50.
+      - Docker restarted during the checks (an E2E run was cut off):
+        Postgres recovered on its own ("not properly shut down", redo
+        done), data intact; ids jumped 161 → 193 (Postgres logs sequence
+        values 32 ahead). The cut-off run's videos 158-161 were deleted and
+        E2E run again.
+      - Test videos on the install: 153-161, 193-199 (mine), all deleted;
+        84 and 140 remain; export files match the table (3).
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
