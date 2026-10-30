@@ -147,9 +147,10 @@ export function ExportPanel({
   /**
    * What the saved file will be called.
    *
-   * Empty means "use the server's name", which is the source filename plus a
-   * "-captions" suffix on a burn. Held here rather than saved anywhere: this
-   * names a *download*, not the video, and someone exporting one clip under a
+   * Empty means "use the server's name", which is the source filename plus
+   * "– captions 1080p" on a burn and "– original" on the original (v1.2.2).
+   * Held here rather than saved anywhere: this names a *download*, not the
+   * video, and someone exporting one clip under a
    * different name has not asked to rename the thing in their library.
    *
    * The extension is never shown or typed. It is decided by the format button

@@ -6,6 +6,17 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Every download is named for what it is.** The original video came down
+  under its own name, so beside your own copy of that file it was saved as
+  "name (1).mp4", which looks like the newer file, the one with captions.
+  It's now "name – original.mp4", and the burned video "name – captions
+  1080p.mp4". Subtitle files keep the video's name, so players still load
+  them on their own, and a name you type is used as it is. Downloads are
+  also never kept in the browser's cache.
+
 ## [1.2.1] - 2026-10-30
 
 Music sections without "nan" captions, and a note on caption accuracy. No

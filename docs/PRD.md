@@ -364,8 +364,10 @@ the speech model for every video until changed back.
   The default (`recommended_height`) is the source height, capped at 2160.
 - Encoding uses NVENC when it is available, and x264 (CRF 18) otherwise.
 - A download needs a short-lived token (15 min) bound to one export.
-- Sidecars are named exactly after the video (`movie.srt`). A burn gets
-  `-captions.mp4`. A name the user types replaces both.
+- Sidecars are named exactly after the video (`movie.srt`). A burn is
+  `movie – captions 1080p.mp4` (its height) and the original
+  `movie – original.mp4` (v1.2.2). A name the user types replaces all of
+  them. Every download is sent with `Cache-Control: no-store`.
 - Deleting a video deletes its export files as well as their rows.
 - Every export records the caption language it was made in and which set of
   captions it came from (v1.0.8). The list shows the language under each

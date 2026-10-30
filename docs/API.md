@@ -129,7 +129,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | POST* | `/api/videos/{video_id}/captions` | [CaptionCreate](#captioncreate) | `201` [CaptionRead](#captionread); queues re-index | 404 · 422 |
 | GET* | `/api/videos/{video_id}/thumbnail` | — | `200 image/jpeg` | 404 no thumbnail / file missing |
 | POST* | `/api/videos/{video_id}/stream-token` | — | `200` [StreamTicket](#streamticket) | 404 |
-| GET | `/api/videos/{video_id}/stream` | query `token` (required), `download` bool, `name` (used only with `download=1`) | `200`/`206` the original file; `Range` supported; `inline` or `attachment` | 401 invalid/expired token · 403 `This token is for a different video` · 404 |
+| GET | `/api/videos/{video_id}/stream` | query `token` (required), `download` bool, `name` (used only with `download=1`) | `200`/`206` the original file; `Range` supported; `inline` (named as uploaded) or, with `download=1`, `attachment` named `<video> – original.<ext>` with `Cache-Control: no-store` | 401 invalid/expired token · 403 `This token is for a different video` · 404 |
 | GET* | `/api/videos/{video_id}/waveform` | — | `200` [Waveform](#waveform) (cached beside the file) | 404 file missing |
 
 ### Captions (`backend/app/api/captions.py`)
@@ -161,7 +161,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | GET* | `/api/exports/{export_id}` | — | `200` [ExportRead](#exportread) (polled during a render) | 404 `Export not found` |
 | DELETE* | `/api/exports/{export_id}` | — | `204`; row and file removed | 404 |
 | POST* | `/api/exports/{export_id}/download-token` | — | `200` [DownloadTicket](#downloadticket) | 404 · 409 `This export failed. Make it again from Export.` or `This export is still being made. Download it when it's ready.` |
-| GET | `/api/exports/{export_id}/download` | query `token` (required), `name` (optional stem; extension added) | `200` file as `attachment`. Default name: `<video>.srt`, or `<video>-captions.mp4` for a burn | 401 · 403 `This token is for a different export` · 404 · 409 `This export has no file` |
+| GET | `/api/exports/{export_id}/download` | query `token` (required), `name` (optional stem; extension added) | `200` file as `attachment`, `Cache-Control: no-store`. Default name: `<video>.srt`, or `<video> – captions 1080p.mp4` for a burn (its height) | 401 · 403 `This token is for a different export` · 404 · 409 `This export has no file` |
 
 ### Fonts (`backend/app/api/fonts.py`)
 

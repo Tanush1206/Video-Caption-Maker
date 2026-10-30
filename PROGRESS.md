@@ -1178,6 +1178,45 @@ gitignored) and Tanush's export new.srt, 33 of 515 captions only "nan".
       - Test videos on the install: 153-161, 193-199 (mine), all deleted;
         84 and 140 remain; export files match the table (3).
 
+## v1.2.2 (in progress)
+Asked by Tanush, 2026-10-30: first the download mix-up, then the MP4 size fix.
+
+- [x] **The burned MP4's Download "gave the original".** Reported on the
+      1.2.1 install, video 140: "new (1).mp4", 421 MB, the original.
+      - Reproduced: the server and the button were right. The install's log
+        has the original saved at 07:55:33 UTC (`/stream?…&download=1`,
+        only "Export original" sends it) and the burn at 07:57:38
+        (`/exports/364/download`, served as "new-captions.mp4", 1.67 GB).
+        Through port 3000, by URL and in Chromium by clicking each button,
+        every body matched its own file on disk: burn 1,667,176,279 bytes
+        `c325e5f3…`, original 441,941,054 bytes `edea395f…`, SRT 35,786
+        bytes. No Cache-Control on any; ETags differ; the export row points
+        at its own file.
+      - Cause: the original was saved under the upload's own name,
+        "new.mp4", beside Tanush's copy of that very file in Downloads, so
+        the browser named it "new (1).mp4", which reads as the newer file,
+        the burn. The proxy doesn't cut large files and nothing is cached.
+      - Fix: the original saves as "new – original.mp4", the burn as
+        "new – captions 1080p.mp4" (its height), sidecars unchanged
+        ("new.srt", so players still find them), a typed name as typed;
+        `Cache-Control: no-store` on every download.
+      - Tests: four in `test_exports.py`/`test_videos.py`, all failing on
+        1.2.1; `scripts/download_check.py` through the production frontend
+        with a burn over 1 GB:
+        - before, the 1.2.1 install (video 200): every body its own file
+          (burn 1,662,287,489 bytes in 18 s), 6 failures, all names and
+          `no-store`;
+        - after, the 1.2.1 frontend image on port 3002 in front of the
+          fixed dev backend (video 7687): ALL PASSED, burn 1,662,335,260
+          bytes in 8 s, "new – captions 1080p.mp4", "new – original.mp4".
+        - Test videos 200 (install) and 7687 (dev) deleted by the script.
+        - Full backend suite: 623 passed; one font test timed out once
+          downloading from Google while both runs were going, and passed
+          on its own.
+- [ ] **MP4 size fix.** The burn of new.mp4 is 3.8× the source (video
+      14.8 Mbit/s against the source's 3.8 Mbit/s, both 1080p30 H.264):
+      NVENC at CQ 19 with no bitrate cap.
+
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
 
