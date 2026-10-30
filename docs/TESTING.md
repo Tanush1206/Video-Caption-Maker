@@ -155,6 +155,22 @@ command), with FFmpeg's own time and speed (`Rendered … in 72 s (12.4x real
 time)`). Baseline on a 15-minute 1080p30 YouTube download: 76 s end to end on
 the RTX 5080 dev stack; 397 s on 4 CPU cores with no GPU.
 
+### Every download is its own file: `scripts/download_check.py` (v1.2.2)
+
+Uploads one video, makes an SRT, a VTT and a burn at the source's size, then
+downloads each of them and the original **through the frontend's proxy**, by
+the URLs the export panel builds. Each body must match its own file on disk
+(size and SHA-256, read inside `--container`, the API container), the burn
+must differ from the original, each name must say what it is (`– captions
+1080p`, `– original`, the video's own name for the sidecars) with no two
+alike, and each must carry `Cache-Control: no-store`. With `--min-burn-gb`
+the burn must be at least that large, which is where a proxy that cuts large
+files would show. **Deletes the video it uploaded.**
+
+```bash
+python scripts/download_check.py --base http://127.0.0.1:3000 --video long.mp4 --container vcm-backend-1 --min-burn-gb 1
+```
+
 ### Screenshots, accessibility and UI behaviour: `scripts/ui-check/`
 
 Committed in v1.0.5 (see its README). Run against a running app: an install,
@@ -419,6 +435,7 @@ Full layer digests are in PROGRESS.md.
 | Uploads through the frontend (v1.2.0): `/api/videos` is streamed by a route handler, not Next's rewrite proxy; the preload overwrites `X-Forwarded-Host` and turns off Node's 5-minute `requestTimeout`; a dropped upload's temporary file is closed at once | `frontend/tests/forwarded-for.test.js`; `test_upload_cancel.py` (fails without `app/multipart.py`) | `checks.js upload-proxy`; measured on the built image: 2.05 GB in 9.8 s, frontend peak 79 MiB (Next 14: 34 → 241 MiB for 192 MB); 360 MB at 1 MB/s in 358 s (the 1.1.0 frontend cut it off at 5 minutes); Cancel in the browser at 360 MB: the API's request ended, its temporary file freed at once, no video or file left |
 | Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
 | Music is no caption (v1.2.1): the Hinglish model's "nan" is never a caption, a caption running from music into speech keeps its words timed to them, the marker runs still split music for re-decoding, Whisper's Hindi filler over music ("कर दो", "करते हैं", "हुआ है") is dropped only as a whole segment Whisper thought was not speech; "khelta jaoon" ×4, the same words said, and English "nan" are kept | `test_transcription.py` (`test_the_hinglish_models_nan_over_music_is_no_caption`, `test_a_caption_running_from_music_into_speech_keeps_the_speech`, `test_music_is_kept_flagged_until_the_gaps_are_filled`, `test_whispers_own_filler_over_music_is_no_caption`, …) | `music_check.py` and `coverage_check.py` on new.mp4, Apex and large-v3, before and after (PROGRESS.md v1.2.1) |
+| Every download is its own file (v1.2.2): the burn, the original, SRT and VTT each come down byte for byte as their own file on disk, the burn is not the original, the names say what each is (`– captions 240p`, `– original`, the sidecars as the video) and differ, and every download is `no-store`; playback keeps the upload's name | `test_exports.py` (`test_every_download_is_its_own_file_under_its_own_name`, `test_the_burn_says_it_has_captions_and_its_size`, `test_download_round_trip`), `test_videos.py` (`test_a_saved_original_says_original_and_is_never_cached`); all four fail on 1.2.1 | `scripts/download_check.py` through the production frontend with a burn over 1 GB, before (1.2.1 install) and after (PROGRESS.md v1.2.2) |
 | A burn never hangs on FFmpeg's own output (v1.2.0): over 1 MB of stderr, a failure's reason kept after it, the 3-hour limit actually stops a hung FFmpeg; the export shows time left | `test_exports.py` (`test_a_burn_survives_ffmpeg_writing_more_than_a_pipe_holds`, `test_a_failed_burn_still_says_why_after_a_flood_of_warnings`, `test_a_hung_burn_is_stopped_at_the_render_timeout`; all three fail on 1.1.1) | `checks.js export-eta`; `scripts/burn_time.py` on a 15-minute 1080p video: 1.1.0 and 1.1.1 stop at 80% for good, the fix burns it in 72 s with NVENC, 397 s on 4 CPU cores |
 | Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |
 | Reset and presets centre the box with the default width and lines | `test_caption_styles.py` (`test_reset_and_presets_clear_a_hand_placement`) | |
@@ -579,7 +596,9 @@ else does.
    warnings are what hung 1.1.1). GPU: `--min-speed 5` (a 15-minute video
    in 3 minutes or less); CPU-only: `--min-speed 1`. Compare with the
    baseline in §2, and note the worker's `Rendered … in` line.
-7. CI green on the `main` commit to be tagged.
+7. Downloads (v1.2.2): `scripts/download_check.py` with a video whose burn
+   is over 1 GB (`--min-burn-gb 1`), through the production frontend.
+8. CI green on the `main` commit to be tagged.
 
 **Tag and release** (maintainer)
 1. Push `main`, then the tag `vX.Y.Z`.
