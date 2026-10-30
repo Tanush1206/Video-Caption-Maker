@@ -8,14 +8,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **A Quality choice for burned-in videos:** Smaller file, Same as original
+  (the default) or Higher quality, with the most the file should come to
+  shown before you export. A burned video used to be up to four times the
+  size of the one you uploaded (a 421 MB video came back as 1.6 GB); at
+  "Same as original" it's now about the same size (520 MB), and you can't
+  tell the picture apart. Exporting takes as long as before.
+
+### Changed
+- **The sound is kept exactly as it was** when it's AAC, MP3, AC-3, E-AC-3
+  or ALAC, as before. Sound in other formats (Opus, Vorbis, FLAC, PCM and
+  others, as in some MKV and WebM files) is now converted to AAC, so the
+  video plays with sound in every player, not only some.
+- **A file name you type** gets " – captions 1080p" on a burned video and
+  " – original" on the original, unless it already ends with it, so the two
+  can't come down under the same name. Subtitle files keep the name exactly.
+
 ### Fixed
 - **Every download is named for what it is.** The original video came down
   under its own name, so beside your own copy of that file it was saved as
   "name (1).mp4", which looks like the newer file, the one with captions.
   It's now "name – original.mp4", and the burned video "name – captions
   1080p.mp4". Subtitle files keep the video's name, so players still load
-  them on their own, and a name you type is used as it is. Downloads are
-  also never kept in the browser's cache.
+  them on their own. Downloads are also never kept in the browser's cache.
 
 ## [1.2.1] - 2026-10-30
 

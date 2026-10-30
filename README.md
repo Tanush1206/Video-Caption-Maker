@@ -82,7 +82,9 @@ below the export step.
   more natural translations, with automatic fallback to the local model.
 - **Caption editor**: edit text, retime captions on the waveform, drag them
   on the video, and style them with a large font catalogue.
-- **Export** burned-in MP4, SRT or VTT.
+- **Export** burned-in MP4, SRT or VTT. A burned-in MP4 is about the size
+  of your video by default ("Same as original"), or smaller or higher
+  quality if you choose, with the size shown before you export.
 - **Semantic search** across everything said in all your videos, with
   clickable timestamps.
 - **Light and dark themes**, responsive from phone to desktop.

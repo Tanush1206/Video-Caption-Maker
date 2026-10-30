@@ -285,8 +285,11 @@ helper lines that used to sit under the timeline and the video.
     one player row; the inspector is a bottom sheet that, lowered, fills the
     rest of the screen and **peeks** at the current caption (its time, and
     its text, editable in place), and rises to 72 vh for a tool.
-- **Export dialog:** the formats as a grouped list with a check; file name
-  and resolution (segmented) as rows; earlier exports as hairline rows with
+- **Export dialog:** the formats as a grouped list with a check; file name,
+  resolution and (v1.2.2) quality, both segmented, as rows, with the
+  most the burn should come to ("Estimated size: up to about 640 MB") in the
+  footnote under them; earlier exports as hairline rows with their height
+  and quality,
   the language and, in the warning's text tone, "From earlier captions";
   Download as plain text; Cancel (grey) and Export (primary).
 - **Search:** the page title, one large field on the grouped tone with

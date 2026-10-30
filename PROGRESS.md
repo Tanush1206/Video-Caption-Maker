@@ -1213,9 +1213,53 @@ Asked by Tanush, 2026-10-30: first the download mix-up, then the MP4 size fix.
         - Full backend suite: 623 passed; one font test timed out once
           downloading from Google while both runs were going, and passed
           on its own.
-- [ ] **MP4 size fix.** The burn of new.mp4 is 3.8× the source (video
-      14.8 Mbit/s against the source's 3.8 Mbit/s, both 1080p30 H.264):
-      NVENC at CQ 19 with no bitrate cap.
+- [x] **Typed file names keep the suffix** (Tanush, 2026-10-30): a burn is
+      "<typed> – captions 1080p.mp4" and the original "<typed> –
+      original.mp4", unless the name already ends with it; SRT/VTT keep a
+      typed name exactly.
+- [x] **MP4 size fix** (brief: Tanush, 2026-10-30; DECISIONS.md D22). The
+      burn of new.mp4 was 3.76× the source on NVENC (CQ 19, no cap) and
+      2.15× on x264.
+      - The cap: `-maxrate` = the source's video bitrate × 0.7 / 1.2 / 2
+        (Smaller file / Same as original, default / Higher quality),
+        × (area ratio)^0.75 below the source's size, `-bufsize` 2×. The
+        quality target still applies under it. Stored as `exports.quality`
+        (migration 20, `a6d2f0c8b913`).
+      - The Quality picker in the export dialog, served by the API with an
+        estimate per quality ("Estimated size: up to about 502 MB"). On a
+        phone each label wraps to two lines (`checks.js export-quality`).
+      - The sound is copied for AAC, MP3, AC-3, E-AC-3 and ALAC, and
+        re-encoded to 192 kbit/s AAC otherwise. FFmpeg 7.1 copies Opus,
+        Vorbis, FLAC, PCM, MP2 and DTS into an MP4 without an error, which
+        many players then play silent.
+      - Before and after on new.mp4 (15 min 1080p30, 421 MB), on the GPU dev
+        stack, with the worker cut to 4 CPUs and no GPU for x264; video
+        7688, deleted. SSIM is against the source over the top 70%:
+
+        | | NVENC | SSIM | time | x264 (4 cores) | SSIM | time |
+        |---|---|---|---|---|---|---|
+        | 1.2.1 | 1,661 MB, 3.76× | 0.9954 | 73 s | 949 MB, 2.15× | 0.9941 | 412 s |
+        | Smaller file | 310 MB, 0.70× | 0.9805 | 73 s | 310 MB, 0.70× | 0.9796 | 313 s |
+        | Same as original | 520 MB, 1.18× | 0.9883 | 73 s | 520 MB, 1.18× | 0.9896 | 350 s |
+        | Higher quality | 856 MB, 1.94× | 0.9925 | 73 s | 838 MB, 1.90× | 0.9935 | 394 s |
+
+        SSIM floors set before the full runs, from a 2-minute calibration:
+        Smaller 0.96, Same 0.975, Higher 0.985; all pass. Estimates were
+        within 1-4% above the real size. AAC was copied packet for packet
+        in every burn.
+      - Tests: 11 new or changed in `test_exports.py`/`test_videos.py`;
+        all but the AAC copy fail on 1.2.1. The cap test runs NVENC in the
+        worker container, the only one with the GPU.
+      - download_check's 1 GB case: `big.mp4`, new.mp4's sound under a
+        generated grainy 1080p picture at 10 Mbit/s (1.13 GB, TESTING.md).
+        Through the 1.2.1 frontend image on port 3002 in front of the dev
+        backend: ALL PASSED, burn 1,356,887,780 bytes (1.20×, "big –
+        captions 1080p.mp4"); video 7689, deleted.
+      - Checks: ruff; backend 632 passed (one font test that fetches from
+        the internet timed out in the full run and passed alone); frontend
+        lint, types, 10 tests, production build; `checks.js export-quality`
+        and `export-eta`; axe 0 on the dashboard, the editor and the open
+        export dialog (light and dark, 1440 and 375).
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
