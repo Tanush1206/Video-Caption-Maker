@@ -1318,3 +1318,92 @@ def test_the_same_words_said_are_kept(monkeypatch, tmp_path):
 def test_the_hinglish_model_uses_its_own_marker_not_the_phrases(monkeypatch, tmp_path):
     [caption] = _run(monkeypatch, tmp_path, transcription.HINGLISH, [_filler("kar do", 5.0, 0.9)], language="en")
     assert caption.text == "kar do"
+
+
+# ── Decoding loops (v1.3.0) ────────────────────────────────────────────────
+
+
+def _said(text: str, start: float, step: float = 0.3):
+    """`text` as one segment, a word every `step` seconds from `start`."""
+    words = text.split()
+    return _segment([(f" {w}", start + i * step, start + i * step + step * 0.9) for i, w in enumerate(words)])
+
+
+def test_a_decoding_loop_across_captions_is_said_once(monkeypatch, tmp_path):
+    """
+    Video 140 at 9:10 after a Redo: "Dlicious snacks" nine times over four
+    captions, the first eight in a row. The run before had it twice; every
+    sample of that window says "delicious, delicious snacks".
+    """
+    found = _run(monkeypatch, tmp_path, transcription.HINGLISH, [
+        _said("Now it's time for some delicious snacks.", 550.56),
+        _said("Dlicious. Dlicious snacks. Dlicious snacks.", 554.10),
+        _said("Dlicious snacks. Dlicious snacks. Dlicious snacks.", 556.08),
+        _said("Dlicious snacks. Dlicious snacks. Dlicious snacks.", 557.52),
+        _said("Chaar tools.", 559.86),
+        _said("Dlicious snacks. Aa gaya bhai. Bhaabhi bachchi aa gai hai.", 561.16),
+    ])
+    assert [c.text for c in found] == [
+        "Now it's time for some delicious snacks.",
+        "Dlicious. Dlicious snacks.",
+        "Chaar tools.",
+        "Dlicious snacks. Aa gaya bhai. Bhaabhi bachchi aa gai hai.",
+    ]
+    # The one kept is timed to its own words.
+    assert found[1].end_ms == int((554.10 + 2 * 0.3 + 0.27) * 1000)
+
+
+def test_a_loop_inside_one_segment_is_said_once(monkeypatch, tmp_path):
+    """A sample at temperature 0.8 of the same window, accepted at compression ratio 2.22."""
+    found = _run(monkeypatch, tmp_path, transcription.HINGLISH, [
+        _said("Aaj bachchi kya ban ke aai hai. " + "Bachcha ban ke aai hai. " * 5, 568.9),
+    ])
+    assert " ".join(c.text for c in found) == "Aaj bachchi kya ban ke aai hai. Bachcha ban ke aai hai."
+
+
+def test_repetition_said_up_to_four_times_is_kept(monkeypatch, tmp_path):
+    """1:52 "khelta jaoon" ×4 and 2:47 "nahin. Nahin. Nahin.", as Apex timed them."""
+    found = _run(monkeypatch, tmp_path, transcription.HINGLISH, [
+        _said("Tanning na aur main unlimited cricket khelta jaoon, khelta jaoon, khelta jaoon, khelta jaoon.", 111.48, 0.15),
+        _said("Matlab because too much of attention is like, nahin. Nahin. Nahin.", 165.58, 0.25),
+        _said("Haan haan done hai.", 436.28),
+    ])
+    # Split into caption-sized pieces, so compared as one text.
+    assert " ".join(c.text for c in found) == (
+        "Tanning na aur main unlimited cricket khelta jaoon, khelta jaoon, khelta jaoon, khelta jaoon."
+        " Matlab because too much of attention is like, nahin. Nahin. Nahin."
+        " Haan haan done hai."
+    )
+
+
+def test_five_times_is_a_loop_four_is_not():
+    from app.services.transcription import Segment, _collapse_loops
+
+    def segment(text):
+        words = text.split()
+        return Segment(0, len(words) * 100, text, -0.2, [(i * 100, i * 100 + 90, w) for i, w in enumerate(words)])
+
+    assert _collapse_loops([segment("go go go go")])[0].text == "go go go go"
+    assert _collapse_loops([segment("go go go go go")])[0].text == "go"
+
+
+# ── Real words beside the music marker (v1.3.0, A2) ────────────────────────
+
+
+def test_lines_said_between_music_are_kept(monkeypatch, tmp_path):
+    """
+    His export before the music fix had these with "nan" in front ("nan nan
+    log yaad karo bhaiyon, agla." at 13:25.76, "nan nan nan nan Aaj hogi
+    sirph gol" at 7:18.94). The words stay, with music either side.
+    """
+    yaad = [(" log", 806.4, 806.7), (" yaad", 806.7, 807.0), (" karo", 807.0, 807.3),
+            (" bhaiyon,", 807.3, 807.7), (" agla.", 807.7, 808.0)]
+    gol = [(" Aaj", 440.75, 441.0), (" hogi", 441.0, 441.3), (" sirph", 441.3, 441.6), (" gol", 441.6, 441.9)]
+    found = _run(monkeypatch, tmp_path, transcription.HINGLISH, [
+        _nan_run(438.9, 4, gol),
+        _nan_run(442.0, 6),
+        _nan_run(805.8, 2, yaad),
+        _nan_run(808.2, 8),
+    ])
+    assert [c.text for c in found] == ["Aaj hogi sirph gol", "log yaad karo bhaiyon, agla."]
+    assert [c.start_ms for c in found] == [440750, 806400]

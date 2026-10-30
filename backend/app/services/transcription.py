@@ -771,7 +771,7 @@ def transcribe(
 
     # The model's non-speech runs have done their part (splitting music for
     # `_fill_skipped`) and are never captions.
-    segments = [s for s in segments if not s.non_speech]
+    segments = _collapse_loops([s for s in segments if not s.non_speech])
     if segments:
         segments = _words_on_onsets(segments, vocal_envelope(audio_path, WORD_ONSET_WINDOW_MS / 1000))
     return segments, info.language or "unknown"
@@ -865,6 +865,82 @@ def _without(segment: Segment, count: int, from_start: bool) -> Segment | None:
         speech=timed or segment.speech,
         non_speech=segment.non_speech,
     )
+
+
+# A phrase said this many times in a row is a decoding loop, not speech
+# (v1.3.0). Whisper's temperature fallback samples a window again when its
+# first try repeats itself, and a sample can still loop and pass: on the
+# 15-minute vlog the window at 9:05 looped "Bachcha van ke aai hai?" ×9 at
+# temperature 0 (rejected, compression ratio 2.73), and ×5 in one of three
+# samples at 0.8 (accepted, 2.22); one run captioned "Dlicious snacks" ×9
+# across four captions. What is really said repeats less: "delicious,
+# delicious snacks" ×2 there in every sample, "khelta jaoon" ×4 (1:52),
+# "nahin. Nahin. Nahin." (2:47). Three or four repeats can't be told apart
+# from speech by the words, timings or probabilities, so only five and more
+# are collapsed, to the phrase once.
+LOOP_MIN_REPEATS = 5
+LOOP_MAX_PHRASE_WORDS = 8
+
+
+def _collapse_loops(segments: list[Segment]) -> list[Segment]:
+    """
+    `segments` with every phrase repeated LOOP_MIN_REPEATS+ times in a row
+    said once.
+
+    Looked for across segments, in order: a loop runs on over caption
+    boundaries. The first saying keeps its words and timings; the rest go,
+    and a segment left with no words goes with them.
+    """
+    stream = [
+        (index, position, _bare(word))
+        for index, segment in enumerate(segments)
+        for position, word in enumerate(segment.text.split())
+        if _bare(word)
+    ]
+    keys = [item[2] for item in stream]
+    drop: set[tuple[int, int]] = set()
+    i = 0
+    while i < len(stream):
+        for size in range(1, LOOP_MAX_PHRASE_WORDS + 1):
+            phrase = keys[i:i + size]
+            if len(phrase) < size:
+                break
+            repeats = 1
+            while keys[i + repeats * size: i + (repeats + 1) * size] == phrase:
+                repeats += 1
+            if repeats >= LOOP_MIN_REPEATS:
+                drop.update((s, p) for s, p, _ in stream[i + size: i + repeats * size])
+                logger.info("Collapsed %r said %d times in a row", " ".join(phrase), repeats)
+                i += repeats * size - 1
+                break
+        i += 1
+    if not drop:
+        return segments
+
+    collapsed = []
+    for index, segment in enumerate(segments):
+        words = segment.text.split()
+        keep = [p for p in range(len(words)) if (index, p) not in drop]
+        if len(keep) == len(words):
+            collapsed.append(segment)
+            continue
+        if not keep:
+            continue
+        timed = [item for item in segment.speech if item[2]]
+        # The timings lose the same words when they line up one to one.
+        if len(timed) == len(words):
+            timed = [timed[p] for p in keep]
+        collapsed.append(
+            Segment(
+                start_ms=timed[0][0] if timed else segment.start_ms,
+                end_ms=timed[-1][1] if timed else segment.end_ms,
+                text=" ".join(words[p] for p in keep),
+                confidence=segment.confidence,
+                speech=timed or segment.speech,
+                non_speech=segment.non_speech,
+            )
+        )
+    return collapsed
 
 
 def _fill_skipped(
