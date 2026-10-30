@@ -153,7 +153,9 @@ python scripts/burn_time.py --base http://localhost:3000 --video long.mp4 --min-
 The encoder used is in the worker's log (`NVENC available`, the logged FFmpeg
 command), with FFmpeg's own time and speed (`Rendered … in 72 s (12.4x real
 time)`). Baseline on a 15-minute 1080p30 YouTube download: 76 s end to end on
-the RTX 5080 dev stack; 397 s on 4 CPU cores with no GPU.
+the RTX 5080 dev stack; 397 s on 4 CPU cores with no GPU. Since v1.2.2,
+at "Same as original": 73 s on the RTX 5080, 350 s on 4 CPU cores
+(Smaller file 313 s, Higher quality 394 s; D22).
 
 ### Every download is its own file: `scripts/download_check.py` (v1.2.2)
 
@@ -168,7 +170,31 @@ the burn must be at least that large, which is where a proxy that cuts large
 files would show. **Deletes the video it uploaded.**
 
 ```bash
-python scripts/download_check.py --base http://127.0.0.1:3000 --video long.mp4 --container vcm-backend-1 --min-burn-gb 1
+python scripts/download_check.py --base http://127.0.0.1:3000 --video big.mp4 --container vcm-backend-1 --min-burn-gb 1
+```
+
+Since v1.2.2 a burn is about the source's size, so a burn over 1 GB needs a
+source near 1 GB with speech in it. `big.mp4` is new.mp4's sound under a
+generated, grainy 1080p picture at 10 Mbit/s (about 1.1 GB), made with:
+
+```bash
+ffmpeg -i new.mp4 -f lavfi -i "testsrc2=size=1920x1080:rate=30,noise=alls=12:allf=t"   -map 1:v -map 0:a -shortest -c:v h264_nvenc -b:v 10M -maxrate 10M -bufsize 20M -c:a copy big.mp4
+```
+
+### What each burn quality costs: `scripts/quality_check.py` (v1.2.2)
+
+Burns one video at the source's size at each quality (`smaller`, `same`,
+`higher`) and reports, per burn: the file against the source (`same` must be
+within `--max-same-ratio`, 1.25), the video bitrate against the source's,
+SSIM against the source over the top 70% of the frame, where no default
+caption reaches (floors `smaller=0.96,same=0.975,higher=0.985`), whether an
+AAC source's sound was copied packet for packet, and the time from request
+to file. `--video-id` burns a video already there (for a CPU pass after a
+GPU one), `--keep` leaves an uploaded video, `--json` writes one line per
+burn. SSIM and the sound are read in `--container`.
+
+```bash
+python scripts/quality_check.py --base http://127.0.0.1:3000 --video long.mp4 --container vcm-worker-1
 ```
 
 ### Screenshots, accessibility and UI behaviour: `scripts/ui-check/`
@@ -435,6 +461,7 @@ Full layer digests are in PROGRESS.md.
 | Uploads through the frontend (v1.2.0): `/api/videos` is streamed by a route handler, not Next's rewrite proxy; the preload overwrites `X-Forwarded-Host` and turns off Node's 5-minute `requestTimeout`; a dropped upload's temporary file is closed at once | `frontend/tests/forwarded-for.test.js`; `test_upload_cancel.py` (fails without `app/multipart.py`) | `checks.js upload-proxy`; measured on the built image: 2.05 GB in 9.8 s, frontend peak 79 MiB (Next 14: 34 → 241 MiB for 192 MB); 360 MB at 1 MB/s in 358 s (the 1.1.0 frontend cut it off at 5 minutes); Cancel in the browser at 360 MB: the API's request ended, its temporary file freed at once, no video or file left |
 | Preview = burn: size (win span), wrapping, Indic fonts | `test_caption_styles.py` (`test_the_style_carries_the_fonts_win_span`), `test_exports.py` (`test_indic_text_is_burned_at_the_caption_fonts_em`, `test_indic_runs_get_their_own_font_at_the_caption_fonts_em`) | `checks.js caption-size`, `caption-wrap`, `script-fonts`; measured preview vs burn frames (PROGRESS.md v1.0.7) |
 | Music is no caption (v1.2.1): the Hinglish model's "nan" is never a caption, a caption running from music into speech keeps its words timed to them, the marker runs still split music for re-decoding, Whisper's Hindi filler over music ("कर दो", "करते हैं", "हुआ है") is dropped only as a whole segment Whisper thought was not speech; "khelta jaoon" ×4, the same words said, and English "nan" are kept | `test_transcription.py` (`test_the_hinglish_models_nan_over_music_is_no_caption`, `test_a_caption_running_from_music_into_speech_keeps_the_speech`, `test_music_is_kept_flagged_until_the_gaps_are_filled`, `test_whispers_own_filler_over_music_is_no_caption`, …) | `music_check.py` and `coverage_check.py` on new.mp4, Apex and large-v3, before and after (PROGRESS.md v1.2.1) |
+| A burn's size follows its quality (v1.2.2): the video bitrate is capped at 0.7×, 1.2× or 2× the source's (less for a smaller frame), on x264 and on NVENC; the quality is stored on a burn and dropped from a sidecar; the options carry the three qualities and an estimate each; AAC is copied packet for packet, Vorbis, PCM and Opus become AAC; a typed name keeps the burn's and the original's suffix, not twice | `test_exports.py` (`test_each_quality_caps_the_burn_against_the_source[libx264, h264_nvenc]`: NVENC runs in the worker container, `test_sound_an_mp4_player_may_not_play_becomes_aac`, `test_the_cap_follows_the_quality_and_shrinks_with_the_frame`, `test_options_offer_three_qualities_with_an_estimate_each`, `test_quality_is_kept_on_a_burn_and_dropped_from_a_sidecar`, `test_a_typed_name_still_says_it_is_the_burn`, `test_aac_sound_is_copied_bit_for_bit`), `test_videos.py` (`test_a_saved_original_says_original_and_is_never_cached`); all but the AAC copy fail on 1.2.1 (the grain clip burned at 2.7× on x264, 1.7× on NVENC for a 0.7× cap) | `checks.js export-quality` at 1440 and 375; axe 0 on the open dialog, light and dark; `scripts/quality_check.py` on new.mp4, GPU and 4 CPU cores, before and after (DECISIONS.md D22) |
 | Every download is its own file (v1.2.2): the burn, the original, SRT and VTT each come down byte for byte as their own file on disk, the burn is not the original, the names say what each is (`– captions 240p`, `– original`, the sidecars as the video) and differ, and every download is `no-store`; playback keeps the upload's name | `test_exports.py` (`test_every_download_is_its_own_file_under_its_own_name`, `test_the_burn_says_it_has_captions_and_its_size`, `test_download_round_trip`), `test_videos.py` (`test_a_saved_original_says_original_and_is_never_cached`); all four fail on 1.2.1 | `scripts/download_check.py` through the production frontend with a burn over 1 GB, before (1.2.1 install) and after (PROGRESS.md v1.2.2) |
 | A burn never hangs on FFmpeg's own output (v1.2.0): over 1 MB of stderr, a failure's reason kept after it, the 3-hour limit actually stops a hung FFmpeg; the export shows time left | `test_exports.py` (`test_a_burn_survives_ffmpeg_writing_more_than_a_pipe_holds`, `test_a_failed_burn_still_says_why_after_a_flood_of_warnings`, `test_a_hung_burn_is_stopped_at_the_render_timeout`; all three fail on 1.1.1) | `checks.js export-eta`; `scripts/burn_time.py` on a 15-minute 1080p video: 1.1.0 and 1.1.1 stop at 80% for good, the fix burns it in 72 s with NVENC, 397 s on 4 CPU cores |
 | Indic scripts shaped in the burn | `test_exports.py` (`test_indic_scripts_are_shaped_in_the_burn`, `test_the_burn_asks_libass_for_complex_shaping`) | a burned frame per language, checked by eye |
@@ -598,7 +625,10 @@ else does.
    baseline in §2, and note the worker's `Rendered … in` line.
 7. Downloads (v1.2.2): `scripts/download_check.py` with a video whose burn
    is over 1 GB (`--min-burn-gb 1`), through the production frontend.
-8. CI green on the `main` commit to be tagged.
+8. Burn quality (v1.2.2): `scripts/quality_check.py` on a 15-minute 1080p
+   video, on the GPU and on the CPU: "same" within 1.25× the source, SSIM
+   over the floors, AAC copied; burn times against the baseline in §2.
+9. CI green on the `main` commit to be tagged.
 
 **Tag and release** (maintainer)
 1. Push `main`, then the tag `vX.Y.Z`.
