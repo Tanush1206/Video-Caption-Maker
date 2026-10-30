@@ -107,6 +107,14 @@ class Streams:
     # A picture or sound in a codec we don't decode: refused, not skipped.
     unsupported_video: str | None = None
     unsupported_audio: str | None = None
+    # The main sound's codec, and each main stream's bitrate in bits/s. The
+    # burn copies MP4-friendly sound as it is and caps the picture's bitrate
+    # relative to the source's (v1.2.2). A container that doesn't record a
+    # stream's bitrate (Matroska, WebM) gets the picture's from the file's
+    # size and length; the sound's stays unknown.
+    audio_codec: str | None = None
+    video_bit_rate: int | None = None
+    audio_bit_rate: int | None = None
 
     @property
     def refusal(self) -> str | None:
@@ -171,7 +179,7 @@ def inspect(path: Path) -> Streams | None:
                 *container_options(),
                 "-nofind_stream_info",
                 "-show_entries",
-                "format=duration:stream=index,codec_type,codec_name,width,height,duration"
+                "format=duration,size:stream=index,codec_type,codec_name,width,height,duration,bit_rate"
                 ":stream_disposition=attached_pic,default,timed_thumbnails",
                 "-of", "json",
                 str(path),
@@ -230,6 +238,18 @@ def inspect(path: Path) -> Streams | None:
     if not seconds and main is not None:
         seconds = _scanned_seconds(path, main)
 
+    def rate(index: int | None) -> int | None:
+        value = _seconds(streams[index].get("bit_rate")) if index is not None else None
+        return int(value) if value else None
+
+    video_rate, audio_rate = rate(video), rate(audio)
+    size = _seconds((data.get("format") or {}).get("size"))
+    if video is not None and video_rate is None and size and seconds:
+        # The whole file's rate less the sound's: 128 kbit/s, the usual AAC
+        # rate, when the sound's own isn't recorded either.
+        sound = (audio_rate or 128_000) if audio is not None else 0
+        video_rate = max(int(size * 8 / seconds) - sound, 0) or None
+
     return Streams(
         video=video,
         audio=audio,
@@ -240,6 +260,9 @@ def inspect(path: Path) -> Streams | None:
         picture_subtitles=pictures,
         unsupported_video=odd_video if video is None else None,
         unsupported_audio=odd_audio if audio is None else None,
+        audio_codec=streams[audio].get("codec_name") if audio is not None else None,
+        video_bit_rate=video_rate,
+        audio_bit_rate=audio_rate,
     )
 
 

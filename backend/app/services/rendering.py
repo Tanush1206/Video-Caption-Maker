@@ -17,6 +17,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.config import get_settings
+from app.models.export import ExportQuality
 from app.services import media
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,36 @@ CRF = 18
 # NVENC's constant-quality target. Slightly tighter than CRF 18 because NVENC
 # is a little less efficient per bit than x264 at the same nominal number.
 NVENC_CQ = 19
+
+# How large a burn's picture may be against the source's, by bitrate (v1.2.2).
+# The quality targets above still decide the picture; this only stops them
+# spending more than the source did. Uncapped, NVENC at CQ 19 turned a
+# 3.8 Mbit/s upload into 14.8 Mbit/s (3.9x), and x264 at CRF 18 a WhatsApp
+# video into 1.6x, the extra bits copying the source's own compression noise.
+# Measured on 2 minutes of that upload (D22): SSIM against the source 0.975
+# at 0.7x, 0.985 at 1.2x, 0.991 at 2x, 0.995 uncapped, at the same speed.
+QUALITY_FACTORS: dict[ExportQuality, float] = {
+    ExportQuality.SMALLER: 0.7,
+    ExportQuality.SAME: 1.2,
+    ExportQuality.HIGHER: 2.0,
+}
+QUALITY_LABELS: dict[ExportQuality, str] = {
+    ExportQuality.SMALLER: "Smaller file",
+    ExportQuality.SAME: "Same as original",
+    ExportQuality.HIGHER: "Higher quality",
+}
+
+# A smaller frame needs fewer bits, but not in proportion to its area: detail
+# per pixel goes up as a picture is scaled down. The usual rule of thumb is
+# the area ratio to the power 0.75 (720p from 1080p: 0.44 of the area, 0.54
+# of the bitrate).
+AREA_EXPONENT = 0.75
+
+# Sound an MP4 plays with everywhere, copied as it is. FFmpeg will also put
+# Opus, Vorbis, FLAC or PCM in an MP4 without complaint, and many players
+# then play the picture in silence, so those are re-encoded to AAC.
+MP4_AUDIO_CODECS = frozenset({"aac", "mp3", "ac3", "eac3", "alac"})
+AAC_BIT_RATE = 192_000
 
 # FFmpeg reports progress as microseconds of output written.
 _OUT_TIME = re.compile(rb"out_time_us=(\d+)")
@@ -148,7 +179,55 @@ def nvenc_available() -> bool:
     return ok
 
 
-def _video_encoder_args() -> list[str]:
+def bitrate_cap(
+    source_bit_rate: int | None,
+    source_size: tuple[int, int],
+    output_size: tuple[int, int],
+    quality: ExportQuality,
+) -> int | None:
+    """
+    The most the burn's picture may use, in bits/s, or None for no cap.
+
+    None only when the source's rate can't be told, which keeps the old,
+    uncapped behaviour rather than guessing a number.
+    """
+    if not source_bit_rate or not all(source_size) or not all(output_size):
+        return None
+    area = (output_size[0] * output_size[1]) / (source_size[0] * source_size[1])
+    return int(source_bit_rate * QUALITY_FACTORS[quality] * min(area, 1.0) ** AREA_EXPONENT)
+
+
+def audio_args(codec: str | None) -> list[str]:
+    """Copy MP4-friendly sound untouched; re-encode anything else to AAC."""
+    if codec is None or codec in MP4_AUDIO_CODECS:
+        return ["-c:a", "copy"]
+    return ["-c:a", "aac", "-b:a", str(AAC_BIT_RATE)]
+
+
+def estimated_bytes(
+    streams: "media.Streams", output_size: tuple[int, int], quality: ExportQuality
+) -> int | None:
+    """
+    The most a burn should come to, or None if it can't be told.
+
+    An upper bound: the cap is a ceiling, and a clean source can come in under
+    it (a 40 Mbit/s camera file burned at 17 Mbit/s against a cap of 48).
+    """
+    cap = bitrate_cap(
+        streams.video_bit_rate, (streams.width or 0, streams.height or 0), output_size, quality
+    )
+    if cap is None or not streams.duration_ms:
+        return None
+    if streams.audio is None:
+        sound = 0
+    elif streams.audio_codec in MP4_AUDIO_CODECS:
+        sound = streams.audio_bit_rate or 128_000
+    else:
+        sound = AAC_BIT_RATE
+    return int((cap + sound) * streams.duration_ms / 1000 / 8)
+
+
+def _video_encoder_args(cap: int | None = None) -> list[str]:
     """
     How to encode the video stream, hardware if there is any.
 
@@ -165,7 +244,12 @@ def _video_encoder_args() -> list[str]:
     video with 4 CPU cores, 120 s of it took 87 s at `medium` and 51 s at
     `faster`, for a file 5% larger: real time with room to spare on a slower
     laptop.
+
+    `cap` (bits/s, v1.2.2) is a ceiling on top of the quality target, with a
+    two-second buffer: the target decides the picture until it would spend
+    more than the cap allows.
     """
+    ceiling = ["-maxrate", str(cap), "-bufsize", str(cap * 2)] if cap else []
     if nvenc_available():
         return [
             "-c:v", "h264_nvenc",
@@ -176,8 +260,9 @@ def _video_encoder_args() -> list[str]:
             "-rc", "vbr",
             "-cq", str(NVENC_CQ),
             "-b:v", "0",
+            *ceiling,
         ]
-    return ["-c:v", "libx264", "-crf", str(CRF), "-preset", "faster"]
+    return ["-c:v", "libx264", "-crf", str(CRF), "-preset", "faster", *ceiling]
 
 
 def _filter_chain(subtitle_file: Path, target: tuple[int, int] | None) -> str:
@@ -222,6 +307,7 @@ def burn_captions(
     *,
     duration_ms: int | None,
     target: tuple[int, int] | None = None,
+    quality: ExportQuality = ExportQuality.SAME,
     on_progress: Callable[[int], None] | None = None,
 ) -> None:
     """
@@ -229,6 +315,7 @@ def burn_captions(
 
     `target` is the output frame size. None renders at the source's own size,
     which is the default and the only choice that cannot soften the picture.
+    `quality` caps the picture's bitrate against the source's (v1.2.2).
 
     Raises RuntimeError on failure. Progress is reported 0-100 when the
     duration is known.
@@ -238,6 +325,9 @@ def burn_captions(
         raise RuntimeError("Could not read this video's streams")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
+
+    source_size = (streams.width or 0, streams.height or 0)
+    cap = bitrate_cap(streams.video_bit_rate, source_size, target or source_size, quality)
 
     command = [
         "ffmpeg", "-y",
@@ -257,14 +347,14 @@ def burn_captions(
         # invisible to this worker. Pointing libass straight at the directory
         # skips that entirely.
         "-vf", _filter_chain(subtitle_file, target),
-        *_video_encoder_args(),
+        *_video_encoder_args(cap),
         # Match the compatibility baseline of the uploads we accept. Without
         # it, a source in a less common pixel format produces output some
         # players refuse.
         "-pix_fmt", "yuv420p",
-        # The whole point: the audio track is copied through untouched, never
-        # decoded and re-encoded. Deliberately not "-c:a aac".
-        "-c:a", "copy",
+        # The sound is copied through untouched, never decoded and re-encoded,
+        # when an MP4 plays it everywhere; only other codecs become AAC.
+        *audio_args(streams.audio_codec),
         # Put the moov atom at the front so the result streams and seeks
         # without downloading the whole file first.
         "-movflags", "+faststart",

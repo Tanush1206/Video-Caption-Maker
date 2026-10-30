@@ -19,7 +19,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.models.caption import Caption
-from app.models.export import Export, ExportStatus
+from app.models.export import Export, ExportQuality, ExportStatus
 from app.models.video import Video
 from app.services import export as export_service
 from app.services import media, rendering, storage, subtitles
@@ -89,6 +89,8 @@ async def _run(export_id: int) -> dict:
         absolute, relative = export_service.build_export_path(video, export.format)
         duration_ms = video.duration_ms
         requested_height = export.height
+        # A row from before v1.2.2 has none; requeued, it gets the default.
+        quality = ExportQuality(export.quality) if export.quality else ExportQuality.SAME
 
     if not source.exists():
         await _mark_failed(export_id, "The source video file is missing")
@@ -157,6 +159,7 @@ async def _run(export_id: int) -> dict:
                 absolute,
                 duration_ms=duration_ms,
                 target=resize,
+                quality=quality,
                 on_progress=report,
             )
         except Exception as exc:  # noqa: BLE001

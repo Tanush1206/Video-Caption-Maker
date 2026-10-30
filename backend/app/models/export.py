@@ -39,6 +39,21 @@ class ExportStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class ExportQuality(str, enum.Enum):
+    """
+    How large a burn may be, against the source (v1.2.2).
+
+    The encoder still aims at a fixed quality; this caps the video bitrate at
+    a multiple of the source's (services/rendering.py, QUALITY_FACTORS).
+    Uncapped, a 3.8 Mbit/s upload came back at 14.8 Mbit/s, spending the
+    difference on copying the source's own compression noise.
+    """
+
+    SMALLER = "smaller"
+    SAME = "same"
+    HIGHER = "higher"
+
+
 # Sidecars are produced synchronously; only a burn is queued.
 INSTANT_FORMATS = {ExportFormat.SRT, ExportFormat.VTT, ExportFormat.JSON}
 
@@ -91,6 +106,10 @@ class Export(Base):
     # duplicate. Only the height: the width follows from the source's aspect
     # ratio, and storing both would allow them to disagree.
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # A burn's ExportQuality value. Null for a sidecar, and for a burn from
+    # before v1.2.2, which had no bitrate cap.
+    quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     # The captions this export was made from: their language (the video's
     # caption language at the time) and when that set of captions was written
