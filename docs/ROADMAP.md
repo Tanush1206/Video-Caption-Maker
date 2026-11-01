@@ -156,6 +156,10 @@ The original 10-milestone build plan is historical and lives in
   fix has to tell a loop from repetition that was said, for example from the
   word timings or the audio, and keep both of those examples.
 - **Tanush, 2026-10-30:** leave for now.
+- **v1.3.0, partly done:** a phrase said 5+ times in a row is now said once
+  (any model; services/transcription.py `_collapse_loops`). Loops of 3-4,
+  like the "सब्सक्राइब" ×3 above, are left: nothing in the words, timings or
+  probabilities tells them from "nahin. Nahin. Nahin.".
 
 ### Custom vocabulary / word corrections
 - **What:** a list of words the user wants spelled their way (names,
@@ -163,11 +167,6 @@ The original 10-milestone build plan is historical and lives in
   afterwards.
 - **Why:** the caption accuracy note (v1.2.1) names these as where captions
   go wrong most.
-
-### Find and replace across all captions
-- **What:** change one word or phrase in every caption of a video at once,
-  instead of caption by caption.
-- **Why:** the same misheard name is usually wrong everywhere it occurs.
 
 ## Possible, not planned
 - **More caption languages.** Nine are offered (v1.0.11). Telugu is not in

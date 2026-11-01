@@ -13,6 +13,7 @@ node axe.js    <base> /dashboard /search /settings            # WCAG 2 A/AA; fai
 node checks.js <base> theme not-found                         # named behaviour checks
 VCM_CHECK_VIDEO=<id> node checks.js <base> caption-drag       # editor checks: change that video's style
 node flow.js   <base> <videoIdToDelete> <videoIdToExport>     # deletes a video: test installs only
+VCM_PARITY_VIDEO=<id> node checks.js <base> style-parity        # preview vs burn, 20 style options (below)
 ```
 
 `<base>` is the app's address, e.g. `http://localhost:3000`. Run `flow.js` at
@@ -29,3 +30,12 @@ dev stack or a test install. `node checks.js <base>` with no check names
 lists them all.
 
 See docs/TESTING.md for when each check is required.
+
+`style-parity` (v1.3.0) needs a dev video with captions whose file is a flat
+colour, so that whatever differs from the frame is the caption: transcribe a
+short clip with speech on the dev stack, then replace its file with
+`ffmpeg -f lavfi -i color=c=0x808080:s=1920x1080:r=25:d=<length> -f lavfi -i
+anullsrc -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac <its storage path>`
+inside the backend container. `VCM_PARITY_ONLY="default,italic"` runs some
+options; `VCM_PARITY_SAVE=1` keeps both frames in the backend's `/tmp`.
+

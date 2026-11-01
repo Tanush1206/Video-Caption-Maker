@@ -285,6 +285,16 @@ helper lines that used to sit under the timeline and the video.
     one player row; the inspector is a bottom sheet that, lowered, fills the
     rest of the screen and **peeks** at the current caption (its time, and
     its text, editable in place), and rises to 72 vh for a tool.
+- **Find and replace** (v1.3.0, the caption list's Replace button): Find and
+  Replace with as rows of a group, Match case and Whole word as checkboxes,
+  the count in words, then each caption it occurs in as a hairline row (its
+  time, the text with the match marked in the warning tone, the result in
+  the secondary tone, Replace in plain text); Close (grey) and Replace all
+  (primary); after a replace, a notice with Undo for 10 seconds.
+- **Caption preview layers** (v1.3.0): the outline is its own layer under
+  the text (a ring of unblurred shadows, round-cornered like libass's), the
+  shadow one drop-shadow of outline and text together; `checks.js
+  style-parity` compares 20 style options with the burn.
 - **Export dialog:** the formats as a grouped list with a check; file name,
   resolution and (v1.2.2) quality, both segmented, as rows, with the
   most the burn should come to ("Estimated size: up to about 640 MB") in the
