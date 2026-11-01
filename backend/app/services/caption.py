@@ -6,6 +6,9 @@ someone else is simply not found. Editing operates on rows the user provably
 owns without any call site needing to remember a check.
 """
 
+import re
+import unicodedata
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -276,3 +279,85 @@ def restore_breaks(text: str, saved: dict[str, tuple[int, ...]]) -> str:
     """`text` with the breaks a caption with exactly these words had, if any."""
     positions = saved.get(break_key(text))
     return with_breaks(text, positions) if positions else text
+
+
+# ── Find and replace (v1.3.0) ───────────────────────────────────────────────
+
+
+def _in_word(char: str) -> bool:
+    r"""
+    Whether `char` belongs to a word.
+
+    By Unicode category rather than regex `\b`: Python's `\w` leaves out the
+    combining marks Indic scripts write their vowels with, so `\b` falls inside
+    "नमस्ते" and a whole-word search for "नम" would match it.
+    """
+    return char == "_" or unicodedata.category(char)[0] in "LMN"
+
+
+def find_spans(text: str, find: str, *, match_case: bool, whole_word: bool) -> list[tuple[int, int]]:
+    """Where `find` occurs in `text`, as (start, end) character offsets."""
+    if not find:
+        return []
+    pattern = re.compile(re.escape(find), 0 if match_case else re.IGNORECASE)
+    spans = []
+    for match in pattern.finditer(text):
+        start, end = match.span()
+        if whole_word and (
+            (start > 0 and _in_word(text[start - 1])) or (end < len(text) and _in_word(text[end]))
+        ):
+            continue
+        spans.append((start, end))
+    return spans
+
+
+def replaced(text: str, spans: list[tuple[int, int]], replacement: str) -> str:
+    """`text` with each span replaced, exactly as typed."""
+    out, last = [], 0
+    for start, end in spans:
+        out += [text[last:start], replacement]
+        last = end
+    return "".join(out) + text[last:]
+
+
+async def replace_text(
+    db: AsyncSession,
+    captions: list[Caption],
+    find: str,
+    replacement: str,
+    *,
+    match_case: bool,
+    whole_word: bool,
+    caption_ids: set[int] | None,
+    apply: bool,
+) -> list[tuple[Caption, str, str, list[tuple[int, int]]]]:
+    """
+    Every caption `find` occurs in, as (caption, before, after, spans), in order.
+
+    With `apply`, the captions in `caption_ids` (every match when None) are
+    changed and saved; a caption the replacement would leave empty is not:
+    deleting a caption is its own action.
+    """
+    found = []
+    for caption in captions:
+        spans = find_spans(caption.text, find, match_case=match_case, whole_word=whole_word)
+        if spans:
+            found.append((caption, caption.text, replaced(caption.text, spans, replacement), spans))
+    if apply:
+        for caption, _, after, _ in found:
+            if (caption_ids is None or caption.id in caption_ids) and after.strip():
+                caption.text = after
+        await db.commit()
+    return found
+
+
+async def set_texts(db: AsyncSession, video_id: int, texts: dict[int, str]) -> list[Caption]:
+    """Put these captions of the video back to these texts (Undo); others are left alone."""
+    rows = (
+        await db.execute(select(Caption).where(Caption.video_id == video_id, Caption.id.in_(texts)))
+    ).scalars().all()
+    for caption in rows:
+        caption.text = texts[caption.id]
+    await db.commit()
+    return list(rows)
+

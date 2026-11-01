@@ -87,3 +87,52 @@ class CaptionPair(BaseModel):
 
     first: CaptionRead
     second: CaptionRead
+
+
+class CaptionReplace(BaseModel):
+    """
+    Find, and optionally replace, across every caption of a video (v1.3.0).
+
+    One request for both the preview and the change, so they can't disagree
+    about what matches: `apply` false shows what would change, true changes
+    the captions in `caption_ids` (every match when it is null).
+    """
+
+    find: str = Field(min_length=1, max_length=200)
+    replace: str = Field(default="", max_length=200)
+    match_case: bool = False
+    whole_word: bool = False
+    caption_ids: list[int] | None = None
+    apply: bool = False
+
+
+class CaptionMatch(BaseModel):
+    id: int
+    start_ms: int
+    end_ms: int
+    before: str
+    after: str
+    #: Where the matches are in `before`, as [start, end) character offsets.
+    spans: list[tuple[int, int]]
+    #: The replacement would leave it empty: it is never applied to this one.
+    empty: bool
+    #: Changed by this request.
+    applied: bool
+
+
+class CaptionReplaceResult(BaseModel):
+    matches: list[CaptionMatch]
+    #: Occurrences, not captions: one caption can hold several.
+    occurrences: int
+
+
+class CaptionText(BaseModel):
+    id: int
+    text: str = Field(min_length=1, max_length=5000)
+
+
+class CaptionTexts(BaseModel):
+    """Captions' texts put back as they were: what Undo sends after a replace."""
+
+    items: list[CaptionText] = Field(max_length=10000)
+

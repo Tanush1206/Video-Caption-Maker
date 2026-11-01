@@ -11,7 +11,15 @@ from fastapi.responses import FileResponse
 from app.config import get_settings
 from app.dependencies import CurrentUser, DbSession
 from app.models.video import VideoStatus
-from app.schemas.caption import CaptionCreate, CaptionList, CaptionRead
+from app.schemas.caption import (
+    CaptionCreate,
+    CaptionList,
+    CaptionMatch,
+    CaptionRead,
+    CaptionReplace,
+    CaptionReplaceResult,
+    CaptionTexts,
+)
 from app.schemas.video import (
     HindiScriptOption,
     LanguageOption,
@@ -470,6 +478,52 @@ async def create_caption(
     _queue_reindex(video_id, [caption.id])
 
     return CaptionRead.model_validate(caption)
+
+
+@router.post("/{video_id}/captions/replace", response_model=CaptionReplaceResult)
+async def replace_in_captions(
+    video_id: int, payload: CaptionReplace, user: CurrentUser, db: DbSession
+) -> CaptionReplaceResult:
+    """
+    Find a word or phrase in every caption of the video, and replace it (v1.3.0).
+
+    The same matching for the preview (`apply` false) and the change, so what
+    was shown is what is replaced. A replacement that would leave a caption
+    empty is never applied to it. Exports read the captions when they are
+    made, so a burn, SRT or VTT made afterwards has the new text.
+    """
+    await _require_owned(db, video_id, user.id)
+    captions = await video_service.list_captions(db, video_id)
+    chosen = set(payload.caption_ids) if payload.caption_ids is not None else None
+    found = await caption_service.replace_text(
+        db, captions, payload.find, payload.replace,
+        match_case=payload.match_case, whole_word=payload.whole_word,
+        caption_ids=chosen, apply=payload.apply,
+    )
+    matches = []
+    for caption, before, after, spans in found:
+        empty = not after.strip()
+        applied = payload.apply and not empty and (chosen is None or caption.id in chosen)
+        matches.append(CaptionMatch(
+            id=caption.id, start_ms=caption.start_ms, end_ms=caption.end_ms,
+            before=before, after=after, spans=spans, empty=empty, applied=applied,
+        ))
+    changed = [m.id for m in matches if m.applied]
+    if changed:
+        _queue_reindex(video_id, changed)
+    return CaptionReplaceResult(matches=matches, occurrences=sum(len(m.spans) for m in matches))
+
+
+@router.post("/{video_id}/captions/texts", response_model=CaptionList)
+async def set_caption_texts(
+    video_id: int, payload: CaptionTexts, user: CurrentUser, db: DbSession
+) -> CaptionList:
+    """Put captions' texts back as they were: Undo after a replace (v1.3.0)."""
+    await _require_owned(db, video_id, user.id)
+    updated = await caption_service.set_texts(db, video_id, {item.id: item.text for item in payload.items})
+    if updated:
+        _queue_reindex(video_id, [c.id for c in updated])
+    return CaptionList(items=[CaptionRead.model_validate(c) for c in updated], total=len(updated))
 
 
 @router.get("/{video_id}/thumbnail")
