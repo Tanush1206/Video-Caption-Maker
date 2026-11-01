@@ -1299,6 +1299,112 @@ Asked by Tanush, 2026-10-30: first the download mix-up, then the MP4 size fix.
         size of WhatsApp video burned to 101 MB (1.6×) on Tanush's M2.
         Videos 7690-7693, deleted.
 
+## v1.3.0 caption quality
+Brief from Tanush, 2026-10-31 (in full in the session; the essentials here so
+work can resume from this section). AGENTS.md rules apply; dev stack on 3001
+only; delete every test video by recorded id.
+
+Test material (test-assets/, gitignored): new.mp4 (15-min noisy Hinglish
+party vlog); new_1.srt = his export **before** the music fix (Downloads
+"new.srt", 515 captions, 53 "nan"); new__1_.srt = **after** (Downloads
+"new (1).srt", 478 captions, the "Dlicious snacks" run at 9:14);
+hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
+
+- [ ] **Step 0, truth file.** Draft test-assets/truth-new-5min.txt: first
+      5 minutes of new.mp4, natural Roman Hinglish, one line per caption with
+      its start time, marked DRAFT; [?] uncertain, [overlap] two people at
+      once, [muffled]. Then STOP and tell Tanush; he corrects it by
+      listening. Parts A and B meanwhile. **No Part C measurement until he
+      confirms the truth file.**
+- [x] **A1. Repetition loop.** ~9:00 "Dlicious snacks" ×8 (old run ×2).
+      Collapse runaway repeats (same phrase 3+ in a row within a few
+      seconds); keep "khelta jaoon" ×4 (1:52) and "nahin. Nahin. Nahin."
+      (2:47). Test all three.
+- [ ] **A2. Real lines near music.** "log yaad karo bhaiyon, agla." (13:26)
+      and "Aaj hogi sirph gol" (~7:20) must be kept; real words next to
+      "nan" always kept. Test both. (Both are present in new__1_.srt; find
+      the runs that drop them.)
+- [x] **B1. Burn = saved style = preview.** His burn of new.mp4: captions
+      ~30 px on 1080p, plain white, no box/outline/shadow. Compare video
+      140's saved style, the burn and the editor preview; fix any
+      difference; test that burns every style option against the preview.
+- [x] **B2. Readable default.** ~5-6% of frame height on landscape, white
+      with a thick dark outline and soft shadow, or a dark translucent box.
+      Check YouTube, TikTok, Minimal presets on bright footage. Existing
+      videos keep their saved styles; new videos and Reset get the new
+      default.
+- [x] **B3. Find & Replace** across a video's captions: match case, whole
+      word, preview of every match, replace one or all, Undo; updates burn,
+      SRT, VTT. (From the ROADMAP.)
+- [ ] **C. Accuracy on hard audio: measure first, Tanush decides.** First
+      5 min of new.mp4 against his corrected truth; hinglish.mp4 against
+      truth-hi.txt (must not get worse). WER, CER, English-word accuracy,
+      error rates on [overlap] and [muffled] lines; time, memory, download
+      size; GPU and CPU. C1 audio clean-up (Demucs / DeepFilterNet /
+      arnndn / afftdn) on a transcription-only copy, licences, offline after
+      one download. C2 diarization + separation (e.g. SepFormer) for
+      overlaps, with 3 samples of how overlaps would look in captions; no
+      gated HF models. C3 transcription settings (beam, temperature
+      fallback, VAD, initial prompt). C4 optional "Improve captions with
+      Gemini" (caption text only, keeps timings, per-change Undo), measured
+      with his key; say if the quota is out. Keep only what helps without
+      hurting clean audio; then ONE message of questions with a
+      recommendation (which to ship, default or setting, download per tier).
+- [ ] **Done when:** A and B fixed and tested; C measured, chosen, built,
+      tested; all suites, UI checks, axe 0; E2E on GPU and CPU; before/after
+      captions for 0:00-1:00, 9:00-9:20 and some [overlap]/[muffled] lines;
+      before/after burned frames at 1:00, 2:00, 6:00. Then release steps as
+      before; after the tag: backup, update, full after-release checklist.
+
+### Log
+- 2026-10-31: copied his two exports into test-assets (new_1.srt, new__1_.srt,
+  identified by content). Both A2 lines ARE in new__1_.srt (7:20.75 "Aaj hogi
+  sirph gol cup ko ki baat", 13:26.38 "log yaad karo bhaiyon, agla."): find the
+  runs that drop them. Cut test-assets/new-5min.mp4 (first 300 s, stream
+  copy). Transcribed it on dev: Apex twice (identical, 179 captions, 22 s),
+  large-v3 Devanagari (125 captions, 186 s, "सब्सक्राइब" twice in speech);
+  videos 7694-7699 deleted. **Truth draft written** (test-assets/
+  truth-new-5min.txt, 104 lines, ~35 [?], every [overlap]/[muffled] marked
+  "(guess)"). Told Tanush; waiting for his corrected file before any C.
+- A1: the loop is Whisper's temperature fallback. Window 545.5-575.5 s at
+  T=0 loops "Bachcha van ke aai hai?" ×9 (cr 2.73, rejected); samples at 0.6
+  and 0.8 vary, one ×5 at cr 2.22 (accepted); video 140 on the install has
+  "Dlicious snacks" ×9 over 4 captions. "delicious, delicious snacks" (×2)
+  in every sample = what is said. Real repeats (khelta ×4 in 1.3 s, word
+  prob 0.84-1.0; nahin ×3) look the same as a loop by words/timing/prob, so
+  the rule is 5+ in a row -> once (`_collapse_loops`, across captions).
+  Stricter than the brief's "3+": tell Tanush.
+- A2: both lines in all 6 GPU outputs (his export, video 140, my runs 1-5).
+  The CPU int8 run LOSES "log yaad karo bhaiyon": not a filter, a
+  mishearing in the re-decoded music stretch (795.5-818.1: "yahaan par ×3",
+  "pyaar hai mera is ginti par", lp -0.8). Decoding the span alone, int8 /
+  int8_float32 / float32 on CPU, other cuts: never found reliably; GPU varies
+  by cut too. -> test in C1 (vocal isolation on this stretch). Filter tests
+  for both lines added. Also seen once (run 1, old code): "緘." ×11 at
+  9:43-10:05 (non-Latin junk from Apex); not in his exports. Mention.
+- B1: video 140's saved style = the default (Poppins Bold 54, outline 3, no
+  shadow); his burn (export 390) matches it. Preview vs burn per option:
+  new `checks.js style-parity` (20 options) + backend/scripts/
+  style_parity.py, on dev fixture video 7700 (flat grey, real captions):
+  all 20 pass at device scale 2 (at scale 1 the 1.3-px outline anti-aliases
+  differently in Chrome and libass). No mismatch: the default is the
+  problem -> B2.
+- B2 decided: default Poppins Bold 100 / outline 6 / shadow 3 (em 5.3% of
+  height); presets YouTube 80, TikTok 112 (outline 6), Minimal 88 (outline
+  3, shadow 3); every app-set style scaled by width/height on a portrait
+  frame (9:16 lands near today's sizes); migration freezes the OLD default
+  for existing videos with no style row.
+- Committed (not pushed): 21790a1 A1; b4204a1 preview layers + style-parity
+  (with the new default as base it found 2 real preview bugs: mitred
+  outline spikes, the fill's text-shadow over the outline; fixed with an
+  outline layer of ring shadows and a drop-shadow, 20/20 pass); acd443f +
+  d460c23 B2; da01fac + d38650e B3 (API with preview/apply + Undo restore,
+  dialog; `find-replace` check 1440/375, axe 0). Editor checks: 238 PASS.
+  Dev fixture video 7700 (flat grey, 10 captions) is mine; delete at the
+  end.
+- A2 left open: the filter keeps real words (tests); the CPU loss is a
+  mishearing under music, to try with C1. Waiting for the truth file.
+
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
 

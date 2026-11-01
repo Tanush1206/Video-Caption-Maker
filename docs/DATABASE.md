@@ -241,13 +241,13 @@ Sizes are in **reference pixels against a 1080-px-high canvas**
 | `id` | integer | no | sequence | PK |
 | `video_id` | integer | no | | FK → `videos.id` ON DELETE CASCADE; **unique** index `ix_caption_styles_video_id` |
 | `font_key` | varchar(32) | no | DB `'poppins'` | a key from `FONTS` or the Google Fonts catalogue, never a free family name |
-| `font_size` | integer | no | ORM 54 | |
+| `font_size` | integer | no | ORM 100 | 54 until v1.3.0; a portrait video's default is scaled by width/height (`caption_style.for_frame`) |
 | `bold` | boolean | no | ORM true | |
 | `italic` | boolean | no | ORM false | |
 | `text_color` | varchar(7) | no | ORM `#FFFFFF` | |
 | `outline_color` | varchar(7) | no | ORM `#000000` | |
-| `outline_width` | integer | no | ORM 3 | |
-| `shadow` | integer | no | ORM 0 | offset in reference px, no blur |
+| `outline_width` | integer | no | ORM 6 | 3 until v1.3.0 |
+| `shadow` | integer | no | ORM 3 | offset in reference px, no blur; 0 until v1.3.0 |
 | `shadow_color` | varchar(7) | no | ORM `#000000` | |
 | `box_color` | varchar(7) | no | ORM `#000000` | |
 | `box_opacity` | double | no | ORM 0.0 | 0 = no box; > 0 = a box drawn under the text, replacing the outline and shadow |
@@ -363,7 +363,8 @@ date is the commit that introduced the file.
 | 17 | `a4d8e2c6f130` | 2026-10-18 | add `videos.speech` (v1.0.8): the word timings captions are timed to; nullable, NULL until a video's next transcription |
 | 18 | `b6e0f4a9c2d1` | 2026-10-21 | add `videos.hindi_script`, `videos.detected_language`, `videos.detected_confidence` (all nullable, NULL on existing rows) and `videos.held` (`false`) (v1.0.9). Changes nothing already captioned |
 | 19 | `e8b3d5f19a42` | 2026-10-28 | caption anchor by alignment (v1.2.0): `pos_x` becomes the block's left edge (Left), centre (Centre) or right edge (Right). **Converts** Left/Right rows to the old box's edge, `pos_x ∓ width/2` clamped to 0..1, with a NULL `box_width` taken by the video's frame shape (read from its file, as the burn reads it; landscape if unreadable), so every video burns byte for byte as before (`tests/test_caption_anchor.py`, against `tests/data/burn-1.1.1.json`). Centre rows unchanged. Downgrade converts back |
-| 20 | `a6d2f0c8b913` | 2026-10-30 | add `exports.quality` (v1.2.2, head), nullable and left null on existing rows |
+| 20 | `a6d2f0c8b913` | 2026-10-30 | add `exports.quality` (v1.2.2), nullable and left null on existing rows |
+| 21 | `c3e7a9d15b42` | 2026-10-31 | existing videos keep their caption style (v1.3.0, head): every video with no `caption_styles` row gets one of the pre-1.3 default (Poppins Bold 54, outline 3, no shadow), so its burns don't change when the default does. No schema change; the downgrade leaves the rows |
 
 ## 6. Migration rules
 

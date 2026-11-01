@@ -127,6 +127,8 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | POST* | `/api/videos/{video_id}/transcribe` | optional [TranscribeRequest](#transcriberequest) | `200` [VideoRead](#videoread) (`pending`); captions are replaced when it runs | 404 · 409 `This video is already being transcribed` · 503 queue unreachable |
 | GET* | `/api/videos/{video_id}/captions` | — | `200` [CaptionList](#captionlist) (by `sequence`) | 404 |
 | POST* | `/api/videos/{video_id}/captions` | [CaptionCreate](#captioncreate) | `201` [CaptionRead](#captionread); queues re-index | 404 · 422 |
+| POST* | `/api/videos/{video_id}/captions/replace` | [CaptionReplace](#captionreplace) | `200` [CaptionReplaceResult](#captionreplaceresult): every caption it occurs in, before and after; with `apply`, the chosen ones (or all) changed and re-indexed, never to empty (v1.3.0) | 404 · 422 |
+| POST* | `/api/videos/{video_id}/captions/texts` | [CaptionTexts](#captiontexts) | `200` [CaptionList](#captionlist) of the captions put back (Undo after a replace); others of the video are ignored; re-indexed | 404 · 422 |
 | GET* | `/api/videos/{video_id}/thumbnail` | — | `200 image/jpeg` | 404 no thumbnail / file missing |
 | POST* | `/api/videos/{video_id}/stream-token` | — | `200` [StreamTicket](#streamticket) | 404 |
 | GET | `/api/videos/{video_id}/stream` | query `token` (required), `download` bool, `name` (used only with `download=1`) | `200`/`206` the original file; `Range` supported; `inline` (named as uploaded) or, with `download=1`, `attachment` named `<video or typed name> – original.<ext>` (not added twice) with `Cache-Control: no-store` | 401 invalid/expired token · 403 `This token is for a different video` · 404 |
@@ -256,6 +258,43 @@ Enum: `left`, `center`, `right`
 | `start_ms` | integer | yes | minimum 0 |
 | `end_ms` | integer | yes | minimum 0 |
 | `text` | string | yes | minLength 1, maxLength 5000 |
+
+### CaptionMatch
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `id` | integer | yes |  |
+| `start_ms` | integer | yes |  |
+| `end_ms` | integer | yes |  |
+| `before` | string | yes | the caption's text as found |
+| `after` | string | yes | what the replacement makes it |
+| `spans` | [integer, integer][] | yes | where the matches are in `before`, [start, end) character offsets |
+| `empty` | boolean | yes | `after` would be empty: never applied |
+| `applied` | boolean | yes | changed by this request |
+
+### CaptionReplace
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `find` | string | yes | 1-200 characters, matched literally |
+| `replace` | string | no | default `""`, at most 200 |
+| `match_case` | boolean | no | default false |
+| `whole_word` | boolean | no | default false; a word is letters, marks and numbers by Unicode category, so Indic vowel signs belong to it |
+| `caption_ids` | integer[] \| null | no | the captions to change; null for every match |
+| `apply` | boolean | no | default false: only show what would change |
+
+### CaptionReplaceResult
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `matches` | [CaptionMatch](#captionmatch)[] | yes | in caption order |
+| `occurrences` | integer | yes | matches, not captions |
+
+### CaptionTexts
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `items` | {`id`: integer, `text`: string 1-5000}[] | yes | at most 10000 |
 
 ### CaptionList
 

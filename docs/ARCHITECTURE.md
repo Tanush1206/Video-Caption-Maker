@@ -248,6 +248,13 @@ Rules the code enforces:
     they split a long stretch of music into the shorter ones decoded again
     (dropped at once, a line inside 24 s of music was lost), then removed
     before anything is captioned.
+- **A decoding loop is said once** (v1.3.0, `_collapse_loops`). Whisper's
+  temperature fallback can accept a sample that repeats itself (one run of
+  the 15-minute vlog: "Dlicious snacks" ×9 over four captions). A phrase of
+  up to 8 words said 5+ times in a row, across caption boundaries, keeps its
+  first saying. Three or four times is left: "khelta jaoon" ×4 and "nahin.
+  Nahin. Nahin." look the same as a loop by words, timings and
+  probabilities.
 - **Silence that would swallow the speech is re-measured** (v1.0.11,
   `silence_for`): FFmpeg's `silencedetect` under -40 dB as before, unless
   more than half of the file's voiced envelope windows (speech band within

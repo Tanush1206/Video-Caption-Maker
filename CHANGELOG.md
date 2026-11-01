@@ -6,6 +6,30 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Find and replace** in the caption list: find a word or phrase in every
+  caption (match case, whole word), see each match and what it becomes,
+  replace one or all, and Undo. Exports made afterwards have the new text.
+
+### Changed
+- **Captions are readable on any video by default:** about twice the size
+  (letters 5% of the frame's height), with a heavy dark outline and a
+  shadow, so they stay clear on bright and busy footage. The YouTube,
+  TikTok and Minimal presets are larger too. Vertical videos keep about the
+  sizes they had. Videos you already have keep the style they had; new
+  videos and Reset get the new one.
+
+### Fixed
+- **A caption repeated over and over** ("Dlicious snacks" nine times) is
+  said once. The speech model can get stuck repeating itself; anything said
+  five or more times in a row is now treated as that. Real repetition, like
+  "khelta jaoon" four times, is kept.
+- **The editor shows outlines and shadows as the exported video has them.**
+  A thick outline grew spikes on letters like "v", and with a coloured
+  outline the shadow showed inside it; neither was in the export.
+
 ## [1.2.2] - 2026-10-30
 
 Burned-in videos about the size of the original, with a Quality choice, and
