@@ -1,10 +1,11 @@
 "use client";
 
-import { FileText, Loader2, Plus, RefreshCw } from "lucide-react";
+import { FileText, Loader2, Plus, RefreshCw, Replace } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccuracyInfo } from "@/components/captions/accuracy-info";
+import { FindReplace } from "@/components/captions/find-replace";
 import { CaptionRow } from "@/components/captions/caption-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -90,6 +91,8 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
    * typing in it rather than hunting for where it went.
    */
   const [pendingFocusId, setPendingFocusId] = useState<number | null>(null);
+  /** The Find and replace dialog (v1.3.0). */
+  const [finding, setFinding] = useState(false);
 
   // Keyboard navigation needs to move focus between rows, which React state
   // can't express — hold the actual DOM nodes.
@@ -278,6 +281,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
 
   return (
     <div className="flex min-h-0 flex-col">
+      <FindReplace videoId={video.id} open={finding} onClose={() => setFinding(false)} />
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex shrink-0 items-center gap-0.5">
           <span className="label-caps">
@@ -293,6 +297,13 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
               Saving…
             </span>
           )}
+          <ToolButton
+            onClick={() => setFinding(true)}
+            icon={Replace}
+            title="Find and replace in every caption"
+          >
+            Replace
+          </ToolButton>
           <ToolButton
             onClick={redo}
             disabled={retranscribe.isPending || video.status === "processing" || !captionOffered}

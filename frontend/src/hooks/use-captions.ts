@@ -4,7 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { videoKeys } from "@/hooks/use-videos";
-import type { Caption, CaptionList, CaptionPair } from "@/types/caption";
+import type {
+  Caption,
+  CaptionList,
+  CaptionPair,
+  CaptionReplaceRequest,
+  CaptionReplaceResult,
+} from "@/types/caption";
 
 export const captionKeys = {
   forVideo: (videoId: number) => ["videos", videoId, "captions"] as const,
@@ -126,4 +132,30 @@ export function useCreateCaption(videoId: number) {
     (body: { start_ms: number; end_ms: number; text: string }) =>
       api.post<Caption>(`/api/videos/${videoId}/captions`, body)
   );
+}
+
+/**
+ * Find across every caption of the video, and replace (v1.3.0). One request
+ * for the preview (`apply: false`) and the change, so the server's matching
+ * is the only one. A change refreshes the captions.
+ */
+export function useReplaceInCaptions(videoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: CaptionReplaceRequest) =>
+      api.post<CaptionReplaceResult>(`/api/videos/${videoId}/captions/replace`, request),
+    onSuccess: (_, request) => {
+      if (request.apply) queryClient.invalidateQueries({ queryKey: captionKeys.forVideo(videoId) });
+    },
+  });
+}
+
+/** Put captions' texts back as a replace found them: Undo. */
+export function useRestoreCaptionTexts(videoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (items: { id: number; text: string }[]) =>
+      api.post<CaptionList>(`/api/videos/${videoId}/captions/texts`, { items }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: captionKeys.forVideo(videoId) }),
+  });
 }

@@ -1849,6 +1849,63 @@ const CHECKS = {
     }
   },
 
+  // v1.3.0: Find and replace across a video's captions. Types a word from
+  // the first caption, checks the preview, replaces one match, then all,
+  // undoes, and leaves the captions exactly as it found them.
+  async "find-replace"(browser, base) {
+    for (const width of [1440, 375]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const id = await editorVideo(page, base);
+      const captionsOf = async () => (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items.map((c) => c.text);
+      const before = await captionsOf();
+      const word = before.join(" ").split(/\s+/).find((w) => /^[A-Za-z]{4,}$/.test(w));
+      try {
+        await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+        // On a phone the caption list is in the lowered sheet.
+        if (width === 375) await page.getByRole("button", { name: "Raise the inspector" }).click();
+        await page.getByRole("button", { name: "Replace", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: "Find and replace" });
+        await dialog.getByLabel("Find").fill(word);
+        await dialog.getByLabel("Replace with").fill("ZZTOP");
+        const status = dialog.getByRole("status");
+        await page.waitForFunction((el) => /match/.test(el.textContent), await status.elementHandle());
+        const expected = before.filter((t) => t.toLowerCase().includes(word.toLowerCase())).length;
+        const rows = dialog.getByRole("list", { name: "Matches" }).getByRole("listitem");
+        ok(`find-replace@${width}: one row per caption with "${word}"`, (await rows.count()) === expected, `${await rows.count()} rows, ${expected} captions`);
+        ok(`find-replace@${width}: the match is marked`, (await rows.first().locator("mark").first().innerText()).toLowerCase() === word.toLowerCase());
+        ok(`find-replace@${width}: the result is shown`, (await rows.first().innerText()).includes("ZZTOP"));
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+        ok(`find-replace@${width}: no overflow`, !overflow);
+
+        await rows.first().getByRole("button", { name: /^Replace in the caption at/ }).click();
+        await page.waitForFunction(() => /Replaced/.test(document.querySelector("dialog")?.textContent ?? ""));
+        const one = await captionsOf();
+        ok(`find-replace@${width}: Replace changes one caption`, one.filter((t) => t.includes("ZZTOP")).length === 1);
+
+        await dialog.getByRole("button", { name: "Replace all" }).click();
+        await page.waitForFunction((n) => /Replaced/.test(document.querySelector("dialog")?.textContent ?? "") && n, true);
+        await page.waitForTimeout(800);
+        const all = await captionsOf();
+        ok(`find-replace@${width}: Replace all changes every one`, all.filter((t) => t.includes("ZZTOP")).length === expected, `${all.filter((t) => t.includes("ZZTOP")).length}/${expected}`);
+        ok(`find-replace@${width}: the editor's list shows it`, (await page.getByText("ZZTOP").count()) > 0);
+
+        await dialog.getByRole("button", { name: "Undo" }).click();
+        await page.waitForTimeout(800);
+        const undone = await captionsOf();
+        ok(`find-replace@${width}: Undo puts back what Replace all changed`, undone.filter((t) => t.includes("ZZTOP")).length === 1, `${undone.filter((t) => t.includes("ZZTOP")).length} left`);
+        await page.keyboard.press("Escape");
+        ok(`find-replace@${width}: Escape closes it`, !(await dialog.isVisible()));
+      } finally {
+        // Exactly as found, whatever happened above.
+        const now = (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items;
+        const items = now.map((c, i) => ({ id: c.id, text: before[i] })).filter((c, i) => now[i].text !== before[i]);
+        if (items.length) await page.request.post(`${base}/api/videos/${id}/captions/texts`, { data: { items } });
+        ok(`find-replace@${width}: the captions are as they were`, JSON.stringify(await captionsOf()) === JSON.stringify(before));
+        await page.close();
+      }
+    }
+  },
+
   // v1.2.2: a burn's Quality, its estimate, and what Export sends. The
   // export request is answered here, so nothing is rendered.
   async "export-quality"(browser, base) {
