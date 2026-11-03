@@ -1310,7 +1310,7 @@ party vlog); new_1.srt = his export **before** the music fix (Downloads
 "new (1).srt", 478 captions, the "Dlicious snacks" run at 9:14);
 hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
 
-- [ ] **Step 0, truth file.** Draft test-assets/truth-new-5min.txt: first
+- [x] **Step 0, truth file.** Draft test-assets/truth-new-5min.txt: first
       5 minutes of new.mp4, natural Roman Hinglish, one line per caption with
       its start time, marked DRAFT; [?] uncertain, [overlap] two people at
       once, [muffled]. Then STOP and tell Tanush; he corrects it by
@@ -1320,7 +1320,7 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
       Collapse runaway repeats (same phrase 3+ in a row within a few
       seconds); keep "khelta jaoon" ×4 (1:52) and "nahin. Nahin. Nahin."
       (2:47). Test all three.
-- [ ] **A2. Real lines near music.** "log yaad karo bhaiyon, agla." (13:26)
+- [x] **A2. Real lines near music.** "log yaad karo bhaiyon, agla." (13:26)
       and "Aaj hogi sirph gol" (~7:20) must be kept; real words next to
       "nan" always kept. Test both. (Both are present in new__1_.srt; find
       the runs that drop them.)
@@ -1336,7 +1336,7 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
 - [x] **B3. Find & Replace** across a video's captions: match case, whole
       word, preview of every match, replace one or all, Undo; updates burn,
       SRT, VTT. (From the ROADMAP.)
-- [ ] **C. Accuracy on hard audio: measure first, Tanush decides.** First
+- [x] **C. Accuracy on hard audio: measure first, Tanush decides.** First
       5 min of new.mp4 against his corrected truth; hinglish.mp4 against
       truth-hi.txt (must not get worse). WER, CER, English-word accuracy,
       error rates on [overlap] and [muffled] lines; time, memory, download
@@ -1430,6 +1430,32 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
   rates (wait for his 2:30-3:15 truth). Questions sent 2026-11-03.
   Lab containers vcm-c1-lab, vcm-c2-lab (stopped) and image
   python:3.11-slim are mine: remove at the end.
+- 2026-11-03, Tanush's decisions: C1 nothing, C3 keep, C2 skip (re-measure
+  with his 2:30-3:15 truth), A1 threshold 5 fine, drop Hinglish captions
+  with no Latin letter (done, tested), soft shadow as a style option (done),
+  build C4 with guards (never numbers, dates, names, brands or English
+  words beyond spelling; never a different meaning; only sure fixes with
+  the original; never more than a few words); must not get worse on his
+  0:00-1:28 or hinglish.mp4; web-design-guidelines + accessibility skills,
+  playwright-cli for the UI checks; then release v1.3.0.
+- Built: `services/caption_fix.py` (prompt + guards: respelling = same
+  consonants and same kind of ending, sound-alike = one consonant apart at
+  3+, names learned from the whole video, no numbers, no added words, at
+  most 3 words), `caption_fix_runs`/`caption_fixes` (migration 23), worker
+  `improve_captions` (own client, 5 min timeout; 503 retried, timeout not;
+  restart closes the run unchanged), 3 routes, the Improve dialog (progress
+  and estimate, changed words struck/highlighted, Undo each and all).
+  Soft shadow: `shadow_blur` (migration 22; existing 0, new 4), burned as
+  its own `\blur` event, previewed as drop-shadow blur x 0.9 (measured).
+- Measured with guards (loose WER): his window 13.9 -> 13.2% (flash-lite
+  live) / 12.5% (flash, its Part C proposals re-checked); hinglish.mp4
+  14.4 -> 14.0% / 12.9%. Not worse on either. gemini-3.8-flash (what
+  flash-latest is) timed out or was "high demand" all day 2026-11-03; lite
+  answered in 3-9 s. Dev worker temporarily on GEMINI_MODEL=flash-lite via
+  scratch dev-lite.yml for the UI checks: undo at the end.
+- UI: axe 0 with the dialog open (light/dark, 1440/375); `checks.js
+  improve-captions` 18/18; style-parity 23/23; the tools row wraps
+  (Improve made it clip at 1440).
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.

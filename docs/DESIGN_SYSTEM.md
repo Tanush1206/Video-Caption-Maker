@@ -291,10 +291,24 @@ helper lines that used to sit under the timeline and the video.
   time, the text with the match marked in the warning tone, the result in
   the secondary tone, Replace in plain text); Close (grey) and Replace all
   (primary); after a replace, a notice with Undo for 10 seconds.
+- **Improve captions with Gemini** (v1.3.0, the caption list's Improve
+  button, Sparkles icon, shown only with a Gemini key; it spins while a
+  check runs): what is sent in the dialog's description; the state as a
+  status line (not checked; "Checking part 2 of 4, about 3 min left." over
+  a progress bar, "You can close this; the check carries on."; the count
+  fixed and left out); each change as a hairline row: its time, the caption
+  before (secondary tone) with the changed words struck through on a
+  destructive tint, after it with them on a success tint, and Undo in plain
+  text, or "Undone" / "Edited since, kept". Footer: Close, Undo all
+  (grey), and Check captions / Check again (primary) only once nothing is
+  left to undo, since a new check replaces the list. The tools row wraps
+  under the caption count rather than clipping.
 - **Caption preview layers** (v1.3.0): the outline is its own layer under
   the text (a ring of unblurred shadows, round-cornered like libass's), the
-  shadow one drop-shadow of outline and text together; `checks.js
-  style-parity` compares 20 style options with the burn.
+  shadow one drop-shadow of outline and text together, blurred by Shadow
+  softness x 0.9 (`SOFT_SHADOW_CSS`: libass's `\blur` measured against the
+  CSS radius on flat grey; 0.6 left the core twice as dark); `checks.js
+  style-parity` compares 23 style options with the burn.
 - **Export dialog:** the formats as a grouped list with a check; file name,
   resolution and (v1.2.2) quality, both segmented, as rows, with the
   most the burn should come to ("Estimated size: up to about 640 MB") in the

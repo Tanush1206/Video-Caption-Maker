@@ -161,6 +161,20 @@ The original 10-milestone build plan is historical and lives in
   like the "सब्सक्राइब" ×3 above, are left: nothing in the words, timings or
   probabilities tells them from "nahin. Nahin. Nahin.".
 
+### Overlapping speech (v1.3.0 Part C2, measured, skipped)
+- **What:** where two people talk at once, the captions mix them or keep
+  one. On new.mp4 the Gemini-flagged overlap lines had about twice the
+  error rate of the rest.
+- **Measured (PROGRESS.md v1.3.0):** SpeechBrain SepFormer (whamr16k,
+  Apache-2.0, 108 MB) separated a second voice at 4:18 that the captions
+  had lost, but leaked one voice into both tracks elsewhere (it would be
+  captioned twice), at 1.5 s of CPU per second of audio, and needs
+  torchaudio, which has no build for the app's torch. Speaker labels (ECAPA,
+  Apache-2.0) split the party by voice type, not by person. pyannote is
+  gated and NVIDIA Sortformer is non-commercial, so neither is usable.
+- **Tanush, 2026-11-03:** skip for now; measure again when the truth for
+  2:30-3:15 (the overlaps) is added to `test-assets/truth-new-5min.txt`.
+
 ### Custom vocabulary / word corrections
 - **What:** a list of words the user wants spelled their way (names,
   technical terms, brands), used when captions are made or applied to them

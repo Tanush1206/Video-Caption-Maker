@@ -13,7 +13,8 @@ node axe.js    <base> /dashboard /search /settings            # WCAG 2 A/AA; fai
 node checks.js <base> theme not-found                         # named behaviour checks
 VCM_CHECK_VIDEO=<id> node checks.js <base> caption-drag       # editor checks: change that video's style
 node flow.js   <base> <videoIdToDelete> <videoIdToExport>     # deletes a video: test installs only
-VCM_PARITY_VIDEO=<id> node checks.js <base> style-parity        # preview vs burn, 20 style options (below)
+VCM_PARITY_VIDEO=<id> node checks.js <base> style-parity        # preview vs burn, 23 style options (below)
+node checks.js <base> improve-captions                           # a real Gemini check, Undo one and all (needs the key)
 ```
 
 `<base>` is the app's address, e.g. `http://localhost:3000`. Run `flow.js` at
