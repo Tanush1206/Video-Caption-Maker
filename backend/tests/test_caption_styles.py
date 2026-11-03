@@ -142,7 +142,7 @@ def test_backcolour_is_the_shadow_colour():
     exactly as asked and be completely invisible.
     """
     shadowed = style_service.to_ass_style(
-        a_style(box_opacity=0.0, shadow=4, shadow_color="#FF0000"), 1080
+        a_style(box_opacity=0.0, shadow=4, shadow_color="#FF0000", shadow_blur=0), 1080
     )
 
     # Opaque (alpha 00) and the shadow's own colour, in ASS's backwards BGR.
@@ -152,7 +152,7 @@ def test_backcolour_is_the_shadow_colour():
 
 def test_shadow_and_tracking_scale_with_the_frame():
     """Every reference-pixel length has to scale, not just the font size."""
-    style = a_style(box_opacity=0.0, shadow=6, letter_spacing=4)
+    style = a_style(box_opacity=0.0, shadow=6, shadow_blur=0, letter_spacing=4)
 
     assert style_service.to_ass_style(style, 1080)["Shadow"] == 6
     assert style_service.to_ass_style(style, 360)["Shadow"] == 2
@@ -449,7 +449,8 @@ def _a_caption(**overrides):
 
 
 def _dialogue(doc: str) -> str:
-    return next(line for line in doc.splitlines() if line.startswith("Dialogue:"))
+    """The text's event: layer 1, above a box or a soft shadow on layer 0."""
+    return next(line for line in doc.splitlines() if line.startswith("Dialogue: 1,"))
 
 
 def test_every_caption_is_positioned_and_sized_per_event():
@@ -742,3 +743,75 @@ async def test_existing_videos_keep_the_style_they_burned_with(client, auth_head
     assert (old.pos_y, old.alignment, old.max_lines) == (0.88, Alignment.CENTER, 2)
     assert rows[styled].font_size == 70
     assert (new["font_size"], new["outline_width"], new["shadow"]) == (100, 6, 3)
+
+
+# ── Soft shadow (v1.3.0) ────────────────────────────────────────────────────
+
+
+def _events(doc: str) -> list[str]:
+    return [line for line in doc.splitlines() if line.startswith("Dialogue:")]
+
+
+def test_a_soft_shadow_is_its_own_blurred_event_under_the_text():
+    r"""
+    libass blurs a style's `Shadow` only together with its outline, so a soft
+    shadow is the caption again on layer 0: moved by the offset, in the
+    shadow's colour, `\blur`red; the text above keeps a sharp outline.
+    """
+    style = a_style(pos_x=0.5, pos_y=0.5, font_size=54, outline_width=3,
+                    shadow=4, shadow_blur=6, shadow_color="#0000FF")
+    caption = subtitles.Caption(video_id=1, sequence=0, start_ms=0, end_ms=1000, text="Hello")
+    shadow, text = _events(subtitles.to_ass([caption], style, 1920, 1080))
+
+    assert style_service.to_ass_style(style, 1080)["Shadow"] == 0
+    assert shadow.startswith("Dialogue: 0,") and text.startswith("Dialogue: 1,")
+    assert r"\pos(964,544)" in shadow and r"\pos(960,540)" in text
+    assert r"\1c&HFF0000&\3c&HFF0000&\shad0\blur6" in shadow
+    assert r"\blur" not in text
+    assert shadow.endswith("}Hello") and text.endswith("}Hello")
+
+
+def test_a_hard_shadow_and_a_box_draw_no_shadow_event():
+    caption = subtitles.Caption(video_id=1, sequence=0, start_ms=0, end_ms=1000, text="Hello")
+    hard = a_style(shadow=4, shadow_blur=0)
+    boxed = a_style(shadow=4, shadow_blur=6, box_opacity=0.6)
+    none = a_style(shadow=0, shadow_blur=6)
+
+    assert [e[:12] for e in _events(subtitles.to_ass([caption], hard, 1920, 1080))] == ["Dialogue: 1,"]
+    assert style_service.to_ass_style(hard, 1080)["Shadow"] == 4
+    boxed_events = _events(subtitles.to_ass([caption], boxed, 1920, 1080))
+    assert len(boxed_events) == 2 and r"\blur" not in "".join(boxed_events)
+    assert [e[:12] for e in _events(subtitles.to_ass([caption], none, 1920, 1080))] == ["Dialogue: 1,"]
+
+
+def test_the_soft_shadow_scales_with_the_frame_and_the_layout_keeps_it_on_screen():
+    from app.services.caption_layout import layout_caption
+
+    style = a_style(shadow=4, shadow_blur=6)
+    assert style_service.shadow_blur(style, 540) == 3
+    assert style_service.shadow_blur(style, 2160) == 12
+
+    soft = layout_caption("Hello there", style, 1920, 1080)
+    hard = layout_caption("Hello there", a_style(shadow=4, shadow_blur=0), 1920, 1080)
+    assert soft.blur == 6 and hard.blur == 0
+    assert soft.ink[2] == hard.ink[2] + 6 and soft.ink[3] == hard.ink[3] + 6
+
+
+def test_new_styles_are_soft_and_saved_ones_stay_hard():
+    """New videos and Reset get the soft default; the migration gives every existing row 0."""
+    assert style_service.default_style_fields()["shadow_blur"] == 4
+    assert CaptionStyle.__table__.c.shadow_blur.server_default.arg == "0"
+    # Presets name it, so picking one never keeps a softness set by hand.
+    assert all(preset["shadow_blur"] == 0 for preset in style_service.PRESETS.values())
+    # Portrait frames scale it with the other sizes.
+    assert style_service.for_frame({"shadow_blur": 4}, (1080, 1920))["shadow_blur"] == 2
+
+
+@pytest.mark.asyncio
+async def test_shadow_softness_is_saved_and_bounded(client, auth_headers, sample_video_bytes):
+    video_id = (await upload(client, auth_headers, sample_video_bytes)).json()["id"]
+
+    saved = await client.patch(f"/api/videos/{video_id}/style", headers=auth_headers, json={"shadow_blur": 10})
+    assert saved.status_code == 200 and saved.json()["shadow_blur"] == 10
+    too_much = await client.patch(f"/api/videos/{video_id}/style", headers=auth_headers, json={"shadow_blur": 21})
+    assert too_much.status_code == 422

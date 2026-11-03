@@ -46,7 +46,7 @@ def styles() -> dict[str, dict]:
 
 # The default the references were made with: v1.3.0 changed it, and the
 # videos saved before keep it (migration c3e7a9d15b42).
-PRE_1_3_DEFAULT = {"font_size": 54, "outline_width": 3, "shadow": 0}
+PRE_1_3_DEFAULT = {"font_size": 54, "outline_width": 3, "shadow": 0, "shadow_blur": 0}
 
 
 def document(overrides: dict, width: int, height: int) -> str:
