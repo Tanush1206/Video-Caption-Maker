@@ -68,6 +68,8 @@ export interface Layout {
   em: number;
   pad: number;
   shadow: number;
+  /** A soft shadow's blur, 0 for a hard one: it reaches this much further. */
+  blur: number;
   /** Letter-spacing in video pixels, rounded as the Style line rounds it. */
   spacing: number;
   bleed: number;
@@ -107,8 +109,8 @@ export function ink(layout: Layout): { x: number; y: number; width: number; heig
   return {
     x: layout.x - b,
     y: layout.y - b,
-    width: layout.width + layout.shadow + 2 * b,
-    height: layout.height + layout.shadow + 2 * b,
+    width: layout.width + layout.shadow + layout.blur + 2 * b,
+    height: layout.height + layout.shadow + layout.blur + 2 * b,
   };
 }
 
@@ -335,6 +337,10 @@ export function layoutCaption(
   // As the burn rounds them (caption_style.box_pad).
   const pad = pyRound((boxed ? style.box_padding : style.outline_width) * k);
   const shadow = boxed ? 0 : pyRound(style.shadow * k);
+  // As caption_style.shadow_blur: only a drawn, unboxed shadow is soft.
+  const blur = boxed || style.shadow <= 0 ? 0 : pyRound((style.shadow_blur ?? 0) * k);
+  // How far past the rectangle the shadow paints, down and right.
+  const reach = shadow + blur;
   const spacing = pyRound(style.letter_spacing * k);
   const size = style.font_size * (options.overrideScale || 1) * k;
   const text = style.uppercase ? rawText.toUpperCase() : rawText;
@@ -352,7 +358,7 @@ export function layoutCaption(
   };
   // The box's width, or less if the box with its outline, shadow and
   // overhang would be wider than the safe area (a box at 94%).
-  const maxWidthAt = (shrink: number) => Math.max(1, Math.min(box, safeW - shadow - 2 * bleedAt(shrink)) - 2 * pad);
+  const maxWidthAt = (shrink: number) => Math.max(1, Math.min(box, safeW - reach - 2 * bleedAt(shrink)) - 2 * pad);
   const linesAt = (shrink: number) => wrap(text, maxWidthAt(shrink), widthAt(shrink), lineStyle, wordsPerLine);
   const build = (shrink: number, texts: string[]) => {
     const em = (size * shrink) / primarySpan;
@@ -385,7 +391,7 @@ export function layoutCaption(
   // until it fits, so no caption is ever cut off at an edge.
   const tooBig = (shrink: number, w: number, h: number) => {
     const b = bleedAt(shrink);
-    return h + shadow + 2 * b > safeH || w + shadow + 2 * b > safeW;
+    return h + reach + 2 * b > safeH || w + reach + 2 * b > safeW;
   };
   for (const step of FIT_STEPS) {
     if (!tooBig(shrink, rectW, rectH)) break;
@@ -400,8 +406,8 @@ export function layoutCaption(
   // pos_x is the block's anchor by alignment (v1.2.0), as in caption_layout.py.
   let ax = (options.center?.x ?? style.pos_x) * frame.width;
   let cy = (options.center?.y ?? style.pos_y) * frame.height;
-  ax += slide(blockLeft(ax, rectW, style.alignment) - bleed, rectW + shadow + 2 * bleed, frame.width);
-  cy += slide(cy - rectH / 2 - bleed, rectH + shadow + 2 * bleed, frame.height);
+  ax += slide(blockLeft(ax, rectW, style.alignment) - bleed, rectW + reach + 2 * bleed, frame.width);
+  cy += slide(cy - rectH / 2 - bleed, rectH + reach + 2 * bleed, frame.height);
 
   return {
     lines,
@@ -410,6 +416,7 @@ export function layoutCaption(
     em,
     pad,
     shadow,
+    blur,
     spacing,
     bleed,
     x: blockLeft(ax, rectW, style.alignment),

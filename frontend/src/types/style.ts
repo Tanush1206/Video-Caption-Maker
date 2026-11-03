@@ -21,9 +21,11 @@ export interface CaptionStyle {
   text_color: string;
   outline_color: string;
   outline_width: number;
-  /** ASS `Shadow`: offset down-right in reference pixels, never blurred. */
+  /** ASS `Shadow`: offset down-right in reference pixels. */
   shadow: number;
   shadow_color: string;
+  /** The shadow's softness in reference pixels; 0 is a hard copy (v1.3.0). */
+  shadow_blur: number;
   box_color: string;
   /** 0 disables the box; the server also flips ASS BorderStyle on this. */
   box_opacity: number;

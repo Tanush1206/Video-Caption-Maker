@@ -525,6 +525,15 @@ export function StylePanel({
             disabled={style.shadow === 0 || style.box_opacity > 0}
             onChange={(shadow_color) => set({ shadow_color })}
           />
+          <Slider
+            label="Shadow softness"
+            value={style.shadow_blur}
+            min={0}
+            max={20}
+            suffix="px"
+            disabled={style.shadow === 0 || style.box_opacity > 0}
+            onChange={(shadow_blur) => set({ shadow_blur })}
+          />
         </Group>
 
         {/* An opaque box replaces both the outline and the shadow in ASS,

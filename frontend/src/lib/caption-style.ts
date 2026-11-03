@@ -166,15 +166,26 @@ export function captionOutlineStyle(
 }
 
 /**
+ * CSS `drop-shadow` blur radius per pixel of libass `\blur`, measured: a
+ * 16-pixel blur burned and previewed on flat grey darkened the same number
+ * of pixels by 5, 15, 30 and 60 levels within 3-7% at 0.9 (0.6: the core
+ * twice as dark, the edge a quarter short). docs/DESIGN_SYSTEM.md.
+ */
+export const SOFT_SHADOW_CSS = 0.9;
+
+/**
  * The shadow of the outlined caption as one shape, for a layer holding both:
- * ASS offsets the outlined text down and right by `Shadow` pixels, unblurred.
- * `text-shadow` on the text shadowed its fill above the outline (v1.3.0).
+ * ASS offsets the outlined text down and right by `Shadow` pixels, blurred
+ * by `shadow_blur` when soft. `text-shadow` on the text shadowed its fill
+ * above the outline (v1.3.0).
  */
 export function captionShadowFilter(style: CaptionStyle, layout: Layout, scale: number): string | undefined {
   if (style.box_opacity > 0 || layout.shadow <= 0) return undefined;
-  // No blur: a blurred shadow would look better here and be a lie about the export.
   const offset = layout.shadow * scale;
-  return `drop-shadow(${offset}px ${offset}px 0 ${style.shadow_color})`;
+  // A soft shadow is libass's `\blur` on the burn: a Gaussian whose radius
+  // CSS counts differently, matched by SOFT_SHADOW_CSS (style-parity check).
+  const blur = layout.blur * SOFT_SHADOW_CSS * scale;
+  return `drop-shadow(${offset}px ${offset}px ${blur}px ${style.shadow_color})`;
 }
 
 /** One laid-out line: exactly its own height, which is libass's line pitch. */

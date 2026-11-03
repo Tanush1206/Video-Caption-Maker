@@ -159,6 +159,7 @@ export function useResetStyle(videoId: number) {
 const EDITABLE = [
   "font_key", "font_size", "bold", "italic", "underline", "strikeout", "uppercase",
   "letter_spacing", "text_color", "outline_color", "outline_width", "shadow", "shadow_color",
+  "shadow_blur",
   "box_color", "box_opacity", "box_padding", "alignment", "pos_x", "pos_y", "box_width",
   "max_lines", "line_style", "words_per_line",
 ] as const satisfies readonly (keyof CaptionStyle)[];
