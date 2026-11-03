@@ -40,6 +40,7 @@ class CaptionStyleRead(BaseModel):
     outline_width: int
     shadow: int
     shadow_color: str
+    shadow_blur: int
     box_color: str
     box_opacity: float
     box_padding: int
@@ -120,6 +121,7 @@ class CaptionStyleUpdate(BaseModel):
     outline_width: int | None = Field(default=None, ge=0, le=20)
     shadow: int | None = Field(default=None, ge=0, le=20)
     shadow_color: str | None = Field(default=None, pattern=HEX_COLOUR)
+    shadow_blur: int | None = Field(default=None, ge=0, le=20)
     box_color: str | None = Field(default=None, pattern=HEX_COLOUR)
     box_opacity: float | None = Field(default=None, ge=0.0, le=1.0)
     box_padding: int | None = Field(default=None, ge=0, le=60)

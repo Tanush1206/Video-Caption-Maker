@@ -39,8 +39,8 @@ class CaptionStyle(Base):
     Every field here has to be expressible **both** in CSS, for the editor's
     live preview, and in an ASS style line, for the burn-in FFmpeg will do in
     Milestone 8. That constraint is the whole design: a property only CSS can
-    do (a gradient fill, a blurred shadow) would make the preview a promise the
-    renderer cannot keep, and the preview is supposed to be the contract.
+    do (a gradient fill) would make the preview a promise the renderer cannot
+    keep, and the preview is supposed to be the contract.
 
     So the knobs are the intersection: font, size, weight, slant, decoration,
     tracking, fill colour, outline, drop shadow, an optional opaque box,
@@ -106,6 +106,12 @@ class CaptionStyle(Base):
     # usually a softer version of the text and an outline usually is not.
     shadow: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     shadow_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
+    # The shadow's softness, in reference pixels (v1.3.0): 0 is the hard
+    # offset copy above. Soft, the burn draws the shadow as its own event
+    # under the text with libass's `lur` and the preview as a CSS
+    # `drop-shadow` with a blur radius matched to it (`subtitles._shadow_event`).
+    # Existing rows are 0, so a video keeps the look it had; new ones are soft.
+    shadow_blur: Mapped[int] = mapped_column(Integer, nullable=False, default=4, server_default="0")
 
     box_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#000000")
     # 0 disables the box entirely, which is also what switches ASS BorderStyle
