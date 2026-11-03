@@ -7,6 +7,7 @@ see the full set of tables.
 
 from app.models.app_setting import AppSetting
 from app.models.caption import Caption
+from app.models.caption_fix import CaptionFix, CaptionFixRun, FixRunStatus
 from app.models.caption_style import Alignment, CaptionStyle, LineStyle
 from app.models.export import Export, ExportFormat, ExportStatus
 from app.models.user import User
@@ -17,10 +18,13 @@ __all__ = [
     "LineStyle",
     "AppSetting",
     "Caption",
+    "CaptionFix",
+    "CaptionFixRun",
     "CaptionStyle",
     "Export",
     "ExportFormat",
     "ExportStatus",
+    "FixRunStatus",
     "User",
     "Video",
     "VideoStatus",
