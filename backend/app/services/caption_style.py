@@ -268,6 +268,7 @@ def get_font(key: str) -> Font:
 _PRESET_BASELINE: dict = {
     "shadow": 0,
     "shadow_color": "#000000",
+    "shadow_blur": 0,
     "underline": False,
     "strikeout": False,
     "letter_spacing": 0,
@@ -361,7 +362,7 @@ PRESETS: dict[str, dict] = {
 # the frame's *width* (v1.3.0). Without it the new default's em, 5.3% of the
 # height, would be 9.4% of a 9:16 frame's width, four or five words a line.
 # Scaled, a 9:16 video gets about the sizes every video had before.
-SIZE_FIELDS = ("font_size", "outline_width", "shadow", "box_padding", "letter_spacing")
+SIZE_FIELDS = ("font_size", "outline_width", "shadow", "shadow_blur", "box_padding", "letter_spacing")
 
 
 def for_frame(fields: dict, frame: tuple[int, int] | None) -> dict:
@@ -523,6 +524,19 @@ def box_pad(style: CaptionStyle, height: int) -> int:
     return round(style.outline_width * scale)
 
 
+def shadow_blur(style: CaptionStyle, height: int) -> int:
+    """
+    The soft shadow's blur in frame pixels, or 0 for a hard shadow (or none).
+
+    A soft shadow is drawn as its own event (`subtitles._shadow_event`), not
+    by the Style line's `Shadow`: libass blurs a style's shadow only together
+    with its outline, and the outline must stay sharp.
+    """
+    if style.box_opacity > 0 or style.shadow <= 0:
+        return 0
+    return round((getattr(style, "shadow_blur", 0) or 0) * scale_for(height))
+
+
 def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
     """
     The fields of an ASS `Style:` line, as a dict.
@@ -559,7 +573,8 @@ def to_ass_style(style: CaptionStyle, height: int) -> dict[str, str | int]:
         "BorderStyle": 1,
         # A box replaces the outline and the shadow, in the preview too.
         "Outline": 0 if boxed else box_pad(style, height),
-        "Shadow": 0 if boxed else round(style.shadow * scale),
+        # A soft shadow is its own event under the text, so not here too.
+        "Shadow": 0 if boxed or shadow_blur(style, height) else round(style.shadow * scale),
         "Spacing": round(style.letter_spacing * scale),
         # Every event carries its own `\an`, `\pos` and line breaks from the
         # layout, so the margins have nothing left to do.

@@ -19,6 +19,7 @@ from app.services.caption_style import (
     font_win_span,
     get_font,
     script_font_span,
+    shadow_blur,
     to_ass_alignment,
     to_ass_inline_colour,
     to_ass_style_block,
@@ -272,7 +273,24 @@ def _box_event(layout: Layout, style: CaptionStyle) -> str:
     )
 
 
-def _layout_tags(layout: Layout, style: CaptionStyle) -> list[str]:
+def _shadow_event(layout: Layout, style: CaptionStyle, blur: int, tags: list[str], body: str) -> str:
+    r"""
+    A soft shadow: the caption again, under it, in the shadow colour and blurred.
+
+    Moved by the shadow's offset, filled and outlined in its colour so its
+    shape is the text with its outline (the hard shadow's shape), `\shad0`,
+    and `\blur` on that: libass blurs the outline and the fill under it, which
+    is a blurred silhouette. The text above keeps its outline sharp.
+    """
+    colour = to_ass_inline_colour(style.shadow_color)
+    moved = _layout_tags(layout, style, offset=layout.shadow)
+    return (
+        "{" + "".join(moved + tags[len(moved):])
+        + f"\\1c{colour}\\3c{colour}\\shad0\\blur{blur}" + "}" + body
+    )
+
+
+def _layout_tags(layout: Layout, style: CaptionStyle, offset: float = 0.0) -> list[str]:
     """
     Where the laid-out caption goes, and at what size.
 
@@ -290,7 +308,7 @@ def _layout_tags(layout: Layout, style: CaptionStyle) -> list[str]:
     y = layout.y + layout.height / 2
     return [
         f"\\an{to_ass_alignment(style)}",
-        f"\\pos({_num(x)},{_num(y)})",
+        f"\\pos({_num(x + offset)},{_num(y + offset)})",
         f"\\fs{_num(layout.size)}",
     ]
 
@@ -312,15 +330,18 @@ def to_ass(captions: Sequence[Caption], style: CaptionStyle, width: int, height:
     # applies it to the text instead of to the Style line. Only here: the
     # stored caption and the SRT/VTT sidecars keep their original case,
     # because this is how the captions are *drawn on the video*.
+    blur = shadow_blur(style, height)
     for caption, layout, bold in _layouts(captions, style, width, height):
         tags = _layout_tags(layout, style) + _emphasis_tags(caption)
-        text = "{" + "".join(tags) + "}" + "\\N".join(
-            _script_runs(line, style, layout.size, bold) for line in layout.lines
-        )
+        body = "\\N".join(_script_runs(line, style, layout.size, bold) for line in layout.lines)
+        text = "{" + "".join(tags) + "}" + body
         span = f"{ass_time(caption.start_ms)},{ass_time(caption.end_ms)}"
-        # The box on layer 0, the text above it on layer 1.
+        # The box (or a soft shadow: never both) on layer 0, the text above
+        # it on layer 1.
         if style.box_opacity > 0:
             events.append(f"Dialogue: 0,{span},Default,,0,0,0,,{_box_event(layout, style)}")
+        elif blur:
+            events.append(f"Dialogue: 0,{span},Default,,0,0,0,,{_shadow_event(layout, style, blur, tags, body)}")
         events.append(f"Dialogue: 1,{span},Default,,0,0,0,,{text}")
 
     return (

@@ -51,6 +51,7 @@ from app.services.caption_style import (
     script_font_file,
     script_font_span,
     script_fonts,
+    shadow_blur,
 )
 
 # Fractions of the frame. Both are mirrored in caption-layout.ts.
@@ -120,6 +121,8 @@ class Layout:
     # Box padding when boxed, the outline when not.
     pad: float
     shadow: float
+    # A soft shadow's blur (0 for a hard one): it reaches this much further.
+    blur: float
     # OVERHANG_EM and BLEED_PX, in this frame's pixels.
     bleed: float
     # The lines plus `pad` on every side — the box, or the outlined text.
@@ -141,7 +144,8 @@ class Layout:
     def ink(self) -> tuple[float, float, float, float]:
         """Everything painted: the rectangle, the drop shadow and the bleed."""
         b = self.bleed
-        return (self.x - b, self.y - b, self.width + self.shadow + 2 * b, self.height + self.shadow + 2 * b)
+        reach = self.shadow + self.blur
+        return (self.x - b, self.y - b, self.width + reach + 2 * b, self.height + reach + 2 * b)
 
 
 def breakable(text: str, index: int) -> bool:
@@ -329,6 +333,9 @@ def layout_caption(
     # this lays out what libass will draw.
     pad = box_pad(style, frame_height)
     shadow = 0 if boxed else round(style.shadow * k)
+    blur = shadow_blur(style, frame_height)
+    # How far past the rectangle the shadow paints, down and right.
+    reach = shadow + blur
     spacing = round(style.letter_spacing * k)
     size = style.font_size * (override_scale or 1) * k
     if style.uppercase:
@@ -351,7 +358,7 @@ def layout_caption(
     def max_width_at(shrink: float) -> float:
         # The box's width, or less if the box with its outline, shadow and
         # overhang would be wider than the safe area (a box at 94%).
-        return max(1.0, min(box, safe_w - shadow - 2 * bleed_at(shrink)) - 2 * pad)
+        return max(1.0, min(box, safe_w - reach - 2 * bleed_at(shrink)) - 2 * pad)
 
     def lines_at(shrink: float) -> list[str]:
         return wrap(text, max_width_at(shrink), width_at(shrink), line_style, words_per_line)
@@ -389,7 +396,7 @@ def layout_caption(
     # until it fits, so no caption is ever cut off at an edge.
     def too_big(shrink: float, rect_w: float, rect_h: float) -> bool:
         b = bleed_at(shrink)
-        return rect_h + shadow + 2 * b > safe_h or rect_w + shadow + 2 * b > safe_w
+        return rect_h + reach + 2 * b > safe_h or rect_w + reach + 2 * b > safe_w
 
     for step in FIT_STEPS:
         if not too_big(shrink, rect_w, rect_h):
@@ -401,8 +408,8 @@ def layout_caption(
 
     ax = style.pos_x * frame_width
     cy = style.pos_y * frame_height
-    ax += _slide(block_left(ax, rect_w, style.alignment) - bleed, rect_w + shadow + 2 * bleed, frame_width)
-    cy += _slide(cy - rect_h / 2 - bleed, rect_h + shadow + 2 * bleed, frame_height)
+    ax += _slide(block_left(ax, rect_w, style.alignment) - bleed, rect_w + reach + 2 * bleed, frame_width)
+    cy += _slide(cy - rect_h / 2 - bleed, rect_h + reach + 2 * bleed, frame_height)
 
     return Layout(
         lines=lines,
@@ -410,6 +417,7 @@ def layout_caption(
         shrink=shrink,
         pad=pad,
         shadow=shadow,
+        blur=blur,
         bleed=bleed,
         x=block_left(ax, rect_w, style.alignment),
         y=cy - rect_h / 2,
