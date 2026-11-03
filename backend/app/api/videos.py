@@ -10,9 +10,11 @@ from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.dependencies import CurrentUser, DbSession
+from app.models.caption_fix import FixRunStatus
 from app.models.video import VideoStatus
 from app.schemas.caption import (
     CaptionCreate,
+    CaptionFixRunRead,
     CaptionList,
     CaptionMatch,
     CaptionRead,
@@ -31,6 +33,7 @@ from app.schemas.video import (
     VideoUpdate,
     Waveform,
 )
+from app.services import app_settings, caption_fix
 from app.services import caption as caption_service
 from app.services import hinglish, languages
 from app.services import media, storage
@@ -524,6 +527,87 @@ async def set_caption_texts(
     if updated:
         _queue_reindex(video_id, [c.id for c in updated])
     return CaptionList(items=[CaptionRead.model_validate(c) for c in updated], total=len(updated))
+
+
+# ── Improve captions with Gemini (v1.3.0) ──────────────────────────────────
+
+
+def _enqueue_caption_check(run_id: int) -> bool:
+    try:
+        from app.workers.caption_fix import improve_captions
+
+        improve_captions.delay(run_id)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Could not queue caption check %s: %s", run_id, exc)
+        return False
+
+
+async def _latest_check(db, video_id: int):
+    run = await caption_fix.latest_run(db, video_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="These captions haven't been checked")
+    return run
+
+
+@router.get("/{video_id}/captions/improve", response_model=CaptionFixRunRead | None)
+async def get_caption_check(video_id: int, user: CurrentUser, db: DbSession) -> CaptionFixRunRead | None:
+    """The latest Gemini check of the video's captions: its progress, or what it changed. Null if none."""
+    await _require_owned(db, video_id, user.id)
+    run = await caption_fix.latest_run(db, video_id)
+    return None if run is None else CaptionFixRunRead(**await caption_fix.describe(db, run))
+
+
+@router.post("/{video_id}/captions/improve", response_model=CaptionFixRunRead, status_code=status.HTTP_202_ACCEPTED)
+async def start_caption_check(video_id: int, user: CurrentUser, db: DbSession) -> CaptionFixRunRead:
+    """
+    Send the caption text (never the audio, never the timings) to Gemini to fix misheard words.
+
+    Only on this request: nothing starts it on its own. Needs a Gemini key in
+    Settings and finished captions; one check at a time per video.
+    """
+    video = await _require_owned(db, video_id, user.id)
+    if not await app_settings.gemini_key(db):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Add a Gemini key in Settings to use this.")
+    if video.status != VideoStatus.COMPLETED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The captions aren't ready yet.")
+    captions = await video_service.list_captions(db, video_id)
+    if not captions:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There are no captions to check.")
+    try:
+        run = await caption_fix.start_run(db, video_id, len(captions))
+    except caption_fix.AlreadyRunning:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="These captions are already being checked.")
+    if not _enqueue_caption_check(run.id):
+        run.status = FixRunStatus.FAILED.value
+        run.error_message = "The check couldn't be started. Try again in a moment."
+        await db.commit()
+    return CaptionFixRunRead(**await caption_fix.describe(db, run))
+
+
+@router.post("/{video_id}/captions/improve/undo", response_model=CaptionFixRunRead)
+async def undo_caption_fixes(
+    video_id: int, user: CurrentUser, db: DbSession, fix_id: int | None = Query(default=None)
+) -> CaptionFixRunRead:
+    """
+    Undo one fix of the latest check (`fix_id`), or all of them.
+
+    A caption edited by hand since its fix keeps the edit: undoing that one
+    alone is a 409, and Undo all leaves it as it is.
+    """
+    await _require_owned(db, video_id, user.id)
+    run = await _latest_check(db, video_id)
+    if fix_id is not None and fix_id not in {fix.id for fix, _ in await caption_fix.fixes_of(db, run.id)}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fix not found")
+    restored, edited = await caption_fix.undo(db, run, fix_id)
+    if restored:
+        _queue_reindex(video_id, restored)
+    if fix_id is not None and edited:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This caption was edited after the fix, so Undo would lose the edit. Change it by hand.",
+        )
+    return CaptionFixRunRead(**await caption_fix.describe(db, run))
 
 
 @router.get("/{video_id}/thumbnail")

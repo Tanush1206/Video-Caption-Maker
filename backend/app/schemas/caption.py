@@ -136,3 +136,41 @@ class CaptionTexts(BaseModel):
 
     items: list[CaptionText] = Field(max_length=10000)
 
+
+
+class WordRun(BaseModel):
+    """Words of a caption, and whether a fix changed them: what the list highlights."""
+
+    text: str
+    changed: bool
+
+
+class CaptionFixRead(BaseModel):
+    """One caption a Gemini check changed (v1.3.0)."""
+
+    id: int
+    caption_id: int
+    start_ms: int
+    end_ms: int
+    before: str
+    after: str
+    before_words: list[WordRun]
+    after_words: list[WordRun]
+    undone: bool
+    #: Edited by hand since: Undo would overwrite the edit, so it is refused.
+    edited: bool
+
+
+class CaptionFixRunRead(BaseModel):
+    """The latest "Improve captions with Gemini" run on a video, and its fixes."""
+
+    id: int
+    status: str
+    batches_total: int
+    batches_done: int
+    #: The estimate while queued or running, from this run's own pace.
+    seconds_left: int | None
+    #: Fixes Gemini offered that the checks refused.
+    dropped: int
+    error_message: str | None
+    fixes: list[CaptionFixRead]
