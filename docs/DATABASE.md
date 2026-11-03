@@ -69,6 +69,9 @@ erDiagram
     videos ||--o{ captions : "has (video_id, CASCADE)"
     videos ||--o| caption_styles : "styled by (video_id UNIQUE, CASCADE)"
     videos ||--o{ exports : "produces (video_id, CASCADE)"
+    videos ||--o{ caption_fix_runs : "checked by (video_id, CASCADE)"
+    caption_fix_runs ||--o{ caption_fixes : "made (run_id, CASCADE)"
+    captions ||--o{ caption_fixes : "changed by (caption_id, CASCADE)"
 
     users {
         int id PK
@@ -247,8 +250,9 @@ Sizes are in **reference pixels against a 1080-px-high canvas**
 | `text_color` | varchar(7) | no | ORM `#FFFFFF` | |
 | `outline_color` | varchar(7) | no | ORM `#000000` | |
 | `outline_width` | integer | no | ORM 6 | 3 until v1.3.0 |
-| `shadow` | integer | no | ORM 3 | offset in reference px, no blur; 0 until v1.3.0 |
+| `shadow` | integer | no | ORM 3 | offset in reference px; 0 until v1.3.0 |
 | `shadow_color` | varchar(7) | no | ORM `#000000` | |
+| `shadow_blur` | integer | no | DB `0`, ORM 4 | the shadow's softness in reference px (v1.3.0), 0-20; 0 = the hard offset copy. Soft, the burn draws the shadow as its own `\blur`red event under the text (`subtitles._shadow_event`) |
 | `box_color` | varchar(7) | no | ORM `#000000` | |
 | `box_opacity` | double | no | ORM 0.0 | 0 = no box; > 0 = a box drawn under the text, replacing the outline and shadow |
 | `box_padding` | integer | no | ORM 8 | `BOX_PADDING_MIN` |
@@ -288,6 +292,31 @@ not in the database.
 
 Index `ix_exports_video_created (video_id, created_at)`: "this video's
 exports, newest first".
+
+### `caption_fix_runs` and `caption_fixes` (`backend/app/models/caption_fix.py`)
+
+"Improve captions with Gemini" (v1.3.0): one run per click, and the caption
+texts it changed, for Undo. The editor shows a video's latest run.
+
+| `caption_fix_runs` column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | integer | no | sequence | PK |
+| `video_id` | integer | no | | FK → `videos.id` ON DELETE CASCADE; index |
+| `status` | varchar(16) | no | ORM `queued` | `queued` `running` `completed` `failed` (a string, so a new state needs no enum migration) |
+| `batches_total`, `batches_done` | integer | no | | requests of up to 60 captions |
+| `seconds_per_batch` | double | yes | | this run's pace, for the time estimate |
+| `dropped` | integer | no | | fixes Gemini offered that the checks refused |
+| `error_message` | text | yes | | |
+| `created_at` | timestamptz | no | `now()` | |
+| `finished_at` | timestamptz | yes | | |
+
+| `caption_fixes` column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | integer | no | sequence | PK |
+| `run_id` | integer | no | | FK → `caption_fix_runs.id` ON DELETE CASCADE; index |
+| `caption_id` | integer | no | | FK → `captions.id` ON DELETE CASCADE (a Redo's new captions drop the fixes); index |
+| `before`, `after` | text | no | | the caption's text before and after; Undo puts `before` back only while the caption reads `after` |
+| `undone` | boolean | no | ORM false | |
 
 ### `app_settings` (`backend/app/models/app_setting.py`)
 
@@ -364,7 +393,9 @@ date is the commit that introduced the file.
 | 18 | `b6e0f4a9c2d1` | 2026-10-21 | add `videos.hindi_script`, `videos.detected_language`, `videos.detected_confidence` (all nullable, NULL on existing rows) and `videos.held` (`false`) (v1.0.9). Changes nothing already captioned |
 | 19 | `e8b3d5f19a42` | 2026-10-28 | caption anchor by alignment (v1.2.0): `pos_x` becomes the block's left edge (Left), centre (Centre) or right edge (Right). **Converts** Left/Right rows to the old box's edge, `pos_x ∓ width/2` clamped to 0..1, with a NULL `box_width` taken by the video's frame shape (read from its file, as the burn reads it; landscape if unreadable), so every video burns byte for byte as before (`tests/test_caption_anchor.py`, against `tests/data/burn-1.1.1.json`). Centre rows unchanged. Downgrade converts back |
 | 20 | `a6d2f0c8b913` | 2026-10-30 | add `exports.quality` (v1.2.2), nullable and left null on existing rows |
-| 21 | `c3e7a9d15b42` | 2026-10-31 | existing videos keep their caption style (v1.3.0, head): every video with no `caption_styles` row gets one of the pre-1.3 default (Poppins Bold 54, outline 3, no shadow), so its burns don't change when the default does. No schema change; the downgrade leaves the rows |
+| 21 | `c3e7a9d15b42` | 2026-10-31 | existing videos keep their caption style (v1.3.0): every video with no `caption_styles` row gets one of the pre-1.3 default (Poppins Bold 54, outline 3, no shadow), so its burns don't change when the default does. No schema change; the downgrade leaves the rows |
+| 22 | `d4f8b2c6e1a7` | 2026-11-03 | add `caption_styles.shadow_blur` (v1.3.0, soft shadow), `0` (hard) on every existing row; new rows get the model's default 4 |
+| 23 | `e5a9c3d7f2b8` | 2026-11-03 | create `caption_fix_runs` and `caption_fixes` (v1.3.0, head, "Improve captions with Gemini"); both cascade with their video, fixes also with their caption |
 
 ## 6. Migration rules
 

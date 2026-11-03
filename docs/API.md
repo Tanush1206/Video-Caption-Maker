@@ -129,6 +129,9 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | POST* | `/api/videos/{video_id}/captions` | [CaptionCreate](#captioncreate) | `201` [CaptionRead](#captionread); queues re-index | 404 · 422 |
 | POST* | `/api/videos/{video_id}/captions/replace` | [CaptionReplace](#captionreplace) | `200` [CaptionReplaceResult](#captionreplaceresult): every caption it occurs in, before and after; with `apply`, the chosen ones (or all) changed and re-indexed, never to empty (v1.3.0) | 404 · 422 |
 | POST* | `/api/videos/{video_id}/captions/texts` | [CaptionTexts](#captiontexts) | `200` [CaptionList](#captionlist) of the captions put back (Undo after a replace); others of the video are ignored; re-indexed | 404 · 422 |
+| GET* | `/api/videos/{video_id}/captions/improve` | — | `200` [CaptionFixRunRead](#captionfixrunread) of the latest "Improve captions with Gemini" check, or `null` if none (v1.3.0) | 404 |
+| POST* | `/api/videos/{video_id}/captions/improve` | — | `202` [CaptionFixRunRead](#captionfixrunread) (`queued`): queues the check. Sends the caption **text** to Gemini (never the audio or timings), only on this request | 404 · 409 `Add a Gemini key in Settings to use this.` / `The captions aren't ready yet.` / `There are no captions to check.` / `These captions are already being checked.` |
+| POST* | `/api/videos/{video_id}/captions/improve/undo` | query `fix_id` (optional) | `200` [CaptionFixRunRead](#captionfixrunread): that fix of the latest check undone, or (no `fix_id`) every one; a caption edited by hand since its fix keeps the edit (Undo all skips it); re-indexed | 404 no check / fix not in it · 409 that caption was edited since |
 | GET* | `/api/videos/{video_id}/thumbnail` | — | `200 image/jpeg` | 404 no thumbnail / file missing |
 | POST* | `/api/videos/{video_id}/stream-token` | — | `200` [StreamTicket](#streamticket) | 404 |
 | GET | `/api/videos/{video_id}/stream` | query `token` (required), `download` bool, `name` (used only with `download=1`) | `200`/`206` the original file; `Range` supported; `inline` (named as uploaded) or, with `download=1`, `attachment` named `<video or typed name> – original.<ext>` (not added twice) with `Cache-Control: no-store` | 401 invalid/expired token · 403 `This token is for a different video` · 404 |
@@ -296,6 +299,31 @@ Enum: `left`, `center`, `right`
 |---|---|---|---|
 | `items` | {`id`: integer, `text`: string 1-5000}[] | yes | at most 10000 |
 
+### CaptionFixRunRead
+
+The latest Gemini check of a video's captions (v1.3.0, services/caption_fix.py).
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | |
+| `status` | `queued` · `running` · `completed` · `failed` | `completed` with an `error_message` when Gemini stopped part way: the parts checked kept their fixes |
+| `batches_total`, `batches_done` | integer | requests of up to 60 captions |
+| `seconds_left` | integer \| null | estimate while queued or running (60 s a request until the run has its own pace); null when finished |
+| `dropped` | integer | fixes Gemini offered that the checks refused |
+| `error_message` | string \| null | quota spent, Gemini unreachable, no key, or a restart (nothing changed) |
+| `fixes` | [CaptionFixRead](#captionfixread)[] | in caption order |
+
+### CaptionFixRead
+
+| Field | Type | Notes |
+|---|---|---|
+| `id`, `caption_id` | integer | |
+| `start_ms`, `end_ms` | integer | the caption's; never changed by a fix |
+| `before`, `after` | string | the caption's text before and after the fix |
+| `before_words`, `after_words` | {`text`: string, `changed`: boolean}[] | the same texts as runs of words, the changed ones marked, for highlighting |
+| `undone` | boolean | |
+| `edited` | boolean | not undone, and the caption no longer reads `after`: edited by hand since, so Undo is refused |
+
 ### CaptionList
 
 | Field | Type | Required | Constraints / default |
@@ -349,6 +377,7 @@ Enum: `left`, `center`, `right`
 | `outline_width` | integer | yes |  |
 | `shadow` | integer | yes |  |
 | `shadow_color` | string | yes |  |
+| `shadow_blur` | integer | yes | 0 = hard (v1.3.0) |
 | `box_color` | string | yes |  |
 | `box_opacity` | number | yes |  |
 | `box_padding` | integer | yes |  |
@@ -383,6 +412,7 @@ Enum: `left`, `center`, `right`
 | `outline_width` | integer \| null | no | minimum 0, maximum 20 |
 | `shadow` | integer \| null | no | minimum 0, maximum 20 |
 | `shadow_color` | string \| null | no | pattern ^#(?:[0-9a-fA-F]{6})$ |
+| `shadow_blur` | integer \| null | no | minimum 0, maximum 20 (v1.3.0) |
 | `box_color` | string \| null | no | pattern ^#(?:[0-9a-fA-F]{6})$ |
 | `box_opacity` | number \| null | no | minimum 0, maximum 1 |
 | `box_padding` | integer \| null | no | minimum 0, maximum 60 |

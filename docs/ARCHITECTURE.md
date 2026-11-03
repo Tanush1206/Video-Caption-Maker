@@ -399,6 +399,36 @@ logged and never surfaced to the user.
   3 s hard limit ran to completion.) A job is bounded by the timeouts of the
   steps that can hang, listed in §8. `tests/test_worker_config.py` pins this.
 
+### 4.4 Caption check (`improve_captions`, `backend/app/workers/caption_fix.py`)
+
+"Improve captions with Gemini" (v1.3.0, D23), only when clicked, only with
+a key:
+
+1. `POST /api/videos/{id}/captions/improve` creates a `caption_fix_runs`
+   row (`queued`; 409 if one is queued or running) and queues the task.
+2. The task reads the captions and the key, marks the run `running`, and
+   sends the **text** of up to 60 captions per request (never timings,
+   never audio) with its own client (5-minute timeout, longer than the
+   shared 60 s: nothing to fall back to). A 503 is retried twice with
+   backoff; a timeout is not; a 429 stops the run with the quota message.
+3. Each proposal is checked (`services/caption_fix.py` `accept`/`check`):
+   aligned with the caption it quotes, then only respellings and
+   sound-alike swaps, no numbers, no names beyond their spelling (names
+   learned from the whole video), no added or removed words, at most three
+   words a caption. After each request, `batches_done` and the pace
+   (`seconds_per_batch`) are saved: the estimate the editor polls (2 s).
+4. At the end, **one commit** applies every kept fix whose caption still
+   reads as it did (a caption edited meanwhile keeps the edit), records each
+   in `caption_fixes`, and closes the run; the changed captions are
+   re-indexed. Stopped part way, the parts checked keep their fixes and the
+   run says what's missing.
+5. Undo (`POST …/captions/improve/undo`, one or all) puts `before` back
+   only while the caption reads `after`.
+
+A restart while a run is unfinished closes it `failed` ("…no captions were
+changed. Try again."), not requeued: it would spend quota again, and
+nothing was applied before its last commit (§8).
+
 ## 5. Hardware detection and model choice
 
 `backend/app/services/hardware.py`, run in the worker:
@@ -549,6 +579,9 @@ flowchart TD
      model…").
 4. A manual retry (`POST /api/videos/{id}/transcribe` → `mark_queued`) resets
    `recovery_attempts` to 0.
+5. **Caption checks** (v1.3.0) a restart left `queued`/`running`, and not in
+   the queue, are closed `failed` with `FIX_INTERRUPTED`, never requeued
+   (§4.4).
 
 Why it is safe: there is one worker node, and at startup it is working on
 nothing, so anything `processing` is stranded. Redis runs with
