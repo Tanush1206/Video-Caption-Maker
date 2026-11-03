@@ -296,7 +296,8 @@ helper lines that used to sit under the timeline and the video.
   check runs): what is sent in the dialog's description; the state as a
   status line (not checked; "Checking part 2 of 4, about 3 min left." over
   a progress bar, "You can close this; the check carries on."; the count
-  fixed and left out); each change as a hairline row: its time, the caption
+  fixed and left out, and "Improved with Gemini Flash-Lite because Flash was
+  busy" when the fallback answered); each change as a hairline row: its time, the caption
   before (secondary tone) with the changed words struck through on a
   destructive tint, after it with them on a success tint, and Undo in plain
   text, or "Undone" / "Edited since, kept". Footer: Close, Undo all
