@@ -47,8 +47,15 @@ function Summary({ check }: { check: CaptionCheck }) {
   const dropped = check.dropped
     ? ` ${check.dropped} ${check.dropped === 1 ? "suggestion was" : "suggestions were"} left out by the safety checks.`
     : "";
-  if (fixed === 0) return <>Gemini found nothing it was sure needed fixing.{dropped}</>;
-  return <>Fixed {fixed} {fixed === 1 ? "caption" : "captions"}.{dropped} Changed words are highlighted.</>;
+  // Which model did the work, when it wasn't the usual one (v1.3.0).
+  const verb = fixed ? "improved" : "checked";
+  const model = !check.fallback_batches
+    ? ""
+    : check.fallback_batches >= check.batches_done
+      ? ` ${verb === "improved" ? "Improved" : "Checked"} with Gemini Flash-Lite because Flash was busy.`
+      : ` ${check.fallback_batches} of ${check.batches_done} parts were ${verb} with Gemini Flash-Lite because Flash was busy.`;
+  if (fixed === 0) return <>Gemini found nothing it was sure needed fixing.{dropped}{model}</>;
+  return <>Fixed {fixed} {fixed === 1 ? "caption" : "captions"}.{dropped}{model} Changed words are highlighted.</>;
 }
 
 function FixRow({ fix, busy, onUndo }: { fix: CaptionFix; busy: boolean; onUndo: () => void }) {

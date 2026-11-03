@@ -92,6 +92,8 @@ export interface CaptionCheck {
   seconds_left: number | null;
   /** Fixes Gemini offered that the safety checks left out. */
   dropped: number;
+  /** Requests Gemini Flash failed (busy, timed out) and Gemini Flash-Lite answered. */
+  fallback_batches: number;
   error_message: string | null;
   fixes: CaptionFix[];
 }
