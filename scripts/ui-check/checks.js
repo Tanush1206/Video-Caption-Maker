@@ -1924,6 +1924,71 @@ const CHECKS = {
     }
   },
 
+  // v1.3.0: Improve captions with Gemini, for real (it needs the stack's
+  // Gemini key, and Gemini answering). Runs a check, reads the list, undoes
+  // one change and then all, and leaves the captions exactly as it found them.
+  async "improve-captions"(browser, base) {
+    const page0 = await browser.newPage();
+    const system = await (await page0.request.get(`${base}/api/system`)).json();
+    await page0.close();
+    if (!system.gemini_configured) return ok("improve-captions: skipped, no Gemini key on this stack", true);
+    for (const width of [1440, 375]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const id = await editorVideo(page, base);
+      const captionsOf = async () => (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items.map((c) => c.text);
+      const before = await captionsOf();
+      try {
+        await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+        if (width === 375) await page.getByRole("button", { name: "Raise the inspector" }).click();
+        await page.getByRole("button", { name: "Improve", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: "Improve captions with Gemini" });
+        const latest = async () => (await (await page.request.get(`${base}/api/videos/${id}/captions/improve`)).json());
+        // A check is offered once the last one has nothing left to undo.
+        const undoAll = dialog.getByRole("button", { name: "Undo all" });
+        if (await undoAll.isVisible()) {
+          await undoAll.click();
+          await undoAll.waitFor({ state: "hidden" });
+        }
+        const previous = (await latest())?.id ?? 0;
+        await dialog.getByRole("button", { name: /^Check (captions|again)$/ }).click();
+        // The new run, finished: Gemini's pace varies a lot (up to its
+        // timeout, three times). The dialog shows the last run until then.
+        let check = await latest();
+        for (const end = Date.now() + 15 * 60_000; Date.now() < end; check = await latest()) {
+          if (check && check.id > previous && !["queued", "running"].includes(check.status)) break;
+          await page.waitForTimeout(2000);
+        }
+        await page.waitForFunction(() => /Fixed|found nothing|Gemini (couldn't|'s free quota)/.test(document.querySelector("dialog[open]")?.textContent ?? ""));
+        ok(`improve-captions@${width}: the check finished`, check.status === "completed", check.error_message ?? "");
+        const rows = dialog.getByRole("list", { name: "Changes" }).getByRole("listitem");
+        ok(`improve-captions@${width}: one row per change`, (await rows.count()) === check.fixes.length, `${await rows.count()} rows, ${check.fixes.length} fixes`);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+        ok(`improve-captions@${width}: no overflow`, !overflow);
+        if (check.fixes.length) {
+          ok(`improve-captions@${width}: changed words are marked`, (await rows.first().locator("ins").count()) > 0 || (await rows.first().locator("del").count()) > 0);
+          const now = await captionsOf();
+          ok(`improve-captions@${width}: the captions have the fixes`, check.fixes.every((f) => now.includes(f.after)));
+          await rows.first().getByRole("button", { name: /^Undo the change at/ }).click();
+          await rows.first().getByText("Undone").waitFor();
+          ok(`improve-captions@${width}: Undo puts one back`, (await captionsOf()).includes(check.fixes[0].before));
+          if (check.fixes.length > 1) {
+            await dialog.getByRole("button", { name: "Undo all" }).click();
+            await page.waitForTimeout(800);
+          }
+          ok(`improve-captions@${width}: Undo all puts every one back`, JSON.stringify(await captionsOf()) === JSON.stringify(before));
+        }
+        await page.keyboard.press("Escape");
+        ok(`improve-captions@${width}: Escape closes it`, !(await dialog.isVisible()));
+      } finally {
+        const now = (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items;
+        const items = now.map((c, i) => ({ id: c.id, text: before[i] })).filter((c, i) => now[i].text !== before[i]);
+        if (items.length) await page.request.post(`${base}/api/videos/${id}/captions/texts`, { data: { items } });
+        ok(`improve-captions@${width}: the captions are as they were`, JSON.stringify(await captionsOf()) === JSON.stringify(before));
+        await page.close();
+      }
+    }
+  },
+
   // v1.2.2: a burn's Quality, its estimate, and what Export sends. The
   // export request is answered here, so nothing is rendered.
   async "export-quality"(browser, base) {
