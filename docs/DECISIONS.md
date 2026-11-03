@@ -788,6 +788,14 @@ refuse every confident wrong edit seen, and also some right ones
 - **Audio to Gemini:** better context, but the audio would leave the
   computer; the app's rule is text only.
 
+**Fallback (Tanush, 2026-11-03).** On release day gemini-flash-latest
+(3.8-flash) timed out or answered "high demand" for hours while
+gemini-flash-lite answered in seconds, and with the checks it is not worse
+than today on either clip. So a request the configured model fails is asked
+once of flash-lite, the rest of that run goes to flash-lite directly (a
+timeout costs up to 5 minutes), and the results say so: "Improved with
+Gemini Flash-Lite because Flash was busy".
+
 ---
 
 ## Decisions recorded

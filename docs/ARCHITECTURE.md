@@ -409,8 +409,12 @@ a key:
 2. The task reads the captions and the key, marks the run `running`, and
    sends the **text** of up to 60 captions per request (never timings,
    never audio) with its own client (5-minute timeout, longer than the
-   shared 60 s: nothing to fall back to). A 503 is retried twice with
-   backoff; a timeout is not; a 429 stops the run with the quota message.
+   shared 60 s). If the configured model fails in any way (busy, timed out,
+   its quota, a broken answer), the request is asked once of
+   `gemini-flash-lite-latest` (`FALLBACK_MODEL`), and the rest of the run
+   goes to it directly; the run counts those requests (`fallback_batches`)
+   and the editor names the model. Both failing stops the run: the quota
+   message for a 429, otherwise "couldn't be reached".
 3. Each proposal is checked (`services/caption_fix.py` `accept`/`check`):
    aligned with the caption it quotes, then only respellings and
    sound-alike swaps, no numbers, no names beyond their spelling (names

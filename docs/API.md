@@ -310,6 +310,7 @@ The latest Gemini check of a video's captions (v1.3.0, services/caption_fix.py).
 | `batches_total`, `batches_done` | integer | requests of up to 60 captions |
 | `seconds_left` | integer \| null | estimate while queued or running (60 s a request until the run has its own pace); null when finished |
 | `dropped` | integer | fixes Gemini offered that the checks refused |
+| `fallback_batches` | integer | requests the configured model failed (busy, timed out, quota) and `gemini-flash-lite-latest` answered; the editor then says "Improved with Gemini Flash-Lite because Flash was busy" |
 | `error_message` | string \| null | quota spent, Gemini unreachable, no key, or a restart (nothing changed) |
 | `fixes` | [CaptionFixRead](#captionfixread)[] | in caption order |
 

@@ -24,6 +24,7 @@ downloads the app layers only.
   changed, and no fix rewrites more than a few words. It runs in the
   background with a time estimate, and lists every change with the changed
   words highlighted, an Undo for each and Undo all. It never runs on its own.
+  When Gemini Flash is busy it uses Gemini Flash-Lite, and says so.
 - **A soft shadow:** Shadow softness in Appearance blurs the shadow, in the
   editor and the exported video alike. New videos get a slightly soft one.
 

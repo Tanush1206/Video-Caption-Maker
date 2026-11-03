@@ -306,6 +306,7 @@ texts it changed, for Undo. The editor shows a video's latest run.
 | `batches_total`, `batches_done` | integer | no | | requests of up to 60 captions |
 | `seconds_per_batch` | double | yes | | this run's pace, for the time estimate |
 | `dropped` | integer | no | | fixes Gemini offered that the checks refused |
+| `fallback_batches` | integer | no | DB `0` | requests answered by the fallback model (Gemini Flash-Lite) |
 | `error_message` | text | yes | | |
 | `created_at` | timestamptz | no | `now()` | |
 | `finished_at` | timestamptz | yes | | |
