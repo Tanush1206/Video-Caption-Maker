@@ -1772,6 +1772,9 @@ const CHECKS = {
       "thick red outline": { outline_width: 8, outline_color: "#E00000" },
       "blue shadow": { outline_width: 0, shadow: 6, shadow_color: "#0030C0" },
       "outline and shadow": { outline_width: 4, shadow: 4 },
+      "hard shadow": { shadow_blur: 0 },
+      "soft wide shadow": { outline_width: 0, shadow: 8, shadow_blur: 16 },
+      "soft blue shadow and thick outline": { outline_width: 8, shadow: 6, shadow_blur: 10, shadow_color: "#0030C0" },
       "black box": { box_opacity: 0.6, box_padding: 16 },
       "blue box": { box_color: "#1040A0", box_opacity: 0.85 },
       "letter spacing": { letter_spacing: 6 },
@@ -1835,10 +1838,25 @@ const CHECKS = {
         // A shadow is a few pixels wide and Chrome softens a filter's edge, so
         // the preview's comes to 0.6-0.7 of the burn's dark pixels at 3 px
         // while lying in the same place; within 2x either way, the others 1.43x.
-        const limit = (k) => (k === "shadow" || (k === "outline" && !style.outline_width) ? 2 : 1.43);
+        // A soft shadow (v1.3.0) passes through its exact colour in a band a
+        // pixel wide, so those counts get 3x; how far it darkens the frame,
+        // 5, 15 and 30 levels below the grey, is held to 1.25x instead.
+        const soft = style.shadow_blur > 0 && style.shadow > 0 && !(style.box_opacity > 0);
+        const sameColour = !style.outline_width || style.outline_color === style.shadow_color;
+        const limit = (k) => {
+          if (soft && (k === "shadow" || (k === "outline" && sameColour))) return 3;
+          return k === "shadow" || (k === "outline" && !style.outline_width) ? 2 : 1.43;
+        };
         const wrong = parts.filter(([k, r]) => r < 1 / limit(k) || r > limit(k)).map(([k, r]) => `${k} ×${r.toFixed(2)}`);
+        if (soft) {
+          burn.darker.forEach((n, i) => {
+            const r = ratio(preview.darker[i], n);
+            if (r < 0.8 || r > 1.25) wrong.push(`darker by ${[5, 15, 30][i]} ×${r.toFixed(2)}`);
+          });
+        }
         const detail = `overlap ${overlap}, edges within ${off.toFixed(1)}px, ` +
-          parts.map(([k]) => `${k} ${preview[k]}/${burn[k]}`).join(" ");
+          parts.map(([k]) => `${k} ${preview[k]}/${burn[k]}`).join(" ") +
+          (soft ? ` darker ${preview.darker.join("/")} vs ${burn.darker.join("/")}` : "");
         // Anton, a condensed display face, overlaps 0.70-0.72 run after run: the
         // two renderers hint its sharp corners a pixel apart.
         ok(`style-parity: ${name}`, overlap >= 0.65 && off <= edge && wrong.length === 0, wrong.length ? `${wrong.join(", ")}; ${detail}` : detail);

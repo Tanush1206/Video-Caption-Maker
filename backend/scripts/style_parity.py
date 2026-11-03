@@ -88,6 +88,20 @@ def measure(frame: bytes, background: bytes, width: int, height: int, style: dic
     return {"bbox": bbox, **counts, "mask": mask}
 
 
+def darker(frame: bytes) -> list[int]:
+    """
+    Pixels darker than the frame's own grey by 5, 15 and 30 levels.
+
+    How far a soft shadow reaches, which colour classes can't say: a blurred
+    shadow passes through its exact colour in a band a pixel wide that moves
+    a pixel either way. Against each frame's median, as the editor's video
+    and the burn's decode differ by a level or two of grey.
+    """
+    luma = [sum(frame[i:i + 3]) // 3 for i in range(0, len(frame), 3)]
+    grey = sorted(luma)[len(luma) // 2]
+    return [sum(1 for v in luma if grey - v >= t) for t in (5, 15, 30)]
+
+
 async def source_of(video_id: int) -> Path:
     from sqlalchemy import text
 
@@ -136,6 +150,7 @@ def main() -> None:
     grow = lambda mask: {(x + dx, y + dy) for x, y in mask for dx in (-1, 0, 1) for dy in (-1, 0, 1)}  # noqa: E731
     a, b = grow(burn.pop("mask")), grow(seen.pop("mask"))
     overlap = len(a & b) / max(1, len(a | b))
+    burn["darker"], seen["darker"] = darker(burned), darker(preview)
     print(json.dumps({"burn": burn, "preview": seen, "overlap": round(overlap, 3)}))
 
 
