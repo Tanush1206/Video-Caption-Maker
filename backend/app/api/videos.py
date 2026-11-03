@@ -24,6 +24,7 @@ from app.schemas.caption import (
 )
 from app.schemas.video import (
     HindiScriptOption,
+    HinglishSpellingOption,
     LanguageOption,
     LanguageOptions,
     StreamTicket,
@@ -35,7 +36,7 @@ from app.schemas.video import (
 )
 from app.services import app_settings, caption_fix
 from app.services import caption as caption_service
-from app.services import hinglish, languages
+from app.services import hinglish, hinglish_spelling, languages
 from app.services import media, storage
 from app.services import video as video_service
 from app.utils.filenames import NO_STORE, safe_stem, with_suffix
@@ -79,6 +80,7 @@ def _to_read(video) -> VideoRead:
         spoken_language=video.spoken_language,
         caption_language=video.caption_language,
         hindi_script=video.hindi_script,
+        hinglish_spelling=video.hinglish_spelling,
         detected_language=video.detected_language,
         detected_confidence=video.detected_confidence,
         held=video.held,
@@ -355,6 +357,10 @@ async def language_options(user: CurrentUser) -> LanguageOptions:
             )
             for code, (label, short) in languages.HINDI_SCRIPTS.items()
         ],
+        hinglish_spellings=[
+            HinglishSpellingOption(code=code, label=label, example=example)
+            for code, (label, example) in hinglish_spelling.SPELLINGS.items()
+        ],
         hinglish_min_confidence=languages.HINGLISH_MIN_CONFIDENCE,
         # Always true. English comes from Whisper's own translate pass, and the
         # others from M2M100, which runs on this machine with no key. A
@@ -410,6 +416,7 @@ async def retranscribe(
         payload.spoken_language is not None
         or payload.caption_language is not None
         or payload.hindi_script is not None
+        or payload.hinglish_spelling is not None
     ):
         video = await video_service.set_languages(
             db,
@@ -417,6 +424,7 @@ async def retranscribe(
             spoken=payload.spoken_language,
             caption=payload.caption_language,
             hindi_script=payload.hindi_script,
+            hinglish_spelling=payload.hinglish_spelling,
         )
 
     if video.status == VideoStatus.PROCESSING:

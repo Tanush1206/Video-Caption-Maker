@@ -79,6 +79,12 @@ class Video(Base):
     # heard at 70% or more). NULL on videos made before it, which stay in
     # Devanagari until a Redo picks.
     hindi_script: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # How Hinglish is spelled (v1.3.1, services/hinglish_spelling.py):
+    # "everyday" (pehle, liye) or "formal" (pahle, lie, the model's own).
+    # Chosen with the languages; a Hinglish job fills in the default
+    # (everyday) when none was. NULL on videos made before it, whose captions
+    # are formal and stay so until a Redo.
+    hinglish_spelling: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # What the language step heard from the first 30 s, before the job ran.
     detected_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     detected_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)

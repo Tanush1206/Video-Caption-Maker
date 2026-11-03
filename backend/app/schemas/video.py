@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.video import VideoStatus
-from app.services import languages
+from app.services import hinglish_spelling, languages
 
 
 class VideoRead(BaseModel):
@@ -36,6 +36,9 @@ class VideoRead(BaseModel):
     #: How Hindi is written: "roman", "devanagari" or "auto"; null for a video
     #: from before v1.0.9 (Devanagari).
     hindi_script: str | None = None
+    #: How Hinglish is spelled: "everyday" (pehle, liye) or "formal" (pahle,
+    #: lie); null for a video from before v1.3.1 (formal).
+    hinglish_spelling: str | None = None
     #: What the language step heard from the first 30 s (an upload held for
     #: it); null until detection has answered, and on older videos.
     detected_language: str | None = None
@@ -95,6 +98,16 @@ class TranscribeRequest(BaseModel):
     caption_language: str | None = None
     #: "roman" (Hinglish), "devanagari" or "auto" (decided from detection).
     hindi_script: str | None = None
+    #: "everyday" (pehle, liye) or "formal" (pahle, lie): how Hinglish is
+    #: spelled. Kept on the video; unset, a new job uses everyday.
+    hinglish_spelling: str | None = None
+
+    @field_validator("hinglish_spelling")
+    @classmethod
+    def known_spelling(cls, value: str | None) -> str | None:
+        if value is not None and value not in hinglish_spelling.SPELLINGS:
+            raise ValueError(f"Unsupported Hinglish spelling: {value}")
+        return value
 
     @field_validator("hindi_script")
     @classmethod
@@ -137,6 +150,14 @@ class HindiScriptOption(BaseModel):
     download_bytes: int | None = None
 
 
+class HinglishSpellingOption(BaseModel):
+    code: str
+    #: "Everyday" / "Formal".
+    label: str
+    #: A few words spelled that way: "pehle, liye, zyada".
+    example: str
+
+
 class LanguageOptions(BaseModel):
     """
     Served rather than hardcoded in the client, for the same reason the font
@@ -148,6 +169,8 @@ class LanguageOptions(BaseModel):
     caption: list[LanguageOption]
     #: How Hindi captions can be written, for the language step and the Redo.
     hindi_scripts: list[HindiScriptOption] = []
+    #: How Hinglish can be spelled (v1.3.1); the first is the default.
+    hinglish_spellings: list[HinglishSpellingOption] = []
     #: Hindi at or above this detection confidence presets Hinglish.
     hinglish_min_confidence: float = 0.7
     #: Whether the non-English targets can be delivered. Always true since local

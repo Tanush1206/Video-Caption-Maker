@@ -181,6 +181,7 @@ async def set_languages(
     spoken: str | None,
     caption: str | None,
     hindi_script: str | None = None,
+    hinglish_spelling: str | None = None,
 ) -> Video:
     """
     Record what to transcribe into, before the job is queued.
@@ -199,6 +200,8 @@ async def set_languages(
         video.caption_language = caption
     if hindi_script is not None:
         video.hindi_script = hindi_script
+    if hinglish_spelling is not None:
+        video.hinglish_spelling = hinglish_spelling
 
     await db.commit()
     await db.refresh(video)
