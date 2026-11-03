@@ -1469,6 +1469,14 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
   refused. Before/after captions and frames 1:00/2:00/6:00 in the scratch
   report. Test videos 7701-7707 deleted (7707 by its script); 7700 (mine)
   and 7426 (not mine) remain.
+- 2026-11-03, Tanush: yes to the fallback. A request Flash fails (busy,
+  timeout, quota, broken answer) is asked once of gemini-flash-lite-latest;
+  the rest of the run goes to it directly (a Flash timeout took 276 s on
+  the dev stack); `caption_fix_runs.fallback_batches` (migration 23
+  amended, unreleased); the results say "Improved with Gemini Flash-Lite
+  because Flash was busy" ("Checked with..." when nothing was fixed).
+  Backend 709 passed; axe 0 with it shown. Part C lab containers and
+  python:3.11-slim removed. Video 7700 is deleted after the release.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
