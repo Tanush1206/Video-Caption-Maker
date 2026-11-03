@@ -1404,6 +1404,32 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
   end.
 - A2 left open: the filter keeps real words (tests); the CPU loss is a
   mishearing under music, to try with C1. Waiting for the truth file.
+- 2026-11-01: Tanush's truth = 0:00-1:28 only, by ear (2:30-3:15 to come,
+  for [overlap]). Rest scored against a **Gemini reference, labelled as
+  such**: gemini-3.8-flash (pro: no free quota), audio in ~30 s pieces cut
+  at sentence ends. Against his truth Gemini scores 12.2% loose WER, Apex
+  13.9%: about as good as what it judges; two Gemini runs of 1:32-5:00
+  differ by 10%. Inaudible changes (volume 0.97/1.03, 10 ms delay) move a
+  score by up to 0.4 points (his window) / 1.6 (Gemini window): the floor.
+  Measured (scratch: scratchpad c/, not committed, quotes the clip):
+  C1 afftdn neutral; RNNoise and DeepFilterNet worse (+3-5 points);
+  Demucs vocals +15% original -1.1 on his window, neutral elsewhere and on
+  hinglish.mp4; CPU A2 cuts: line back in 5/6 with Demucs, 0/3 without,
+  but on the full video on GPU Demucs garbles or drops it. C3: beam 8
+  drops speech; repetition_penalty 1.1 kills "nahin. Nahin. Nahin.";
+  the rest neutral. C4 (text only): -1.4 his window, -2.7 hinglish.mp4,
+  but some confident wrong edits ("2026"->"20 23", "blinkit"->"manage");
+  ~3 min per request today. C2: SepFormer (Apache-2.0) recovers a second
+  speaker at 4:18 but leaks one voice into both streams elsewhere.
+  Full new.mp4: Demucs drops or garbles 13:26 on GPU and CPU; without it
+  the CPU run (8 cores, 17 min) now keeps it: that passage flips with any
+  change, no robust fix. ECAPA diarization (Apache-2.0; pyannote gated,
+  Sortformer CC-BY-NC): 0.6 -> 52 clusters; 0.8/0.9 -> one cluster of
+  ~80% + one ~16% (roughly the woman's voice): a voice-type split, not
+  people. 440 s CPU for 5 min. Measurements done except [overlap] error
+  rates (wait for his 2:30-3:15 truth). Questions sent 2026-11-03.
+  Lab containers vcm-c1-lab, vcm-c2-lab (stopped) and image
+  python:3.11-slim are mine: remove at the end.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
