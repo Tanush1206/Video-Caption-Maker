@@ -24,6 +24,7 @@ from app.services import (
     embeddings,
     hardware,
     hinglish,
+    hinglish_spelling,
     languages,
     media,
     model_store,
@@ -152,6 +153,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
         spoken = video.spoken_language or languages.AUTO
         wanted = video.caption_language or languages.SAME
         chosen_script = video.hindi_script
+        spelling = video.hinglish_spelling or hinglish_spelling.DEFAULT
         video.notice = None
         await session.commit()
 
@@ -287,6 +289,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
     # Skipped when Whisper already reported the target language — asking a
     # model to translate Hindi into Hindi is a round trip that can only make
     # the text worse.
+    translated = False
     if segments and wanted not in (languages.SAME, "en") and language != wanted:
         await _set_progress(video_id, STAGE_TRANSLATING, 0)
 
@@ -328,6 +331,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
                 f"the spoken language ({languages.label(language)})."
             )
         else:
+            translated = True
             if result.notice:
                 notices.append(result.notice)
             # Timings are untouched on purpose: a translated line has a
@@ -349,6 +353,12 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
                 "Video %s: translated %d captions to %s (%s)",
                 video_id, len(segments), wanted, result.engine,
             )
+
+    # Everyday spelling (v1.3.1, services/hinglish_spelling.py) on captions
+    # that stay in Hinglish: after translation, which reads the model's own
+    # spelling, and before phrasing, so the text and the timed words agree.
+    if roman and not translated and spelling == hinglish_spelling.EVERYDAY:
+        segments = [hinglish_spelling.everyday_segment(segment) for segment in segments]
 
     # The word timings the captions are made from, kept with the video.
     spoken = [
@@ -423,6 +433,10 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             if chosen_script == languages.SCRIPT_AUTO and script is not None:
                 # Decided now; a Redo repeats it rather than deciding again.
                 video.hindi_script = script
+            if roman:
+                # How these captions are spelled: Improve with Gemini keeps
+                # its fixes in the same spelling (workers/caption_fix.py).
+                video.hinglish_spelling = spelling
             await session.commit()
 
     return {"video_id": video_id, "segments": len(segments), "language": language}

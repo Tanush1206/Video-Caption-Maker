@@ -323,3 +323,98 @@ async def test_a_failed_detection_stops_showing_detecting(client, auth_headers, 
     assert "error" in result
     body = (await client.get(f"/api/videos/{held['id']}", headers=auth_headers)).json()
     assert body["stage"] is None and body["detected_language"] is None
+
+
+# ── Everyday Hinglish spelling (v1.3.1) ─────────────────────────────────
+
+
+async def test_start_records_the_spelling_and_refuses_an_unknown_one(
+    client, auth_headers, sample_video_bytes, monkeypatch
+):
+    monkeypatch.setattr("app.api.videos._enqueue_transcription", lambda vid, keep_breaks=False: True)
+    held = await _upload(client, auth_headers, sample_video_bytes, hold="true")
+    assert held["hinglish_spelling"] is None
+
+    response = await client.post(
+        f"/api/videos/{held['id']}/transcribe", headers=auth_headers,
+        json={"hindi_script": "roman", "hinglish_spelling": "formal"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["hinglish_spelling"] == "formal"
+
+    refused = await client.post(
+        f"/api/videos/{held['id']}/transcribe", headers=auth_headers, json={"hinglish_spelling": "textbook"},
+    )
+    assert refused.status_code == 422
+
+
+async def test_the_options_offer_everyday_then_formal(client, auth_headers):
+    options = (await client.get("/api/videos/languages", headers=auth_headers)).json()
+    assert [(s["code"], s["label"]) for s in options["hinglish_spellings"]] == [
+        ("everyday", "Everyday"), ("formal", "Formal"),
+    ]
+    assert "pehle" in options["hinglish_spellings"][0]["example"]
+    assert "pahle" in options["hinglish_spellings"][1]["example"]
+
+
+def _apex_says(monkeypatch, text, speech=()):
+    from app.services import transcription
+
+    segments = [SimpleNamespace(start_ms=0, end_ms=3000, text=text, confidence=-0.1, speech=list(speech))]
+    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None: (segments, language))
+
+
+async def test_hinglish_is_spelled_everyday_by_default_and_recorded(
+    client, auth_headers, sample_video_bytes, fake_pipeline, monkeypatch
+):
+    """No spelling chosen (a new video, or one from before v1.3.1 on Redo): everyday."""
+    from app.workers import transcription as job
+
+    _apex_says(monkeypatch, "Yah nahin, ham log ke lie", speech=[
+        (0, 400, " Yah"), (400, 900, " nahin,"), (900, 1300, " ham"), (1300, 1700, " log"),
+        (1700, 2000, " ke"), (2000, 2400, " lie"),
+    ])
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="roman")
+    await job._run(video_id)
+
+    assert " ".join(await _captions(video_id)) == "Yeh nahi, hum log ke liye"
+    async with AsyncSessionLocal() as session:
+        assert (await session.get(Video, video_id)).hinglish_spelling == "everyday"
+
+
+async def test_formal_keeps_the_models_spelling(
+    client, auth_headers, sample_video_bytes, fake_pipeline, monkeypatch
+):
+    from app.workers import transcription as job
+
+    _apex_says(monkeypatch, "Yah nahin, ham log ke lie")
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="roman", hinglish_spelling="formal")
+    await job._run(video_id)
+
+    assert " ".join(await _captions(video_id)) == "Yah nahin, ham log ke lie"
+    async with AsyncSessionLocal() as session:
+        assert (await session.get(Video, video_id)).hinglish_spelling == "formal"
+
+
+async def test_a_translation_of_hinglish_still_reads_the_models_spelling(
+    client, auth_headers, sample_video_bytes, fake_pipeline, monkeypatch
+):
+    """The transliterator was measured on Apex's spelling: it gets that, not everyday."""
+    from app.workers import transcription as job
+
+    _apex_says(monkeypatch, "Yah nahin")
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="roman", caption_language="es")
+    await job._run(video_id)
+
+    assert fake_pipeline.devanagari == [["Yah nahin"]]
+    assert await _captions(video_id) == ["¿Cómo haces un archivo SRT?"]
+
+
+async def test_devanagari_captions_record_no_spelling(client, auth_headers, sample_video_bytes, fake_pipeline):
+    from app.workers import transcription as job
+
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="devanagari")
+    await job._run(video_id)
+
+    async with AsyncSessionLocal() as session:
+        assert (await session.get(Video, video_id)).hinglish_spelling is None
