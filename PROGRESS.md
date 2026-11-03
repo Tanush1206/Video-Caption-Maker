@@ -1350,7 +1350,7 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
       with his key; say if the quota is out. Keep only what helps without
       hurting clean audio; then ONE message of questions with a
       recommendation (which to ship, default or setting, download per tier).
-- [ ] **Done when:** A and B fixed and tested; C measured, chosen, built,
+- [x] **Done when:** A and B fixed and tested; C measured, chosen, built,
       tested; all suites, UI checks, axe 0; E2E on GPU and CPU; before/after
       captions for 0:00-1:00, 9:00-9:20 and some [overlap]/[muffled] lines;
       before/after burned frames at 1:00, 2:00, 6:00. Then release steps as
@@ -1456,6 +1456,19 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
 - UI: axe 0 with the dialog open (light/dark, 1440/375); `checks.js
   improve-captions` 18/18; style-parity 23/23; the tools row wraps
   (Improve made it clip at 1440).
+- Release checks (dev stack, 2026-11-03): backend 702 passed, 2 skipped;
+  ruff, frontend lint/types/tests and the production build pass. UI:
+  shoot.js 4 pages x 2 widths x 2 themes, axe 0, editor checks 377 PASS
+  (caption-timing with VCM_CHECK_SECONDS=10: fixture 7700 is 15 s long, 20 s
+  never ends), style-parity 23, improve-captions 18. E2E GPU: hinglish.mp4
+  same/en/es with SRT, VTT, MP4 ALL PASSED; CPU (worker with no GPU, 4
+  cores): same/en ALL PASSED, Hinglish CPU 14.0% loose as before.
+  Full new.mp4 GPU Hinglish (video 7704): 477 captions in 76 s, both A2
+  lines, 9:00 loop said once, no non-Latin captions, burn 72 s with the new
+  default; Improve on all 477 captions 16 s (flash-lite), 15 fixed, 32
+  refused. Before/after captions and frames 1:00/2:00/6:00 in the scratch
+  report. Test videos 7701-7707 deleted (7707 by its script); 7700 (mine)
+  and 7426 (not mine) remain.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.

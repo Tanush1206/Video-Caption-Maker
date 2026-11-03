@@ -6,7 +6,12 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-03
+
+Clearer captions on noisy, real-life videos: a readable default style, Find
+and replace, and an optional Gemini pass that fixes misheard words, with an
+Undo for each change. Three migrations, run when the app starts; the update
+downloads the app layers only.
 
 ### Added
 - **Find and replace** in the caption list: find a word or phrase in every
