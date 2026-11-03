@@ -116,13 +116,14 @@ def gemini(monkeypatch):
     def propose(texts, api_key, model):
         if state["error"]:
             raise state["error"]
+        used = state.get("used", model)
         if state["proposals"] is not None:
-            return state["proposals"]
+            return state["proposals"], used
         return [
             {"i": i, "original": t, "fixed": t.replace("hari", "hurry").replace("blanket", "manage")
              .replace("kyonki", "kyunki")}
             for i, t in enumerate(texts)
-        ]
+        ], used
 
     monkeypatch.setattr(app_settings, "gemini_key", gemini_key)
     monkeypatch.setattr(caption_fix, "propose", propose)
@@ -168,6 +169,7 @@ async def test_a_check_fixes_only_what_passes_and_keeps_every_timing(
 
     assert run["status"] == "completed" and run["seconds_left"] is None
     assert run["batches_done"] == run["batches_total"] == 1
+    assert run["fallback_batches"] == 0
     # "blanket" -> "manage" is a different word: refused.
     assert run["dropped"] == 1
     assert [(f["before"], f["after"]) for f in run["fixes"]] == [(TEXTS[0], "Main itna hurry mein kaam"),
@@ -296,33 +298,102 @@ async def test_a_restart_closes_an_unfinished_check_without_changing_anything(
     assert await texts_of(client, auth_headers, video_id) == TEXTS
 
 
-def test_a_timeout_is_not_retried_but_a_busy_model_is(monkeypatch):
-    calls = []
+class FakeGemini:
+    """Answers per model: an error message to raise, or proposals to return."""
 
-    class Models:
-        def __init__(self, error):
-            self.error = error
+    def __init__(self, answers: dict):
+        self.answers, self.asked = answers, []
 
-        def generate_content(self, **kwargs):
-            calls.append(1)
-            raise RuntimeError(self.error)
+    def client(self, key):
+        fake = self
 
-    class Client:
-        def __init__(self, error):
-            self.models = Models(error)
+        class Models:
+            def generate_content(self, model, **kwargs):
+                fake.asked.append(model)
+                answer = fake.answers[model]
+                if isinstance(answer, str):
+                    raise RuntimeError(answer)
+                import json
+                return type("Response", (), {"text": json.dumps(answer)})()
 
-    monkeypatch.setattr(caption_fix, "RETRY_BACKOFF_SECONDS", 0)
-    monkeypatch.setattr(caption_fix, "_client_for", lambda key: Client("504 DEADLINE_EXCEEDED"))
+        return type("Client", (), {"models": Models()})()
+
+
+FIX = [{"i": 0, "original": "a", "fixed": "b"}]
+
+
+@pytest.mark.parametrize("failure", [
+    "503 UNAVAILABLE. This model is currently experiencing high demand.",
+    "504 DEADLINE_EXCEEDED",
+    "429 RESOURCE_EXHAUSTED",
+    "Request timed out",
+])
+def test_a_busy_or_failing_flash_is_asked_once_more_on_flash_lite(monkeypatch, failure):
+    gemini = FakeGemini({"gemini-flash-latest": failure, caption_fix.FALLBACK_MODEL: FIX})
+    monkeypatch.setattr(caption_fix, "_client_for", gemini.client)
+
+    assert caption_fix.propose(["a"], "k", "gemini-flash-latest") == (FIX, caption_fix.FALLBACK_MODEL)
+    assert gemini.asked == ["gemini-flash-latest", caption_fix.FALLBACK_MODEL]
+
+
+def test_flash_answering_is_used_and_flash_lite_never_asked(monkeypatch):
+    gemini = FakeGemini({"gemini-flash-latest": FIX, caption_fix.FALLBACK_MODEL: "must not be asked"})
+    monkeypatch.setattr(caption_fix, "_client_for", gemini.client)
+
+    assert caption_fix.propose(["a"], "k", "gemini-flash-latest") == (FIX, "gemini-flash-latest")
+    assert gemini.asked == ["gemini-flash-latest"]
+
+
+def test_both_failing_says_why_and_flash_lite_is_not_asked_twice(monkeypatch):
+    busy = FakeGemini({"gemini-flash-latest": "503 high demand", caption_fix.FALLBACK_MODEL: "503 high demand"})
+    monkeypatch.setattr(caption_fix, "_client_for", busy.client)
     with pytest.raises(caption_fix.GeminiUnavailable):
-        caption_fix.propose(["a"], "k", "m")
-    assert len(calls) == 1
+        caption_fix.propose(["a"], "k", "gemini-flash-latest")
+    assert len(busy.asked) == 2
 
-    calls.clear()
-    monkeypatch.setattr(caption_fix, "_client_for", lambda key: Client("503 UNAVAILABLE high demand"))
-    with pytest.raises(caption_fix.GeminiUnavailable):
-        caption_fix.propose(["a"], "k", "m")
-    assert len(calls) == caption_fix.MAX_ATTEMPTS
-
-    monkeypatch.setattr(caption_fix, "_client_for", lambda key: Client("429 RESOURCE_EXHAUSTED"))
+    spent = FakeGemini({"gemini-flash-latest": "504", caption_fix.FALLBACK_MODEL: "429 RESOURCE_EXHAUSTED"})
+    monkeypatch.setattr(caption_fix, "_client_for", spent.client)
     with pytest.raises(caption_fix.QuotaExhausted):
-        caption_fix.propose(["a"], "k", "m")
+        caption_fix.propose(["a"], "k", "gemini-flash-latest")
+
+    # Configured as flash-lite already: one request, no second try of the same.
+    lite = FakeGemini({caption_fix.FALLBACK_MODEL: "503 high demand"})
+    monkeypatch.setattr(caption_fix, "_client_for", lite.client)
+    with pytest.raises(caption_fix.GeminiUnavailable):
+        caption_fix.propose(["a"], "k", caption_fix.FALLBACK_MODEL)
+    assert lite.asked == [caption_fix.FALLBACK_MODEL]
+
+
+@pytest.mark.asyncio
+async def test_a_check_answered_by_flash_lite_says_so(client, auth_headers, sample_video_bytes, db_session, gemini):
+    video_id = await captioned(client, auth_headers, sample_video_bytes, db_session)
+    gemini["used"] = caption_fix.FALLBACK_MODEL
+
+    run = await checked(client, auth_headers, video_id, gemini)
+
+    assert run["status"] == "completed" and run["fallback_batches"] == run["batches_total"] == 1
+    gemini.pop("used")
+    again = await client.post(f"/api/videos/{video_id}/captions/improve/undo", headers=auth_headers)
+    assert again.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_after_flash_fails_once_the_rest_of_the_run_asks_flash_lite(
+    client, auth_headers, sample_video_bytes, db_session, gemini, monkeypatch
+):
+    """A flash timeout costs up to five minutes; it isn't paid again for every part."""
+    from app.config import get_settings
+
+    video_id = await captioned(client, auth_headers, sample_video_bytes, db_session)
+    monkeypatch.setattr(caption_fix, "BATCH_SIZE", 1)
+    asked = []
+
+    def propose(texts, api_key, model):
+        asked.append(model)
+        return [], caption_fix.FALLBACK_MODEL
+
+    monkeypatch.setattr(caption_fix, "propose", propose)
+    run = await checked(client, auth_headers, video_id, gemini)
+
+    assert asked == [get_settings().gemini_model] + [caption_fix.FALLBACK_MODEL] * (len(TEXTS) - 1)
+    assert run["fallback_batches"] == run["batches_total"] == len(TEXTS)
