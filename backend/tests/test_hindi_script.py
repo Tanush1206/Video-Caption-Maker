@@ -214,6 +214,25 @@ async def test_hindi_in_roman_runs_on_the_hinglish_model(client, auth_headers, s
     assert await _captions(video_id) == ["Aap SRT file kaise banate ho"]
 
 
+async def test_hinglish_drops_captions_with_no_latin_letter(
+    client, auth_headers, sample_video_bytes, fake_pipeline, monkeypatch
+):
+    from app.services import transcription
+    from app.workers import transcription as job
+
+    segments = [
+        SimpleNamespace(start_ms=0, end_ms=1500, text="Aap SRT file kaise banate ho", confidence=-0.1, speech=[]),
+        SimpleNamespace(start_ms=4000, end_ms=5500, text="緘.", confidence=-0.9, speech=[]),
+        SimpleNamespace(start_ms=8000, end_ms=9500, text="Diwali party vlog 2026", confidence=-0.2, speech=[]),
+    ]
+    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None: (segments, language))
+
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="roman")
+    await job._run(video_id)
+
+    assert await _captions(video_id) == ["Aap SRT file kaise banate ho", "Diwali party vlog 2026"]
+
+
 async def test_auto_decides_from_detection_and_is_remembered(client, auth_headers, sample_video_bytes, fake_pipeline):
     from app.services.transcription import HINGLISH
     from app.workers import transcription as job

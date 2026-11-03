@@ -311,6 +311,19 @@ def _translator(on_download: model_store.Progress | None):
     return _xlit
 
 
+def in_roman(text: str) -> bool:
+    """
+    False for a caption written only in another script: Apex's junk, never Hinglish.
+
+    Apex now and then writes a run of non-Latin characters over noise (once
+    "緘." eleven times at 9:43-10:05 of a party vlog). Hinglish always has a
+    Latin letter; digits and punctuation alone ("2026", "...") are kept.
+    """
+    if LATIN_WORD.search(text):
+        return True
+    return not any(ch.isalpha() for ch in text)
+
+
 def keeps(word: str) -> bool:
     """A Latin word the transliterator leaves as it is: an initialism (SRT, AI)."""
     return len(word) > 1 and word.isupper()

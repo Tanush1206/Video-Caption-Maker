@@ -267,6 +267,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
         if roman:
             # It is Hindi, whatever token it was decoded under.
             language = "hi"
+            segments = [s for s in segments if hinglish.in_roman(s.text)]
         logger.info("Video %s: %d segments (%s)", video_id, len(segments), language)
         if transcription.low_confidence_note:
             notices.append(transcription.low_confidence_note)

@@ -92,6 +92,19 @@ def test_hinglish_becomes_devanagari_word_by_word_and_initialisms_stay(monkeypat
     assert all(t[0] == "__hi__" for t in batch)
 
 
+@pytest.mark.parametrize("text, kept", [
+    ("Aap SRT file kaise banate ho", True),
+    ("Dlicious snacks.", True),
+    ("2026", True),           # digits alone are not another script
+    ("...", True),
+    ("緘.", False),            # Apex's junk over noise, seen at 9:43 of a vlog
+    ("緘. 緘. 緘.", False),
+    ("सब्सक्राइब", False),     # Devanagari is not the Roman captions asked for
+])
+def test_a_hinglish_caption_needs_a_latin_letter(text, kept):
+    assert hinglish.in_roman(text) is kept
+
+
 def test_text_with_nothing_to_transliterate_skips_the_model(monkeypatch):
     monkeypatch.setattr(hinglish, "_translator", lambda on_download: pytest.fail("loaded"))
     assert hinglish.to_devanagari(["SRT, AI 5.", ""]) == ["SRT, AI 5.", ""]
