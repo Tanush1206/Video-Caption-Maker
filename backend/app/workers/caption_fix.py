@@ -65,6 +65,7 @@ async def _run(run_id: int) -> dict:
         await _finish(run_id, FixRunStatus.COMPLETED, None, [], 0)
         return {"run": run_id, "fixed": 0}
 
+    names = caption_fix.names_in([c.text for c in captions])
     found: list[tuple[int, str, str]] = []
     dropped = 0
     reason = None
@@ -80,7 +81,7 @@ async def _run(run_id: int) -> dict:
         except caption_fix.GeminiUnavailable:
             reason = caption_fix.FAILED_MESSAGE
             break
-        kept, refused = caption_fix.accept(texts, proposals)
+        kept, refused = caption_fix.accept(texts, proposals, names)
         dropped += refused
         found += [(chunk[f.index].id, f.before, f.after) for f in kept]
         async with worker_session() as db:

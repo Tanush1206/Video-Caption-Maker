@@ -36,15 +36,32 @@ def test_a_fix_that_respells_or_swaps_a_sound_alike_word_is_kept(before, after):
     # A name is only ever respelled.
     ("Thank you guys Ketan aage dekho", "Thank you guys Chetan aage dekho", "name"),
     ("using the SRT file", "using the SST file", "name"),
+    ("worry yah kaafi chizen to Aap", "worry yah kaafi chizen to App", "name"),
     # Never more than a few words, never added or removed words.
     ("ek do teen chaar paanch", "ek dho theen chhaar paanchh", "too many words"),
     ("Kya is mere? Aap vahaan par sone Plan kar rahe ho?", "Kya is mere? Aap vahaan par sone ka Plan kar rahe ho?", "adds or removes words"),
     ("the year 2026 was", "the year 2025 was", "number"),
+    ("rakh ke split vaala button dabaane.", "rakh ke split vaala button dabaana hai.", "adds or removes words"),
     ("same text", "same  text", "unchanged"),
     ("something", "  ", "empty"),
 ])
 def test_a_fix_that_changes_meaning_numbers_names_or_many_words_is_refused(before, after, reason):
     assert caption_fix.check(before, after) == reason
+
+
+def test_a_name_written_as_one_anywhere_is_protected_everywhere():
+    """Seen with flash-lite: "ketan" (lower-cased by speech recognition) became "kitni", same consonants."""
+    texts = ["Ketan aage dekho.", "Thank you guys, Ketan doesn't like it", "Itni attention ketan ko."]
+    names = caption_fix.names_in(texts)
+
+    assert "ketan" in names
+    assert caption_fix.check("Itni attention ketan ko.", "Itni attention kitni ko.", names) == "name"
+    assert caption_fix.check("Itni attention ketan ko.", "Itni attention Ketan ko.", names) is None
+    # Without the name, as when every caption has it lower-cased: same
+    # consonants, but it no longer ends as it did, so another word.
+    assert caption_fix.check("Itni attention ketan ko.", "Itni attention kitni ko.") == "different word"
+    kept, dropped = caption_fix.accept(texts, [{"i": 2, "original": texts[2], "fixed": "Itni attention kitni ko."}])
+    assert kept == [] and dropped == 1
 
 
 def test_spelling_variants_sound_the_same():

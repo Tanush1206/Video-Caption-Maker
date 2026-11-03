@@ -32,6 +32,14 @@ BATCH_SIZE = 60
 SECONDS_PER_BATCH_GUESS = 60.0
 MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 10
+# Per request. Longer than the shared client's 60 s (services/rag.py), which
+# suits a translation that falls back to the local model: a check runs in the
+# background with nothing to fall back to, and on 2026-11-03 every request
+# took over a minute, ending in Google's own 504 at 60 s, even for 2 captions.
+REQUEST_TIMEOUT_MS = 300_000
+
+_client = None
+_client_key = None
 
 # A fix may change at most this many words of a caption, and never more than
 # half of a caption longer than two words.
@@ -78,6 +86,18 @@ class GeminiUnavailable(Exception):
 # ── Proposals ──────────────────────────────────────────────────────────────
 
 
+def _client_for(api_key: str):
+    """A Gemini client with this module's longer timeout, rebuilt when the key changes."""
+    global _client, _client_key
+    if _client is None or _client_key != api_key:
+        from google import genai
+        from google.genai import types
+
+        _client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS))
+        _client_key = api_key
+    return _client
+
+
 def propose(texts: list[str], api_key: str, model: str) -> list[dict]:
     """
     Gemini's fixes for one batch: [{"i", "original", "fixed"}], unchecked.
@@ -87,13 +107,11 @@ def propose(texts: list[str], api_key: str, model: str) -> list[dict]:
     """
     from google.genai import types
 
-    from app.services.rag import get_client
-
     captions = json.dumps([{"i": i, "text": t} for i, t in enumerate(texts)], ensure_ascii=False)
     last: Exception | None = None
     for attempt in range(MAX_ATTEMPTS):
         try:
-            response = get_client(api_key).models.generate_content(
+            response = _client_for(api_key).models.generate_content(
                 model=model,
                 contents=PROMPT.format(captions=captions),
                 config=types.GenerateContentConfig(
@@ -158,20 +176,46 @@ def _distance(a: str, b: str) -> int:
     return previous[-1]
 
 
-def _protected(words: list[str], start: int, all_words: list[str]) -> bool:
-    """A name, brand or initialism: capitalised mid-sentence, or all capitals."""
-    for offset, word in enumerate(words):
-        letters = re.sub(r"[^\w]", "", word)
-        if len(letters) > 1 and letters.isupper():
-            return True
-        position = start + offset
-        after_stop = position == 0 or all_words[position - 1][-1:] in ".?!"
-        if letters[:1].isupper() and not after_stop:
-            return True
-    return False
+# A protected word may only be respelled: this much of it, letter for
+# letter, stays ("ketan"/"Ketan", not "Ketan"/"Chetan" at 0.73).
+RESPELLING = 0.8
 
 
-def check(original: str, fixed: str) -> str | None:
+def _bare(word: str) -> str:
+    return re.sub(r"[^\w]", "", word).lower()
+
+
+def _name_like(word: str, position: int, words: list[str]) -> bool:
+    """Capitalised mid-sentence, or all capitals: a name, brand or initialism."""
+    letters = re.sub(r"[^\w]", "", word)
+    if len(letters) > 1 and letters.isupper():
+        return True
+    after_stop = position == 0 or words[position - 1][-1:] in ".?!"
+    return letters[:1].isupper() and not after_stop
+
+
+def _ends_open(text: str) -> bool:
+    letters = re.sub(r"[^\w]", "", text.split()[-1]).lower() if text.split() else ""
+    return letters[-1:] in ("a", "e", "i", "o", "u", "y")
+
+
+def names_in(texts: list[str]) -> frozenset[str]:
+    """
+    Every word written as a name anywhere in the captions, lower-cased.
+
+    Speech recognition writes the same name both ways ("Ketan doesn't like",
+    "Itni attention ketan ko"), and lower-cased it slipped past the check:
+    Gemini turned that "ketan" into "kitni", same consonants. Protected
+    everywhere once it is a name anywhere.
+    """
+    names = set()
+    for text in texts:
+        words = text.split()
+        names.update(_bare(w) for i, w in enumerate(words) if _name_like(w, i, words) and _bare(w))
+    return frozenset(names)
+
+
+def check(original: str, fixed: str, names: frozenset[str] = frozenset()) -> str | None:
     """
     Why a proposed fix is refused, or None to keep it.
 
@@ -179,8 +223,10 @@ def check(original: str, fixed: str) -> str | None:
     - "too many words": more than MAX_CHANGED_WORDS, or over half the caption;
     - "adds or removes words": a word with nothing in its place;
     - "number": a changed word with a digit in it, before or after;
-    - "name": a name, brand or initialism changed beyond its spelling;
-    - "different word": a word swapped for one that doesn't sound alike.
+    - "name": a name, brand or initialism (`names`, or written as one here)
+      changed beyond its spelling;
+    - "different word": a word swapped for one that doesn't sound alike,
+      or a "respelling" that changes how the word ends.
 
     Alike: the same consonants (a respelling), or, for three consonants or
     more, one consonant different ("hari"/"hurry", "corona"/"corner").
@@ -202,11 +248,23 @@ def check(original: str, fixed: str) -> str | None:
             return "adds or removes words"
         if any(ch.isdigit() for ch in before + after):
             return "number"
-        was, now = sound(before), sound(after)
-        if was == now:
-            continue
-        if _protected(a[i1:i2], i1, a):
+        if any(_name_like(w, i1 + k, a) or _bare(w) in names for k, w in enumerate(a[i1:i2])):
+            if SequenceMatcher(None, before.lower(), after.lower(), autojunk=False).ratio() >= RESPELLING:
+                continue
             return "name"
+        was, now = sound(before), sound(after)
+        # More words or fewer in their place: only ever a spacing fix
+        # ("clip champ" -> "clipchamp"), never a word added ("dabaane" ->
+        # "dabaana hai", flash-lite).
+        if i2 - i1 != j2 - j1 and was != now:
+            return "adds or removes words"
+        # A respelling keeps how the word ends, on a vowel or not: kaaphi/
+        # kaafi, yah/yeh, mainne/maine. "ketan" -> "kitni" has the same
+        # consonants and is another word (flash-lite, 2026-11-03).
+        if was == now:
+            if _ends_open(before) == _ends_open(after):
+                continue
+            return "different word"
         if min(len(was), len(now)) < 3 or _distance(was, now) > 1:
             return "different word"
     return None
@@ -219,8 +277,9 @@ class Fix:
     after: str
 
 
-def accept(texts: list[str], proposals: list[dict]) -> tuple[list[Fix], int]:
-    """The proposals that pass every check, and how many were dropped."""
+def accept(texts: list[str], proposals: list[dict], names: frozenset[str] | None = None) -> tuple[list[Fix], int]:
+    """The proposals that pass every check, and how many were dropped. `names`: the whole video's."""
+    names = names_in(texts) if names is None else names
     kept: list[Fix] = []
     dropped = 0
     seen: set[int] = set()
@@ -237,7 +296,7 @@ def accept(texts: list[str], proposals: list[dict]) -> tuple[list[Fix], int]:
         if not isinstance(original, str) or " ".join(original.split()) != " ".join(texts[i].split()):
             dropped += 1
             continue
-        reason = check(texts[i], fixed)
+        reason = check(texts[i], fixed, names)
         if reason is None:
             seen.add(i)
             kept.append(Fix(index=i, before=texts[i], after=" ".join(fixed.split())))
