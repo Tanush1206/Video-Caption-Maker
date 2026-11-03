@@ -144,3 +144,15 @@ async def test_another_users_captions_are_not_found(client, auth_headers, second
 
     assert (find.status_code, put.status_code) == (404, 404)
     assert await texts(client, auth_headers, video_id) == TEXTS
+
+
+def test_everyday_spellings_are_found_as_whole_words():
+    """v1.3.1: everyday Hinglish ("nahi", "liye") is found as itself, not inside the formal form."""
+    from app.services.hinglish_spelling import everyday
+
+    text = everyday("Yah nahin hai, ke lie nahin.")
+    assert text == "Yeh nahi hai, ke liye nahi."
+    assert find_spans(text, "nahi", match_case=False, whole_word=True) == [(4, 8), (22, 26)]
+    assert find_spans(text, "liye", match_case=False, whole_word=True) == [(17, 21)]
+    # "nahin" from an older, formal video is a different whole word.
+    assert find_spans("Yah nahin hai", "nahi", match_case=False, whole_word=True) == []

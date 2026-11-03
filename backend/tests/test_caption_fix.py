@@ -85,6 +85,28 @@ def test_only_aligned_unique_fixes_are_accepted():
     assert dropped == 5
 
 
+def test_on_everyday_spelling_fixes_stay_everyday_and_respellings_back_are_no_fix():
+    """v1.3.1: a video in everyday spelling keeps it through Improve."""
+    texts = ["Yeh hari mein kaam nahi hai", "kyunki yahan par", "zyada log aaye"]
+    kept, dropped = caption_fix.accept(texts, [
+        # A real fix, with Gemini writing the rest in the model's own spelling.
+        {"i": 0, "original": texts[0], "fixed": "Yah hurry mein kaam nahin hai"},
+        # Only respelling back: nothing to fix, and nothing refused either.
+        {"i": 1, "original": texts[1], "fixed": "kyonki yahaan par"},
+        {"i": 2, "original": texts[2], "fixed": "zyaada log aae"},
+    ], spelling="everyday")
+    assert [(f.index, f.after) for f in kept] == [(0, "Yeh hurry mein kaam nahi hai")]
+    assert dropped == 0
+
+
+def test_formal_and_older_videos_check_as_before():
+    texts = ["kyonki yahaan par"]
+    proposal = [{"i": 0, "original": texts[0], "fixed": "kyunki yahaan par"}]
+    for spelling in ("formal", None):
+        kept, _ = caption_fix.accept(texts, proposal, spelling=spelling)
+        assert [f.after for f in kept] == ["kyunki yahaan par"]
+
+
 def test_changed_words_are_marked_for_highlighting():
     before, after = caption_fix.word_parts("Main itna hari mein kaam", "Main itna hurry mein kaam")
     assert before == [{"text": "Main itna", "changed": False}, {"text": "hari", "changed": True},
@@ -189,6 +211,30 @@ async def test_a_check_fixes_only_what_passes_and_keeps_every_timing(
     async with AsyncSessionLocal() as session:
         body = storage.resolve((await session.get(Export, made["id"])).storage_path).read_text(encoding="utf-8")
     assert "Main itna hurry mein kaam" in body and "hari" not in body
+
+
+@pytest.mark.asyncio
+async def test_a_check_on_everyday_captions_keeps_their_spelling(
+    client, auth_headers, sample_video_bytes, db_session, gemini
+):
+    from sqlalchemy import update
+
+    from app.models.caption import Caption
+
+    video_id = await captioned(client, auth_headers, sample_video_bytes, db_session)
+    (await db_session.get(Video, video_id)).hinglish_spelling = "everyday"
+    await db_session.execute(update(Caption).where(Caption.video_id == video_id, Caption.sequence == 0)
+                             .values(text="Main itna hari mein kaam nahi"))
+    await db_session.commit()
+    # Gemini fixes the misheard word and writes "nahi" back as "nahin".
+    gemini["proposals"] = [{"i": 0, "original": "Main itna hari mein kaam nahi",
+                            "fixed": "Main itna hurry mein kaam nahin"}]
+
+    run = await checked(client, auth_headers, video_id, gemini)
+
+    assert [(f["before"], f["after"]) for f in run["fixes"]] == [
+        ("Main itna hari mein kaam nahi", "Main itna hurry mein kaam nahi")]
+    assert run["dropped"] == 0
 
 
 @pytest.mark.asyncio

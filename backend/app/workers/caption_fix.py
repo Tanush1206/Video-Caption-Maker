@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from app.config import get_settings
 from app.models.caption import Caption
 from app.models.caption_fix import ACTIVE_FIX_STATUSES, CaptionFix, CaptionFixRun, FixRunStatus
+from app.models.video import Video
 from app.services import app_settings, caption_fix
 from app.services import video as video_service
 from app.workers.celery_app import celery_app
@@ -54,6 +55,7 @@ async def _run(run_id: int) -> dict:
             return {"run": run_id, "skipped": True}
         key = await app_settings.gemini_key(db)
         captions = await video_service.list_captions(db, run.video_id)
+        spelling = (await db.get(Video, run.video_id)).hinglish_spelling
         run.status = FixRunStatus.RUNNING.value
         run.batches_total = caption_fix.batches(len(captions))
         await db.commit()
@@ -85,7 +87,7 @@ async def _run(run_id: int) -> dict:
         except caption_fix.GeminiUnavailable:
             reason = caption_fix.FAILED_MESSAGE
             break
-        kept, refused = caption_fix.accept(texts, proposals, names)
+        kept, refused = caption_fix.accept(texts, proposals, names, spelling)
         dropped += refused
         fallback += used != settings.gemini_model
         model = used

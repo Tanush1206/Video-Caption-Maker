@@ -21,6 +21,8 @@ import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
+from app.services import hinglish_spelling
+
 logger = logging.getLogger(__name__)
 
 # Captions per request: enough context for Gemini to read the speech, few
@@ -292,8 +294,13 @@ class Fix:
     after: str
 
 
-def accept(texts: list[str], proposals: list[dict], names: frozenset[str] | None = None) -> tuple[list[Fix], int]:
-    """The proposals that pass every check, and how many were dropped. `names`: the whole video's."""
+def accept(
+    texts: list[str], proposals: list[dict], names: frozenset[str] | None = None, spelling: str | None = None
+) -> tuple[list[Fix], int]:
+    """
+    The proposals that pass every check, and how many were dropped. `names`:
+    the whole video's. `spelling`: how its Hinglish is spelled (v1.3.1).
+    """
     names = names_in(texts) if names is None else names
     kept: list[Fix] = []
     dropped = 0
@@ -311,6 +318,10 @@ def accept(texts: list[str], proposals: list[dict], names: frozenset[str] | None
         if not isinstance(original, str) or " ".join(original.split()) != " ".join(texts[i].split()):
             dropped += 1
             continue
+        if spelling == hinglish_spelling.EVERYDAY:
+            # Fixes come out in the captions' own spelling, and one that only
+            # respells back to the model's ("nahi" -> "nahin") is no fix.
+            fixed = hinglish_spelling.everyday(fixed)
         reason = check(texts[i], fixed, names)
         if reason is None:
             seen.add(i)
