@@ -294,3 +294,35 @@ async def test_a_restart_closes_an_unfinished_check_without_changing_anything(
     run = await db_session.get(CaptionFixRun, run_id)
     assert run.status == "failed" and "restart" in run.error_message
     assert await texts_of(client, auth_headers, video_id) == TEXTS
+
+
+def test_a_timeout_is_not_retried_but_a_busy_model_is(monkeypatch):
+    calls = []
+
+    class Models:
+        def __init__(self, error):
+            self.error = error
+
+        def generate_content(self, **kwargs):
+            calls.append(1)
+            raise RuntimeError(self.error)
+
+    class Client:
+        def __init__(self, error):
+            self.models = Models(error)
+
+    monkeypatch.setattr(caption_fix, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(caption_fix, "_client_for", lambda key: Client("504 DEADLINE_EXCEEDED"))
+    with pytest.raises(caption_fix.GeminiUnavailable):
+        caption_fix.propose(["a"], "k", "m")
+    assert len(calls) == 1
+
+    calls.clear()
+    monkeypatch.setattr(caption_fix, "_client_for", lambda key: Client("503 UNAVAILABLE high demand"))
+    with pytest.raises(caption_fix.GeminiUnavailable):
+        caption_fix.propose(["a"], "k", "m")
+    assert len(calls) == caption_fix.MAX_ATTEMPTS
+
+    monkeypatch.setattr(caption_fix, "_client_for", lambda key: Client("429 RESOURCE_EXHAUSTED"))
+    with pytest.raises(caption_fix.QuotaExhausted):
+        caption_fix.propose(["a"], "k", "m")

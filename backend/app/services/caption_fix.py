@@ -130,6 +130,10 @@ def propose(texts: list[str], api_key: str, model: str) -> list[dict]:
         except Exception as exc:  # noqa: BLE001
             if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
                 raise QuotaExhausted() from exc
+            # A timeout has already waited REQUEST_TIMEOUT_MS: three of them
+            # would keep the person waiting a quarter of an hour to hear no.
+            if "504" in str(exc) or "DEADLINE_EXCEEDED" in str(exc) or "timed out" in str(exc).lower():
+                raise GeminiUnavailable() from exc
             logger.warning("Caption check failed (attempt %d): %s", attempt + 1, str(exc)[:200])
             last = exc
             if attempt < MAX_ATTEMPTS - 1:
