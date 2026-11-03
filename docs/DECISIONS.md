@@ -755,6 +755,39 @@ above every real size.
 - **Scaling the cap by frame area linearly:** this starves smaller heights,
   since each pixel then holds more detail.
 
+## D23. Gemini may fix misheard words, only when asked and within checks
+
+**Context.** On noisy Hinglish audio about one word in seven is misheard
+(PROGRESS.md v1.3.0 Part C: 13.9% loose word error against a truth made by
+ear). Audio clean-up, separation and decoding settings didn't help reliably.
+Gemini, given only the caption text, cut the errors by 1.4 points there and
+2.7 on a clean tutorial, but also made confident wrong edits: "2026" became
+"20 23", "jaa raha" became "chhod raha", "blinkit" became "manage".
+
+**Decision (v1.3.0, Tanush).** An opt-in editor action, "Improve captions
+with Gemini", shown only with a key, started only by a click. Text only:
+the timings never leave and never change. The server keeps a proposed fix
+only if every changed word is a respelling (same consonants, same kind of
+ending) or a sound-alike swap (one consonant apart, three or more), never
+touches a number, never changes a name, brand or initialism beyond its
+spelling (names learned from the whole video), never adds or removes words,
+and changes at most three words, and never more than half, of a caption
+(`services/caption_fix.py`). Every change is recorded and listed with its
+words highlighted, an Undo for each and Undo all.
+
+Measured with the checks on (loose WER, today's GPU captions): his 0:00-1:28
+13.9% to 13.2% (flash-lite, live) or 12.5% (flash, its Part C proposals);
+hinglish.mp4 14.4% to 14.0% or 12.9%. Neither clip gets worse. The checks
+refuse every confident wrong edit seen, and also some right ones
+("likhna", "aur"): the price of never changing meaning on their own.
+
+**Alternatives.**
+- **Automatic, at transcription:** rejected, it would change captions nobody
+  reviewed and send every video's text to Google.
+- **Trust Gemini's own "sure" flag:** its wrong edits were confident.
+- **Audio to Gemini:** better context, but the audio would leave the
+  computer; the app's rule is text only.
+
 ---
 
 ## Decisions recorded

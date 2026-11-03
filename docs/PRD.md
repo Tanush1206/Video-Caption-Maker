@@ -250,6 +250,18 @@ the speech model for every video until changed back.
   video, so search matches the current text.
 - Low-confidence lines are flagged in the editor ("Check this line"), based on
   `captions.confidence`.
+- **Find and replace** (v1.3.0) across every caption: match case, whole word,
+  each match shown before and after, replace one or all, Undo.
+- **Improve captions with Gemini** (v1.3.0, only with a Gemini key in
+  Settings, D23): the caption text, never the video or the timings, is sent
+  only when the person clicks; Gemini proposes fixes for misheard words and
+  the server keeps only those that respell a word or swap it for one that
+  sounds alike, never touching numbers, names or brands, never adding or
+  removing words, at most three words a caption. It runs in the background
+  with a time estimate (the dialog can be closed); every change is listed
+  with its changed words highlighted, an Undo for each and Undo all; a
+  caption edited by hand since keeps the edit. Quota spent, Gemini
+  unreachable or a restart: nothing is changed, and it says so.
 
 ### F5. Caption styling
 
@@ -530,9 +542,11 @@ What the code deliberately does not do:
   accounts mode (registration, JWT, Google sign-in, password change, delete
   account) is kept for a hosted build (`AUTH_MODE=accounts` plus
   `NEXT_PUBLIC_AUTH_MODE=accounts`). It isn't shipped or offered.
-- **No LLM rewriting of transcripts.** Captions stay what Whisper heard. Gemini
-  only translates (when asked) and answers questions (docs/MILESTONES.md, "Where
-  Gemini fits").
+- **No automatic LLM rewriting of transcripts.** Captions stay what Whisper
+  heard unless the person asks: Gemini translates (when asked), answers
+  questions, and, since v1.3.0, fixes misheard words only when **Improve
+  captions with Gemini** is clicked, within checks that allow respellings and
+  sound-alike words only, every change listed with its Undo (F4, D23).
 - **No network exposure.** Only the UI port is published, and only on
   `127.0.0.1` (`docker-compose.prod.yml`).
 - **No caption language that isn't checked end to end.** Nine targets

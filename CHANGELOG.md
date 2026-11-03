@@ -12,6 +12,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Find and replace** in the caption list: find a word or phrase in every
   caption (match case, whole word), see each match and what it becomes,
   replace one or all, and Undo. Exports made afterwards have the new text.
+- **Improve captions with Gemini** (with a Gemini key in Settings): one click
+  sends the caption text, never the video or the timings, to Gemini, which
+  fixes words that were clearly misheard. Safety checks keep only
+  respellings and sound-alike fixes: numbers, names and brands are never
+  changed, and no fix rewrites more than a few words. It runs in the
+  background with a time estimate, and lists every change with the changed
+  words highlighted, an Undo for each and Undo all. It never runs on its own.
+- **A soft shadow:** Shadow softness in Appearance blurs the shadow, in the
+  editor and the exported video alike. New videos get a slightly soft one.
 
 ### Changed
 - **Captions are readable on any video by default:** about twice the size
@@ -29,6 +38,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The editor shows outlines and shadows as the exported video has them.**
   A thick outline grew spikes on letters like "v", and with a coloured
   outline the shadow showed inside it; neither was in the export.
+- **No more captions of stray symbols in Hinglish.** Over noise the
+  Hinglish model now and then wrote a caption of non-Latin characters
+  ("緘."); a Hinglish caption with no Latin letter is dropped.
 
 ## [1.2.2] - 2026-10-30
 

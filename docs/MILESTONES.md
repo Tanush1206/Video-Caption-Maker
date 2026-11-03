@@ -250,7 +250,8 @@ Deliberately *not* used to clean up transcripts in M4, for three reasons:
 
 **Stretch, not scheduled:** opt-in editor actions in M5–7 — rewrite this
 caption, summarize this section, generate chapter markers. Explicit
-actions the user triggers, never an automatic pass.
+actions the user triggers, never an automatic pass. (v1.3.0 shipped the
+first: Improve captions with Gemini, D23.)
 
 ---
 
