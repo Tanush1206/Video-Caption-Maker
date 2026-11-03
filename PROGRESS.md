@@ -1299,7 +1299,7 @@ Asked by Tanush, 2026-10-30: first the download mix-up, then the MP4 size fix.
         size of WhatsApp video burned to 101 MB (1.6×) on Tanush's M2.
         Videos 7690-7693, deleted.
 
-## v1.3.0 caption quality
+## v1.3.0 caption quality (released 2026-11-03, tag on 073974d)
 Brief from Tanush, 2026-10-31 (in full in the session; the essentials here so
 work can resume from this section). AGENTS.md rules apply; dev stack on 3001
 only; delete every test video by recorded id.
@@ -1477,6 +1477,44 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
   because Flash was busy" ("Checked with..." when nothing was fixed).
   Backend 709 passed; axe 0 with it shown. Part C lab containers and
   python:3.11-slim removed. Video 7700 is deleted after the release.
+- [x] **Released and checked (2026-11-03/04).** `ci` and `release` (4/4)
+      green on 073974d; 8 assets matching `SHA256SUMS` and the tag (the two
+      `.ps1` differ from the blobs only by CRLF); six GHCR tags pull
+      anonymously, each `latest` the same digest as its `1.3.0`.
+      - Backup before the update: `VideoCaptionMaker-backup-1.2.2` next to
+        the install folder (dump with all 7 tables, media 11 of 11 files,
+        1.0 GB, `.env` copied unread; 23 s down). The 1.1.1, 1.2.0 and
+        1.2.1 backups are kept too, until Tanush confirms.
+      - `vcm update` failed twice in `compose pull`, 6-11 s in: the Docker
+        daemon got "tls: error decoding message" from GHCR's blob store on
+        new frontend layers, while curl on the host fetched the same blobs
+        at 4 MB/s. The install stayed on 1.2.2 and up both times (the pull
+        comes before any restart). `docker pull` of the frontend alone then
+        worked, and `vcm update` ran in 31 s: backend 4/19 layers 0.2 MB,
+        frontend 7/13 11.0 MB (as 1.2.2).
+      - Postgres, Redis and ChromaDB were recreated this time, with the same
+        images and the same compose file: Docker Compose is now 5.6.1 (the
+        old containers were made by an older one), which changes the config
+        hash. Volumes kept, data intact.
+      - 1.3.0; alembic head `e5a9c3d7f2b8`; videos 84 and 140, 637 captions
+        (caption-text md5 unchanged by the update), 4 exports, 2 styles, no
+        caption checks. Images amd64, uid 10001 / 100, CapEff 0, NoNewPrivs
+        1; `/licenses` complete; only CA bundles in the images (the
+        `proxy-root.crt` seen is the install's `certs/` mount); no secret
+        file in git history (only the learning guide, added and removed on
+        2026-08-06).
+      - At localhost and 127.0.0.1: framing, frontend-guard, csp,
+        upload-proxy, export-eta, caption-accuracy, export-quality,
+        improve-captions: 78 PASS each (improve-captions skipped: no Gemini
+        key on the install, so the button is hidden, as meant); `flow.js`
+        PASS at both (Speech model put back to auto).
+      - E2E (hinglish.mp4; same, en, hi, fr; SRT, VTT, MP4): ALL PASSED.
+        Hinglish (roman, held upload then transcribe): 159 captions in
+        14 s, none with letters but no Latin letter.
+      - Test videos on the install: 213-219 (mine; 216 and 215 deleted by
+        `flow.js`, 218 and 219 by upload-proxy, 213, 214, 217 by id), all
+        deleted; 84 and 140 remain; 11 media files, as in the backup.
+        Dev: 7700 deleted; 7426 (not mine) remains.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
