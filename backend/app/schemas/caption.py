@@ -172,5 +172,7 @@ class CaptionFixRunRead(BaseModel):
     seconds_left: int | None
     #: Fixes Gemini offered that the checks refused.
     dropped: int
+    #: Requests the configured model failed and Gemini Flash-Lite answered.
+    fallback_batches: int
     error_message: str | None
     fixes: list[CaptionFixRead]

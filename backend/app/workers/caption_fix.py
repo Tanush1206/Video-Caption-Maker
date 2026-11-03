@@ -68,13 +68,17 @@ async def _run(run_id: int) -> dict:
     names = caption_fix.names_in([c.text for c in captions])
     found: list[tuple[int, str, str]] = []
     dropped = 0
+    fallback = 0
+    # Once the configured model has failed, the rest of the run asks the
+    # fallback straight away: a timeout costs up to five minutes a request.
+    model = settings.gemini_model
     reason = None
     started = time.monotonic()
     for b in range(total):
         chunk = captions[b * caption_fix.BATCH_SIZE:(b + 1) * caption_fix.BATCH_SIZE]
         texts = [c.text for c in chunk]
         try:
-            proposals = await asyncio.to_thread(caption_fix.propose, texts, key, settings.gemini_model)
+            proposals, used = await asyncio.to_thread(caption_fix.propose, texts, key, model)
         except caption_fix.QuotaExhausted:
             reason = caption_fix.QUOTA_MESSAGE
             break
@@ -83,10 +87,13 @@ async def _run(run_id: int) -> dict:
             break
         kept, refused = caption_fix.accept(texts, proposals, names)
         dropped += refused
+        fallback += used != settings.gemini_model
+        model = used
         found += [(chunk[f.index].id, f.before, f.after) for f in kept]
         async with worker_session() as db:
             run = await db.get(CaptionFixRun, run_id)
             run.batches_done = b + 1
+            run.fallback_batches = fallback
             run.seconds_per_batch = (time.monotonic() - started) / (b + 1)
             await db.commit()
 

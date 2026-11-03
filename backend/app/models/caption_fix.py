@@ -40,6 +40,9 @@ class CaptionFixRun(Base):
     seconds_per_batch: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Fixes Gemini offered that the checks refused (caption_fix.check).
     dropped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Requests the configured model failed and caption_fix.FALLBACK_MODEL
+    # answered: the results say which model improved them.
+    fallback_batches: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

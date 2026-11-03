@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("batches_done", sa.Integer(), nullable=False),
         sa.Column("seconds_per_batch", sa.Float(), nullable=True),
         sa.Column("dropped", sa.Integer(), nullable=False),
+        sa.Column("fallback_batches", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),

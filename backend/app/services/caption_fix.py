@@ -18,7 +18,6 @@ more than a few words of a caption.
 import json
 import logging
 import re
-import time
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -30,13 +29,17 @@ BATCH_SIZE = 60
 # Before a run has timed a batch of its own: measured 2026-11-01 at 100-180 s
 # per 60 captions on a busy day and about 20 s on a quiet one.
 SECONDS_PER_BATCH_GUESS = 60.0
-MAX_ATTEMPTS = 3
-RETRY_BACKOFF_SECONDS = 10
 # Per request. Longer than the shared client's 60 s (services/rag.py), which
-# suits a translation that falls back to the local model: a check runs in the
-# background with nothing to fall back to, and on 2026-11-03 every request
-# took over a minute, ending in Google's own 504 at 60 s, even for 2 captions.
+# suits a translation that falls back to the local model: on 2026-11-03 every
+# flash request took over a minute, ending in Google's own 504 at 60 s, even
+# for 2 captions.
 REQUEST_TIMEOUT_MS = 300_000
+# Asked once when the configured model fails (busy, timed out, quota, a
+# broken answer): on 2026-11-03 gemini-flash-latest (3.8-flash) timed out or
+# answered "high demand" all day while flash-lite answered in 3-9 s. With
+# the guards it is not worse than today on either measured clip (D23). Each
+# run counts the parts it answered, and the results say so.
+FALLBACK_MODEL = "gemini-flash-lite-latest"
 
 _client = None
 _client_key = None
@@ -98,47 +101,55 @@ def _client_for(api_key: str):
     return _client
 
 
-def propose(texts: list[str], api_key: str, model: str) -> list[dict]:
-    """
-    Gemini's fixes for one batch: [{"i", "original", "fixed"}], unchecked.
-
-    Retried on transient failures; a 429 is not retried, as it won't clear
-    within a run.
-    """
+def _ask(texts: list[str], api_key: str, model: str) -> list[dict]:
+    """One request to `model`; raises on any failure, a malformed answer included."""
     from google.genai import types
 
     captions = json.dumps([{"i": i, "text": t} for i, t in enumerate(texts)], ensure_ascii=False)
-    last: Exception | None = None
-    for attempt in range(MAX_ATTEMPTS):
-        try:
-            response = _client_for(api_key).models.generate_content(
-                model=model,
-                contents=PROMPT.format(captions=captions),
-                config=types.GenerateContentConfig(
-                    # A check, not a creative task.
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                    # Thinking tokens count against this; see translation.py.
-                    max_output_tokens=16000,
-                    thinking_config=types.ThinkingConfig(thinking_level="low"),
-                ),
-            )
-            payload = json.loads((response.text or "").strip() or "[]")
-            if not isinstance(payload, list):
-                raise ValueError(f"expected a list, got {type(payload).__name__}")
-            return [p for p in payload if isinstance(p, dict)]
-        except Exception as exc:  # noqa: BLE001
-            if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
-                raise QuotaExhausted() from exc
-            # A timeout has already waited REQUEST_TIMEOUT_MS: three of them
-            # would keep the person waiting a quarter of an hour to hear no.
-            if "504" in str(exc) or "DEADLINE_EXCEEDED" in str(exc) or "timed out" in str(exc).lower():
-                raise GeminiUnavailable() from exc
-            logger.warning("Caption check failed (attempt %d): %s", attempt + 1, str(exc)[:200])
-            last = exc
-            if attempt < MAX_ATTEMPTS - 1:
-                time.sleep(RETRY_BACKOFF_SECONDS * (2**attempt))
-    raise GeminiUnavailable() from last
+    response = _client_for(api_key).models.generate_content(
+        model=model,
+        contents=PROMPT.format(captions=captions),
+        config=types.GenerateContentConfig(
+            # A check, not a creative task.
+            temperature=0.1,
+            response_mime_type="application/json",
+            # Thinking tokens count against this; see translation.py.
+            max_output_tokens=16000,
+            thinking_config=types.ThinkingConfig(thinking_level="low"),
+        ),
+    )
+    payload = json.loads((response.text or "").strip() or "[]")
+    if not isinstance(payload, list):
+        raise ValueError(f"expected a list, got {type(payload).__name__}")
+    return [p for p in payload if isinstance(p, dict)]
+
+
+def _failure(exc: Exception) -> Exception:
+    if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+        return QuotaExhausted()
+    return GeminiUnavailable()
+
+
+def propose(texts: list[str], api_key: str, model: str) -> tuple[list[dict], str]:
+    """
+    Gemini's fixes for one batch, unchecked, and the model that gave them.
+
+    One request to `model`; if it fails in any way (busy, timed out, its
+    quota spent, a broken answer), one to FALLBACK_MODEL. Quota is granted
+    per model, so a 429 is worth the second try too. Both failing raises
+    QuotaExhausted if the last was a 429, GeminiUnavailable otherwise.
+    """
+    try:
+        return _ask(texts, api_key, model), model
+    except Exception as exc:  # noqa: BLE001
+        if model == FALLBACK_MODEL:
+            raise _failure(exc) from exc
+        logger.warning("Caption check: %s failed (%s); asking %s", model, str(exc)[:200], FALLBACK_MODEL)
+    try:
+        return _ask(texts, api_key, FALLBACK_MODEL), FALLBACK_MODEL
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Caption check: %s failed too (%s)", FALLBACK_MODEL, str(exc)[:200])
+        raise _failure(exc) from exc
 
 
 # ── Guards ─────────────────────────────────────────────────────────────────
@@ -408,7 +419,8 @@ async def describe(db, run) -> dict:
     return {
         "id": run.id, "status": run.status, "batches_total": run.batches_total, "batches_done": run.batches_done,
         "seconds_left": seconds_left(run.batches_total, run.batches_done, run.seconds_per_batch) if active else None,
-        "dropped": run.dropped, "error_message": run.error_message, "fixes": fixes,
+        "dropped": run.dropped, "fallback_batches": run.fallback_batches,
+        "error_message": run.error_message, "fixes": fixes,
     }
 
 
