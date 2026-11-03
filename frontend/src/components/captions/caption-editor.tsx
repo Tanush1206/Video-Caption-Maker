@@ -1,16 +1,18 @@
 "use client";
 
-import { FileText, Loader2, Plus, RefreshCw, Replace } from "lucide-react";
+import { FileText, Loader2, Plus, RefreshCw, Replace, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccuracyInfo } from "@/components/captions/accuracy-info";
 import { FindReplace } from "@/components/captions/find-replace";
+import { ImproveCaptions, isChecking } from "@/components/captions/improve-captions";
 import { CaptionRow } from "@/components/captions/caption-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   EMPHASIS,
   NO_EMPHASIS,
+  useCaptionCheck,
   useCreateCaption,
   useDeleteCaption,
   useMergeCaption,
@@ -22,6 +24,7 @@ import type { Playback } from "@/hooks/use-playback";
 import { Select } from "@/components/ui/select";
 import { LanguagePicker } from "@/components/videos/language-picker";
 import { useLanguageOptions, useRetranscribe } from "@/hooks/use-videos";
+import { useSystem } from "@/hooks/use-system";
 import { languageName } from "@/lib/languages";
 import { askToNotify, watchTranscription } from "@/lib/transcription-alerts";
 import type { Video } from "@/types/video";
@@ -93,6 +96,11 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
   const [pendingFocusId, setPendingFocusId] = useState<number | null>(null);
   /** The Find and replace dialog (v1.3.0). */
   const [finding, setFinding] = useState(false);
+  /** "Improve captions with Gemini" (v1.3.0): offered only with a key in Settings. */
+  const [improving, setImproving] = useState(false);
+  const { data: system } = useSystem();
+  const canImprove = Boolean(system?.gemini_configured);
+  const { data: check } = useCaptionCheck(video.id, canImprove);
 
   // Keyboard navigation needs to move focus between rows, which React state
   // can't express — hold the actual DOM nodes.
@@ -282,7 +290,10 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
   return (
     <div className="flex min-h-0 flex-col">
       <FindReplace videoId={video.id} open={finding} onClose={() => setFinding(false)} />
-      <div className="mb-2 flex items-center justify-between gap-2">
+      {canImprove && <ImproveCaptions videoId={video.id} open={improving} onClose={() => setImproving(false)} />}
+      {/* Wraps rather than clipping: with Improve (v1.3.0) the tools no
+          longer fit beside the count in the inspector's width. */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <div className="flex shrink-0 items-center gap-0.5">
           <span className="label-caps">
             {captions.length} caption{captions.length === 1 ? "" : "s"}
@@ -290,7 +301,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           <AccuracyInfo />
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {updateCaption.isPending && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
@@ -304,6 +315,17 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
           >
             Replace
           </ToolButton>
+          {canImprove && (
+            <ToolButton
+              onClick={() => setImproving(true)}
+              disabled={video.status === "processing"}
+              icon={Sparkles}
+              spinning={isChecking(check)}
+              title="Fix misheard words with Gemini"
+            >
+              Improve
+            </ToolButton>
+          )}
           <ToolButton
             onClick={redo}
             disabled={retranscribe.isPending || video.status === "processing" || !captionOffered}
@@ -494,7 +516,7 @@ function ToolButton({
       title={title}
       className="flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm text-primary transition-colors duration-200 ease-out hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-8"
     >
-      {spinning ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
+      {spinning ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Icon className="size-4" aria-hidden="true" />}
       {children}
     </button>
   );

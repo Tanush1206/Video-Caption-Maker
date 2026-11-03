@@ -58,3 +58,40 @@ export interface CaptionReplaceResult {
   /** Occurrences, not captions: one caption can hold several. */
   occurrences: number;
 }
+
+/** Words of a caption, and whether a fix changed them (v1.3.0). */
+export interface WordRun {
+  text: string;
+  changed: boolean;
+}
+
+/** One caption a Gemini check changed. */
+export interface CaptionFix {
+  id: number;
+  caption_id: number;
+  start_ms: number;
+  end_ms: number;
+  before: string;
+  after: string;
+  before_words: WordRun[];
+  after_words: WordRun[];
+  undone: boolean;
+  /** Edited by hand since the fix: Undo would lose the edit, so it isn't offered. */
+  edited: boolean;
+}
+
+export type CaptionCheckStatus = "queued" | "running" | "completed" | "failed";
+
+/** The latest "Improve captions with Gemini" run on a video. */
+export interface CaptionCheck {
+  id: number;
+  status: CaptionCheckStatus;
+  batches_total: number;
+  batches_done: number;
+  /** The server's estimate while queued or running; null once finished. */
+  seconds_left: number | null;
+  /** Fixes Gemini offered that the safety checks left out. */
+  dropped: number;
+  error_message: string | null;
+  fixes: CaptionFix[];
+}

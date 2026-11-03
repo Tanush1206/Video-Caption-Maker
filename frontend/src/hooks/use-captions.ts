@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { videoKeys } from "@/hooks/use-videos";
 import type {
   Caption,
+  CaptionCheck,
   CaptionList,
   CaptionPair,
   CaptionReplaceRequest,
@@ -14,6 +15,7 @@ import type {
 
 export const captionKeys = {
   forVideo: (videoId: number) => ["videos", videoId, "captions"] as const,
+  check: (videoId: number) => ["videos", videoId, "caption-check"] as const,
 };
 
 export function useVideoCaptions(videoId: number) {
@@ -157,5 +159,60 @@ export function useRestoreCaptionTexts(videoId: number) {
     mutationFn: (items: { id: number; text: string }[]) =>
       api.post<CaptionList>(`/api/videos/${videoId}/captions/texts`, { items }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: captionKeys.forVideo(videoId) }),
+  });
+}
+
+/** How often a running Gemini check is asked how far it got. */
+const CHECK_POLL_MS = 2_000;
+
+/**
+ * The latest "Improve captions with Gemini" check of the video (v1.3.0), or
+ * null. Followed while it runs; when it finishes the captions are refetched,
+ * as it has just changed them.
+ */
+export function useCaptionCheck(videoId: number, enabled = true) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: captionKeys.check(videoId),
+    enabled,
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<CaptionCheck | null>(captionKeys.check(videoId));
+      const check = await api.get<CaptionCheck | null>(`/api/videos/${videoId}/captions/improve`);
+      const wasActive = previous?.status === "queued" || previous?.status === "running";
+      if (wasActive && check && check.status !== "queued" && check.status !== "running") {
+        queryClient.invalidateQueries({ queryKey: captionKeys.forVideo(videoId) });
+      }
+      return check;
+    },
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? CHECK_POLL_MS : false;
+    },
+  });
+}
+
+/** Start a check: only ever on this click. */
+export function useStartCaptionCheck(videoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<CaptionCheck>(`/api/videos/${videoId}/captions/improve`),
+    onSuccess: (check) => queryClient.setQueryData(captionKeys.check(videoId), check),
+  });
+}
+
+/** Undo one fix of the latest check, or (no id) all of them. */
+export function useUndoCaptionFix(videoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fixId: number | null) =>
+      api.post<CaptionCheck>(
+        `/api/videos/${videoId}/captions/improve/undo${fixId === null ? "" : `?fix_id=${fixId}`}`
+      ),
+    onSuccess: (check) => {
+      queryClient.setQueryData(captionKeys.check(videoId), check);
+      queryClient.invalidateQueries({ queryKey: captionKeys.forVideo(videoId) });
+    },
+    // A refused Undo (edited since) still changes what the list should say.
+    onError: () => queryClient.invalidateQueries({ queryKey: captionKeys.check(videoId) }),
   });
 }
