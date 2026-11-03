@@ -26,12 +26,13 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 
+from app.models.caption_fix import ACTIVE_FIX_STATUSES, CaptionFixRun, FixRunStatus
 from app.models.export import Export, ExportStatus
 from app.models.video import Video, VideoStatus
 
 logger = logging.getLogger(__name__)
 
-TASK_FOR = {"transcribe_video": "video", "render_export": "export"}
+TASK_FOR = {"transcribe_video": "video", "render_export": "export", "improve_captions": "fix"}
 
 # Automatic requeues before a job is failed instead. A job that takes the
 # worker down with it (out of memory on a small machine, most often) would
@@ -47,6 +48,9 @@ EXPORT_GAVE_UP = (
     "Rendering was interrupted several times without finishing, which usually "
     "means the computer ran out of memory. Close other programs, then export again."
 )
+# A caption check is not requeued: it would spend Gemini quota again, and
+# nothing was changed until its last step, which commits all at once.
+FIX_INTERRUPTED = "Checking was interrupted by a restart, so no captions were changed. Try again."
 QUEUE = "celery"
 UNACKED = "unacked"
 UNACKED_INDEX = "unacked_index"
@@ -58,6 +62,7 @@ class Recovery:
     exports: list[int] = field(default_factory=list)
     failed_videos: list[int] = field(default_factory=list)
     failed_exports: list[int] = field(default_factory=list)
+    failed_fix_runs: list[int] = field(default_factory=list)
 
 
 def _job_of(message: dict) -> tuple[str, int] | None:
@@ -184,6 +189,16 @@ async def recover(session, held: set[tuple[str, int]]) -> Recovery:
             export.recovery_attempts += 1
             result.exports.append(export.id)
 
+    runs = await session.scalars(
+        select(CaptionFixRun).where(CaptionFixRun.status.in_(ACTIVE_FIX_STATUSES))
+    )
+    for run in runs:
+        if ("fix", run.id) in held:
+            continue
+        run.status = FixRunStatus.FAILED.value
+        run.error_message = FIX_INTERRUPTED
+        result.failed_fix_runs.append(run.id)
+
     await session.commit()
     return result
 
@@ -214,4 +229,6 @@ async def requeue_stranded(client) -> Recovery:
             "Gave up on work interrupted %d times: videos %s, exports %s",
             MAX_REQUEUES + 1, result.failed_videos, result.failed_exports,
         )
+    if result.failed_fix_runs:
+        logger.info("Caption checks a restart interrupted, closed unchanged: %s", result.failed_fix_runs)
     return result

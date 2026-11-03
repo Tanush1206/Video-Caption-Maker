@@ -20,6 +20,7 @@ celery_app = Celery(
     include=[
         "app.workers.transcription",
         "app.workers.export",
+        "app.workers.caption_fix",
     ],
 )
 
