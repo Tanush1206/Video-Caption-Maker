@@ -43,19 +43,22 @@ run() { # fails, says -> sets status, out, calls
     set -e
     calls="$(wc -l < "$FAKE_CALLS" | tr -d ' ')"
 }
-check() { if eval "$2"; then echo "PASS $1"; else echo "FAIL $1"; echo "$out" | sed 's/^/    /'; failures=$((failures + 1)); fi; }
+# check NAME RESULT: RESULT is "yes" from a test written out in full at the
+# call (not a string to eval), so shellcheck sees what each one reads.
+check() { if [ "$2" = yes ]; then echo "PASS $1"; else echo "FAIL $1"; echo "$out" | sed 's/^/    /'; failures=$((failures + 1)); fi; }
+yes_if() { if "$@"; then echo yes; else echo no; fi; }
 
 run 1 "$TLS"
-check "a TLS failure is tried again and the pull succeeds" '[ $status -eq 0 ] && [ "$calls" = 2 ]'
-check "it says it is trying again" 'grep -q "trying again" <<< "$out"'
+check "a TLS failure is tried again and the pull succeeds" "$( [ "$status" -eq 0 ] && [ "$calls" = 2 ] && echo yes)"
+check "it says it is trying again" "$(yes_if grep -q "trying again" <<< "$out")"
 
 run 9 "$TLS"
-check "it gives up after three tries" '[ $status -ne 0 ] && [ "$calls" = 3 ]'
-check "it names HTTPS scanning by antivirus" 'grep -qi "antivirus" <<< "$out" && grep -qi "HTTPS" <<< "$out"'
-check "it names both hosts to allow" 'grep -q "ghcr.io" <<< "$out" && grep -q "pkg-containers.githubusercontent.com" <<< "$out"'
+check "it gives up after three tries" "$( [ "$status" -ne 0 ] && [ "$calls" = 3 ] && echo yes)"
+check "it names HTTPS scanning by antivirus" "$(grep -qi "antivirus" <<< "$out" && grep -qi "HTTPS" <<< "$out" && echo yes)"
+check "it names both hosts to allow" "$(grep -q "ghcr.io" <<< "$out" && grep -q "pkg-containers.githubusercontent.com" <<< "$out" && echo yes)"
 
 run 9 "no matching manifest for linux/arm64/v8 in the manifest list entries"
-check "a non-network failure is not tried again" '[ $status -ne 0 ] && [ "$calls" = 1 ]'
-check "and says nothing about antivirus" '! grep -qi "antivirus" <<< "$out"'
+check "a non-network failure is not tried again" "$( [ "$status" -ne 0 ] && [ "$calls" = 1 ] && echo yes)"
+check "and says nothing about antivirus" "$(grep -qi "antivirus" <<< "$out" || echo yes)"
 
 [ $failures -eq 0 ] && echo "ALL PASSED" || { echo "$failures FAILED"; exit 1; }
