@@ -6,9 +6,31 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.4.0] - unreleased
+## [1.4.0] - 2026-11-12
+
+Native on Apple silicon, progress that tells the truth on long videos, and
+a way to report a bug in one file. No migration; on Intel/AMD the update
+downloads the app layers only.
+
+### Added
+- **`vcm doctor`** writes a report to attach to a bug report: the version,
+  your system, Docker, the containers, their health and recent logs.
+  Passwords, keys, tokens, email addresses, video file names, your custom
+  vocabulary and your home folder are left out; read it before you attach
+  it. The new bug-report form on GitHub asks for it, and points security
+  problems to the private report instead.
+- A weekly check that the latest release still installs: its files against
+  `SHA256SUMS`, every image, the models and the website. A failure opens an
+  issue. Every push is also built, installed and timed on ARM as well as
+  Intel/AMD.
 
 ### Changed
+- **Progress on long videos tells the truth.** Checking for missed speech
+  and arranging the captions into lines are now steps of their own in the
+  pipeline, each with its own percentage, instead of sitting at
+  "Transcribing 99%" (on a 60-minute video, up to 15 minutes). Arranging
+  the captions is also 4.6 times faster on a long video (6.5 minutes down
+  to under 1.5 on 60 minutes of Hindi), with exactly the same captions.
 - **Native on Apple silicon and ARM Linux.** The app's images are now
   built for ARM as well as Intel/AMD, so Macs with M1-M4 chips and ARM
   Linux machines run them natively: no emulation, and no Rosetta setting
@@ -21,6 +43,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   If that one can't run, the current one finishes the update as before.
   A download that fails part-way (no network, say) now leaves the install
   exactly as it was, files included.
+
+### Fixed
+- The dashboard and Settings no longer jump while they load: the header,
+  the video list's placeholder and the stats keep their place until the
+  data arrives.
+
+### Security
+- The release workflows run with only the permissions each job needs, on
+  actions pinned to commits (Node 24) with Dependabot proposing updates,
+  and on `ubuntu-24.04` rather than `ubuntu-latest`, which is moving to
+  26.04.
 
 ## [1.3.1] - 2026-11-12
 

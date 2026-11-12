@@ -16,12 +16,12 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 1.4 | Export dialog warns while Improve is running on that video | 14 Nov | done 12 Nov |
 | 1.5 | Norton TLS: confirm the cause; install and `vcm update` detect it and say what to do; README troubleshooting | 15 Nov | done 12 Nov: the cause is Quick Heal's HTTPS scanning (Norton had expired); retry + advice in vcm and the installers, README |
 | 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | done 12 Nov |
-| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | started 12 Nov |
-| 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | built 12 Nov, waiting on the first native arm64 CI run; macOS CI question open |
-| 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | built 12 Nov (stages recovering and phrasing, real percentages, in order); 60-min run on dev pending |
+| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | (a)-(e) built and checked 12 Nov; release checks, then the tag (Tanush) |
+| 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | done 12 Nov: arm64 CI green natively, times beside amd64; edge images multi-arch; macOS stays by hand (Tanush: no Intel runner) |
+| 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | done 12 Nov: stages recovering and phrasing, in order; 60 min: phrasing 390 s (192 s on one value) -> 85 s (no stall over 7 s); splitter 4.6x, same cuts |
 | 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | done 12 Nov: cold-load CLS 0.059-0.071 -> 0.000 (`checks.js cls`, <= 0.01) |
-| 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | done 12 Nov: least privilege, actions on Node 24, ubuntu-24.04 pinned, Dependabot, weekly-check.yml; needs a CI run |
-| 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | |
+| 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | done 12 Nov: least privilege, actions on Node 24, ubuntu-24.04 pinned, Dependabot, weekly-check.yml; ci, arm64 and the manual release run green |
+| 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | done 12 Nov: bash and PowerShell, redacted, tested in CI; bug and idea forms |
 | 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | |
 | 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 25 Nov | |
 
@@ -34,6 +34,9 @@ Daily check:
   architectures; ci's scripts job failed on the PowerShell update test
   (-WindowStyle on Linux, fixed). Next: CI on the fixes, the manual
   release run for edge tags, (e).
+  Later on 12 Nov: (a)-(e) all built; ci #53 and #54, arm64 and the manual
+  release run (edge tags) green; v1.4.0 docs and release checks next. Nine
+  days ahead of the 21 Nov date.
   Noted for the final audit, not in this plan: the frontend runs Node 20,
   which reached end of life in April 2026.
 
@@ -1696,7 +1699,7 @@ baithakar); 207 of his 484 caption lines hold one.
 ## v1.4.0 (due 21 Nov 2026; plan item 2 at the top)
 Started 2026-11-12, after v1.3.1's after-release checks.
 
-- [ ] **(a) Multi-arch CPU images** (Tanush, 2026-11-12, adding to the plan).
+- [x] **(a) Multi-arch CPU images** (Tanush, 2026-11-12, adding to the plan).
   Built 2026-11-12 (7a93a3f..be4e4f7); every wheel the CPU image needs has
   an aarch64 build (torch 2.13.0+cpu, ctranslate2, onnxruntime, av,
   chromadb). A local emulated arm64 build twice hit Debian's CDN answering
@@ -1707,7 +1710,9 @@ Started 2026-11-12, after v1.3.1's after-release checks.
   mid-update), and pulls with the staged files so a failed download
   changes nothing. GitHub's Apple-silicon macOS runners have no nested
   virtualization; Intel ones (`macos-15-intel`, `macos-26-intel`) exist:
-  a macOS CI test there would cover Intel Macs only (question for Tanush).
+  a macOS CI test there would cover Intel Macs only. Tanush: skip the
+  Intel runner, macOS stays tested by hand (his M2 MacBook Air, after the
+  release).
   - backend CPU and frontend built for amd64 and arm64 on native runners
     (`ubuntu-latest`, `ubuntu-24.04-arm`), merged into one tag each; CUDA
     stays amd64. The amd64 build keeps its registry cache name, so its
@@ -1726,11 +1731,122 @@ Started 2026-11-12, after v1.3.1's after-release checks.
   - site and README macOS note say what is now native;
   - a macOS CI test only if a GitHub runner can run Docker; otherwise macOS
     stays tested by hand.
-- [ ] (b) honest progress on long videos; (c) CLS fix on dashboard and
-  settings; (d) S7 workflow permissions and the weekly health check, plus
-  the two Actions notices (actions/checkout on Node 24, `ubuntu-latest`
-  moving to Ubuntu 26); (e) `vcm doctor` and an issue template asking for
-  its output.
+  - Checked 2026-11-12. arm64 run 4 on 8299ed8, both architectures
+    natively, model large-v3-turbo on both:
+
+    | | amd64 | arm64 |
+    |---|---|---|
+    | build backend | 134 s | 124 s |
+    | build frontend | 58 s | 62 s |
+    | English (faster-whisper) | 35.8 s | 31.9 s |
+    | Hinglish to Spanish (Apex, IndicXlit, M2M100) | 42.8 s | 54.0 s |
+    | burn (FFmpeg) | 1.1 s | 1.1 s |
+
+    Every container reported the host's architecture.
+  - The manual release run on main (43228050003, on 8299ed8): 5 image
+    jobs and both manifests green, first run of the new permissions and
+    pinned actions. Read anonymously:
+    - `backend:edge-cpu` and `frontend:edge` list amd64 + arm64;
+    - `backend:edge-cuda` is amd64 only;
+    - the per-arch tags (`edge-cpu-amd64`, `edge-cpu-arm64`) are
+      single-arch.
+    `latest-cpu`, `latest-cuda` and `frontend:latest` keep v1.3.1's digests.
+    `frontend:edge` pulled anonymously for both architectures; arm64 ran
+    `uname -m` = aarch64 (emulated here). The arm64 pull failed once first
+    (transient; likely Quick Heal again), and then worked. The test images are removed.
+- [x] **(b) Honest progress on long videos** (launch audit P2/U1).
+  `recovering` (the second pass, `_fill_skipped`) and `phrasing` are stages
+  of their own (4a060a9, 93a6a5f, 7733cee). Progress is written in the order
+  it was made, through one chain per job (`_reporter`), and flushed before
+  the next stage. The first 60-minute run showed phrasing at 0% for 192 s
+  (one long run between pauses costs the cube of its length). Tanush: do
+  both fixes (02a28e2):
+  - progress from inside the splitter, per phrase count tried;
+  - prefix sums in the splitter, the same cuts (tested against the
+    v1.3.1 code).
+
+  Capping run length stays on the ROADMAP. 60 minutes of hinglish.mp4
+  looped, Devanagari, GPU dev, every value logged
+  (`test-assets/results/v1.4.0/long_progress.py`, `long60_progress.tsv`
+  and `long60_progress_2.tsv`):
+
+  | Stage | before: s | distinct % | longest on one % | after: s | distinct % | longest on one % |
+  |---|---|---|---|---|---|---|
+  | transcribing | 901 | 82 | 21 s | 985 | 85 | 29 s |
+  | recovering | 350 | 43 | 14 s | 300 | 34 | 14 s |
+  | phrasing | 390 | 4 | 192 s | 85 | 12 | < 7 s |
+  | embedding | 8 | 1 | | 7 | 1 | |
+  | total | 1,658 | | | ~1,384 | | |
+
+  Transcribing and recovering vary between runs on their own (shared
+  GPU); the fixes changed phrasing only. Before v1.4.0 this video sat at
+  "Transcribing 99%" for about 13 minutes.
+- [x] **(c) No layout shift on the dashboard and settings** (launch audit
+  P1, 2dcb37f). The library's header is shared by the loading and loaded
+  states, the skeleton shows the last visit's row count
+  (`vcm.library.count`), the stats skeleton has the stats' height, and
+  settings hold the screen while loading. `checks.js cls` (API 600 ms
+  late, 375/1440, light/dark): 0.059-0.071 before, 0.000 after.
+- [x] **(d) Workflows** (launch audit S7, the two Actions notices;
+  f80e414, df7f833, cccf124):
+  - least privilege per job;
+  - actions pinned to Node 24 commits;
+  - `ubuntu-24.04` pinned (26.04 later: ROADMAP, D27);
+  - Dependabot for actions;
+  - `weekly-check.yml`, Mondays 06:00 UTC: assets, images, models,
+    dependencies, site; a failure opens one `weekly-check` issue.
+- [x] **(e) `vcm doctor` and issue templates** (launch audit M4; b3a2b6c,
+  a7e0cc2). Bash and PowerShell, a redacted report in the current folder,
+  and bug and idea forms with `blank_issues_enabled: false`; security goes
+  to the private advisory.
+  - Bugs found while building it:
+    - the report was written to the install folder (moved to the
+      current one);
+    - BSD sed on macOS has no `I` flag and no `` (portable patterns);
+    - GPU UUIDs were left in (now redacted);
+    - PS 5.1 read the health answer as bytes (decoded).
+  - Tests: `install/tests/test_vcm_doctor.{sh,ps1}` in CI.
+- CI #52 (on 8413404) failed in the `scripts` job, at the PowerShell
+  update hand-over test: PowerShell 7 on Linux refuses `Start-Process
+  -WindowStyle`, so the test stopped at its first file server. The app and
+  `vcm` were unaffected. Fixed in e2116b3 (the flag only on Windows); ci #53
+  on 8299ed8 was the next run, green.
+- Docs for v1.4.0 (6808897, 18eead5, 74e512b): ARCHITECTURE (stages,
+  honest progress, platform, two architectures, the hand-over's failure
+  rows), DATABASE (stage values), PRD (flow, F9, images, macOS), SECURITY
+  (5b `vcm doctor`, 8 hand-over, 8a workflows), DESIGN_SYSTEM, TESTING
+  (rows, checks, the 8-job release), DECISIONS D25-D27, ROADMAP (capping
+  run length, Ubuntu 26.04), README (`vcm doctor`, reporting a bug).
+  PRD's "macOS is untested ... no one has run them there" was out of date
+  (the M2 ran v1.2.1) and now reads as the README does.
+- Release checks (dev stack on 3001, 2026-11-12):
+  - backend: ruff clean; 773 passed, 2 skipped;
+  - frontend: lint, types, tests (10) and the production build
+    (`docker build --target build`) pass;
+  - `install/tests`: pull, update and doctor ALL PASSED in bash and in
+    Windows PowerShell 5.1 (CI runs them on PowerShell 7);
+  - UI: shoot.js 3 pages x 2 widths x 2 themes, axe 0; checks.js cls
+    (0.000 on all eight), pipeline-stages, theme, not-found, retry-small,
+    language-step, hindi-script, unsupported-speech, redo-script,
+    redo-spelling, retired-language, vocabulary, export-improving,
+    export-quality, export-eta, framing, frontend-guard, csp,
+    caption-accuracy: 264 PASS, 0 FAIL;
+  - E2E GPU (large-v3): hinglish.mp4 same/en/hi/es with SRT, VTT, MP4 ALL
+    PASSED, the stages in order (transcribing, recovering, translating,
+    phrasing, embedding); es fell back to local translation (Gemini 503,
+    then 504);
+  - E2E CPU (worker without the GPU, 4 cores, large-v3-turbo): same/en ALL
+    PASSED (141 s, 145 s);
+  - CI: ci #54 and arm64 green on a7e0cc2 (arm64 run: English 32.9 s on
+    both, Hinglish to Spanish 55.0 s amd64 / 54.1 s arm64).
+
+  Docker Desktop stopped during the first GPU E2E (the session ended);
+  restarted, both stacks came back, the run was repeated from the start.
+  Logs in `test-assets/results/v1.4.0/release/`.
+- Test videos on dev: 7729 and 7730 (the 60-minute runs), 7731 (UI
+  checks), 7732-7734 (the E2E run that was cut off), 7767-7770 (E2E GPU),
+  7771 and 7772 (E2E CPU): all deleted through the API; 7426 (not mine)
+  remains. The dev worker is back on the GPU.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
