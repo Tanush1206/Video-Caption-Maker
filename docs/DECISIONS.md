@@ -798,6 +798,31 @@ Gemini Flash-Lite because Flash was busy".
 
 ---
 
+
+## D24. Hinglish spelling and the vocabulary are applied to the text
+
+**Context (v1.3.1).** On a clean 12.7-minute vlog most of what made Hinglish
+captions look wrong was spelling style, not misheard words: the Hinglish
+model writes textbook transliteration ("yah", "nahin", "lie"). Separately,
+people want names and brands spelled their way.
+
+**Decision (Tanush, 2026-11-04 and 2026-11-12).**
+- **Everyday spelling** is a fixed whole-word map on the model's output, the
+  default, with Formal (the model's own) as a choice per video. Only
+  spellings that mean one thing; the four that are also English (lie, ham,
+  die, tin) change only next to a clearly Hindi word. Existing videos keep
+  their captions until a Redo, which presets Everyday.
+- **The custom vocabulary is applied to the caption text, not given to the
+  model.** Measured on three clips and both models: as hotwords or an
+  initial prompt it fixed none of the target words on the Hinglish model,
+  flipped a meaning, dropped speech on large-v3 and wrote "Thanks for
+  watching" into English captions. On the text, by sound (one sound off
+  only as a voiced/voiceless twin next to Hindi), it made 16 right changes
+  on the vlog and none elsewhere.
+
+**Alternatives.** A map learnt per video (can't promise it means one
+thing); Gemini respelling (sends text, not deterministic); the vocabulary as
+hotwords only where it helps (it helped nowhere).
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open

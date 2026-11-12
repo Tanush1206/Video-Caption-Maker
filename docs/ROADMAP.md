@@ -175,12 +175,18 @@ The original 10-milestone build plan is historical and lives in
 - **Tanush, 2026-11-03:** skip for now; measure again when the truth for
   2:30-3:15 (the overlaps) is added to `test-assets/truth-new-5min.txt`.
 
-### Custom vocabulary / word corrections
-- **What:** a list of words the user wants spelled their way (names,
-  technical terms, brands), used when captions are made or applied to them
-  afterwards.
-- **Why:** the caption accuracy note (v1.2.1) names these as where captions
-  go wrong most.
+### Improve review mode (deferred from v1.3.1 by the finishing plan)
+- **What:** fixes the checks refuse shown as suggestions, with Accept,
+  Reject and Accept all, measured on the 0:00-1:28 truth before shipping.
+- **Why deferred:** no time before 25 November 2026 (PROGRESS.md plan).
+
+### Caption-list virtualisation and long-video phrasing speed
+- **What:** render only the visible rows of a long caption list; make
+  phrasing of a long video faster.
+- **Why deferred:** in the finishing plan only if time is left after v1.4.0
+  item e).
+
+(Custom vocabulary shipped in v1.3.1, applied to the caption text: D24.)
 
 ## Possible, not planned
 - **More caption languages.** Nine are offered (v1.0.11). Telugu is not in

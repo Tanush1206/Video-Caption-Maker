@@ -15,6 +15,8 @@ VCM_CHECK_VIDEO=<id> node checks.js <base> caption-drag       # editor checks: c
 node flow.js   <base> <videoIdToDelete> <videoIdToExport>     # deletes a video: test installs only
 VCM_PARITY_VIDEO=<id> node checks.js <base> style-parity        # preview vs burn, 23 style options (below)
 node checks.js <base> improve-captions                           # a real Gemini check, Undo one and all (needs the key)
+node checks.js <base> vocabulary export-improving               # Settings' word list (puts it back); export warning (mocked)
+VCM_CHECK_VIDEO=<id> node checks.js <base> redo-spelling        # the Redo's Everyday/Formal (needs captions; read-only)
 ```
 
 `<base>` is the app's address, e.g. `http://localhost:3000`. Run `flow.js` at
