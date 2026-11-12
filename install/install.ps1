@@ -55,28 +55,22 @@ $ErrorActionPreference = 'Continue'
     Ok "Docker $dockerVersion is running"
 
     # -- 1b. Processor --------------------------------------------------------
-    # Our images are Intel/AMD only; on an ARM PC the compose file asks for
-    # them by platform and Docker emulates them (v1.2.1).
+    # The app's CPU images are built for Intel/AMD and ARM (v1.4.0): native on
+    # an ARM PC. Only the CUDA image is Intel/AMD only, never chosen on ARM.
     $arch = (docker version --format '{{.Server.Arch}}') 2>$null
-    $emulated = $arch -in @('arm64', 'aarch64')
-    if ($emulated) {
-        Warn "This computer has an ARM processor ($arch)."
-        Info "The app's images are built for Intel and AMD processors, so Docker runs them"
-        Info 'under emulation. It works, but transcription and exports are slower.'
-        $machine = (docker run --rm --platform linux/amd64 busybox:1.37 uname -m) 2>$null
-        if ($machine -ne 'x86_64') {
-            Fail "Docker can't run Intel/AMD (amd64) containers on this PC yet." @(
-                'Update Docker Desktop to the latest version, then run this installer again.')
-        }
-        Ok 'Docker can run Intel/AMD containers here (emulated)'
-    }
+    $arm = $arch -in @('arm64', 'aarch64')
+    if ($arm) { Ok "ARM processor ($arch): the app runs natively" }
 
     # -- 2. GPU ---------------------------------------------------------------
-    # Never on ARM: an emulated container can't use an NVIDIA GPU.
+    # Never on ARM: the CUDA image is for Intel/AMD PCs with an NVIDIA GPU.
     $variant = 'cpu'
     if ($env:VCM_GPU -eq '1') {
+        if ($arm) {
+            Fail 'VCM_GPU=1 asks for the NVIDIA (CUDA) build, which is for Intel/AMD computers.' @(
+                'On this ARM PC, leave VCM_GPU unset: the app runs natively on the processor.')
+        }
         $variant = 'cuda'
-    } elseif ($env:VCM_GPU -ne '0' -and -not $emulated -and (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) {
+    } elseif ($env:VCM_GPU -ne '0' -and -not $arm -and (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) {
         # Docker Desktop (WSL2) passes NVIDIA GPUs through on its own; check it
         # actually does before choosing the CUDA image.
         docker run --rm --gpus all busybox:1.37 true *> $null

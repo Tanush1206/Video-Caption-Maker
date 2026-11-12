@@ -9,7 +9,11 @@
 # VCM_VARIANT=cuda so the CUDA build of the image is pulled.
 
 services:
+  # The CUDA image is built for Intel/AMD only (NVIDIA's GPUs in a PC).
+  backend:
+    platform: linux/amd64
   worker:
+    platform: linux/amd64
     environment:
       # `video` is the one that matters for rendering, and it is not implied.
       # `capabilities: [gpu]` gives compute and utility, enough for CUDA and

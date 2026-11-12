@@ -66,62 +66,25 @@ ok "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null) is runni
 
 # ── 1b. Processor ───────────────────────────────────────────────────────────
 # Docker's own architecture decides which images it pulls (a shell running
-# under Rosetta would report x86_64 from uname). Our images are Intel/AMD
-# only; on ARM the compose file asks for them by platform and Docker
-# emulates them (v1.2.1).
+# under Rosetta would report x86_64 from uname). The app's CPU images are
+# built for Intel/AMD and ARM (v1.4.0), so on Apple silicon and ARM Linux
+# they run natively: no emulation, no Rosetta. Only the CUDA image is
+# Intel/AMD only, and it is never chosen on ARM.
 ARCH="$(docker version --format '{{.Server.Arch}}' 2>/dev/null || uname -m)"
-EMULATED=0
-case "$ARCH" in arm64|aarch64) EMULATED=1 ;; esac
-
-rosetta_setting() {  # prints true, false, or nothing if it can't be read
-    local dir="$HOME/Library/Group Containers/group.com.docker" file
-    for file in "$dir/settings-store.json" "$dir/settings.json"; do
-        [ -f "$file" ] || continue
-        grep -Eo '"UseVirtualizationFrameworkRosetta"[[:space:]]*:[[:space:]]*(true|false)' "$file" \
-            | grep -Eo 'true|false' | head -1
-        return
-    done
-}
-
-if [ "$EMULATED" = 1 ]; then
-    warn "This computer has an ARM processor ($ARCH)."
-    info "The app's images are built for Intel and AMD processors, so Docker runs them"
-    info "under emulation. It works, but transcription and exports are slower."
-    if [ "$OS" = "Darwin" ]; then
-        case "$(rosetta_setting)" in
-            true) ok "Rosetta emulation is on in Docker Desktop" ;;
-            false)
-                warn "Rosetta emulation is off in Docker Desktop, so emulation is much slower."
-                info "Turn it on: Docker Desktop > Settings > General > \"Use Rosetta for"
-                info "x86_64/amd64 emulation on Apple Silicon\" > Apply & restart."
-                info "If macOS asks to install Rosetta, allow it (or run:"
-                info "  softwareupdate --install-rosetta --agree-to-license)" ;;
-            *)
-                info "Couldn't read Docker Desktop's Rosetta setting. For the best speed, check that"
-                info "Settings > General > \"Use Rosetta for x86_64/amd64 emulation on Apple Silicon\" is on." ;;
-        esac
-    fi
-    if [ "$(docker run --rm --platform linux/amd64 busybox:1.37 uname -m 2>/dev/null)" != "x86_64" ]; then
-        if [ "$OS" = "Darwin" ]; then
-            die "Docker can't run Intel/AMD (amd64) containers on this Mac yet." \
-                "In Docker Desktop: Settings > General > turn on \"Use Rosetta for x86_64/amd64" \
-                "emulation on Apple Silicon\", then Apply & restart, and run this installer again." \
-                "If that option is missing, update Docker Desktop first."
-        fi
-        die "Docker can't run Intel/AMD (amd64) containers on this machine yet." \
-            "Turn on amd64 emulation once (it lasts until the next reboot on some systems):" \
-            "  docker run --privileged --rm tonistiigi/binfmt --install amd64" \
-            "then run this installer again."
-    fi
-    ok "Docker can run Intel/AMD containers here (emulated)"
+ARM=0
+case "$ARCH" in arm64|aarch64) ARM=1 ;; esac
+if [ "$ARM" = 1 ]; then
+    ok "ARM processor ($ARCH): the app runs natively"
 fi
 
 # ── 2. GPU ──────────────────────────────────────────────────────────────────
-# Never on ARM: an emulated container can't use an NVIDIA GPU.
+# Never on ARM: the CUDA image is for Intel/AMD PCs with an NVIDIA GPU.
 VARIANT=cpu
 if [ "${VCM_GPU:-}" = "1" ]; then
+    [ "$ARM" = 1 ] && die "VCM_GPU=1 asks for the NVIDIA (CUDA) build, which is for Intel/AMD computers." \
+        "On this ARM computer, leave VCM_GPU unset: the app runs natively on the processor."
     VARIANT=cuda
-elif [ "${VCM_GPU:-}" != "0" ] && [ "$EMULATED" = 0 ] && [ "$OS" = "Linux" ] && command -v nvidia-smi >/dev/null 2>&1 \
+elif [ "${VCM_GPU:-}" != "0" ] && [ "$ARM" = 0 ] && [ "$OS" = "Linux" ] && command -v nvidia-smi >/dev/null 2>&1 \
      && nvidia-smi >/dev/null 2>&1; then
     # A driver on the host is not enough: Docker needs the NVIDIA Container
     # Toolkit to hand the GPU to a container. Ask for one and see.
