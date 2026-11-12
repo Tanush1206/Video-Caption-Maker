@@ -38,7 +38,7 @@ export interface Video {
   /** 0-100, meaningful only while status is "processing". */
   progress: number;
   /**
-   * "downloading" | "extracting" | "transcribing" | "translating" |
+   * "downloading" | "extracting" | "transcribing" | "recovering" | "translating" | "phrasing" |
    * "embedding", or null when idle.
    */
   stage: string | null;

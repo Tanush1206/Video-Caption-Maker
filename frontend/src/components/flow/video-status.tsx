@@ -43,8 +43,11 @@ function ProgressBar({ percent, label }: { percent: number; label: string }) {
 }
 
 /**
- * The worker's stages, in the order it runs them (model, audio, speech,
- * translation, search index). Translation only happens
+ * The worker's stages, in the order it runs them (model, audio, speech, a
+ * second listen to stretches with no captions, translation, arranging the
+ * captions, search index; the second listen and arranging have their own
+ * rows since v1.4.0, where an hour of speech sat at "99%" for 15 minutes).
+ * Translation only happens
  * for a target other than English or the spoken language, so it is listed
  * only when one was asked for; whether it is then skipped (Whisper already
  * heard that language) shows as the list moving straight past it.
@@ -54,15 +57,17 @@ function pipeline(video: Video): { stage: string; title: string; detail: string 
     { stage: "downloading", title: "Loading the speech model", detail: "Into memory, before anything is transcribed." },
     { stage: "extracting", title: "Preparing audio", detail: "The sound track is extracted from the video." },
     { stage: "transcribing", title: "Transcribing with faster-whisper", detail: "Speech to timed captions, on this computer." },
+    { stage: "recovering", title: "Checking for missed speech", detail: "Stretches with no captions are listened to again." },
   ];
   if (video.caption_language !== "same" && video.caption_language !== "en") {
     steps.push({ stage: "translating", title: "Translating", detail: "Captions into the language you chose." });
   }
+  steps.push({ stage: "phrasing", title: "Arranging captions", detail: "Into readable lines, timed to the speech." });
   steps.push({ stage: "embedding", title: "Building the search index", detail: "So this video can be searched by meaning." });
   return steps;
 }
 
-const ORDER = ["downloading", "extracting", "transcribing", "translating", "embedding"];
+const ORDER = ["downloading", "extracting", "transcribing", "recovering", "translating", "phrasing", "embedding"];
 
 function Processing({ video }: { video: Video }) {
   const label = stageLabel(video);

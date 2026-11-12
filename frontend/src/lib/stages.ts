@@ -9,7 +9,9 @@ export const STAGE_LABELS: Record<string, string> = {
   downloading: "Downloading model",
   extracting: "Extracting audio",
   transcribing: "Transcribing speech",
+  recovering: "Checking for missed speech",
   translating: "Translating captions",
+  phrasing: "Arranging captions",
   embedding: "Building search index",
 };
 

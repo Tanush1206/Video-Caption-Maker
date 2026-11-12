@@ -2116,6 +2116,43 @@ const CHECKS = {
     }
   },
 
+  // v1.4.0: the pipeline shows the second listen ("Checking for missed
+  // speech") and phrasing ("Arranging captions") as stages of their own,
+  // each with its percentage, the earlier ones Done, the later ones waiting;
+  // the video's state is mocked. No overflow; axe 0, light and dark.
+  // Read-only.
+  async "pipeline-stages"(browser, base) {
+    const { AxeBuilder } = require("@axe-core/playwright");
+    for (const [width, theme] of [[1440, "light"], [375, "dark"]]) {
+      for (const [stage, percent, title, before, after] of [
+        ["recovering", 40, "Checking for missed speech", "Transcribing with faster-whisper", "Arranging captions"],
+        ["phrasing", 70, "Arranging captions", "Checking for missed speech", "Building the search index"],
+      ]) {
+        const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
+        await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+        const page = await context.newPage();
+        const id = await editorVideo(page, base);
+        await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+          const body = await (await route.fetch()).json();
+          await route.fulfill({ json: { ...body, status: "processing", held: false, stage, progress: percent, stage_detail: null, caption_language: "same" } });
+        });
+        await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+        const at = `pipeline-stages@${width} (${theme}, ${stage})`;
+        const row = (name) => page.locator("ol li").filter({ hasText: name });
+        await row(title).waitFor();
+        ok(`${at}: the stage is its own row, running, with its percentage`,
+          (await row(title).getAttribute("aria-current")) === "step" && (await row(title).innerText()).includes(`${percent}%`));
+        ok(`${at}: the one before is done`, (await row(before).innerText()).includes("Done"));
+        ok(`${at}: the one after waits`, !(await row(after).innerText()).includes("Done") && (await row(after).getAttribute("aria-current")) === null);
+        ok(`${at}: no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+        const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+        ok(`${at}: axe 0`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+        await page.unrouteAll({ behavior: "ignoreErrors" });
+        await context.close();
+      }
+    }
+  },
+
   // v1.3.1: while Improve with Gemini is checking the video's captions, the
   // export dialog says an export made now won't have its fixes; with no check
   // running it says nothing. The check's state is mocked: nothing is sent to
