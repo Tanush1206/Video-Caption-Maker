@@ -98,6 +98,8 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
      Start waits for a pick;
    - nothing heard within 15 s (the worker is busy): asked with nothing
      preset, and Start doesn't wait; the job then decides by the same rule.
+   Under it, **Spelling: Everyday (pehle, liye) / Formal (pahle, lie)**
+   (v1.3.1), Everyday chosen; disabled, not hidden, unless Hinglish is.
    **When the speech is in a language not offered** (v1.0.11: anything but
    the nine, Tamil, Marathi, Bengali and Malayalam included), the step says
    "Tamil speech isn't supported yet, so captions would be inaccurate." and
@@ -194,6 +196,23 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
   against large-v3's 74%, 65 of 73 English words right against 12, 7.6 s on
   the GPU against 109 s, and every caption start within the timing rule.
   It downloads (1.6 GB) the first time it is used.
+- **Everyday Hinglish spelling** (v1.3.1, default): the Hinglish model
+  writes textbook transliteration ("yah", "nahin", "lie", "zyaada"); a fixed
+  word map turns it into the spelling people type ("yeh", "nahi", "liye",
+  "zyada"), whole words only, capitals and punctuation kept. Four of its
+  words are English too (lie, ham, die, tin) and change only next to a
+  clearly Hindi word. Formal keeps the model's spelling. Measured: strict
+  word error 24.0% -> 16.7% on new.mp4 0:00-1:31 and 28.8% -> 14.0% on the
+  Hinglish tutorial, the loose number unchanged. Existing videos keep their
+  captions until a Redo, whose panel presets Everyday (or the video's own
+  recorded choice).
+- **Custom vocabulary** (v1.3.1, Settings): a word list (names, brands,
+  "vlog"). When captions are made, a word that sounds like one of them
+  takes its spelling ("laddaakh" -> "Ladakh", "acropovic" -> "Akrapovic"); one
+  sound off only for a voiced/voiceless twin next to a clearly Hindi word
+  ("block" -> "vlog"). Applied to the caption text, never given to the
+  speech model, which measured worse in every language (D24). Latin words
+  only; up to 100 words of 40 characters.
 - Other targets from Hinglish are translated from Devanagari: IndicXlit
   transliterates it first (138 MB, first use), because M2M100 can't read
   Roman Hinglish. English captions are still Whisper's own translation.
@@ -261,7 +280,11 @@ the speech model for every video until changed back.
   with a time estimate (the dialog can be closed); every change is listed
   with its changed words highlighted, an Undo for each and Undo all; a
   caption edited by hand since keeps the edit. Quota spent, Gemini
-  unreachable or a restart: nothing is changed, and it says so.
+  unreachable or a restart: nothing is changed, and it says so. On captions
+  in Everyday spelling its fixes come out in that spelling, and a "fix" that
+  only respells back ("nahi" -> "nahin") is dropped (v1.3.1).
+- While Improve is checking a video, its export dialog says an export made
+  now won't have the fixes (v1.3.1).
 
 ### F5. Caption styling
 

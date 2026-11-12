@@ -193,7 +193,7 @@ automatic; in accounts mode it needs a Bearer token, or the route returns
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
 | GET* | `/api/system` | — | `200` [SystemInfo](#systeminfo). `hardware`/`whisper` are null until the worker has reported. **The Gemini key is never returned** by this or any other response, only `gemini_configured` and `gemini_source` (`settings`, `env` or null) | — |
-| PATCH* | `/api/system/settings` | [SystemSettingsUpdate](#systemsettingsupdate): only keys sent are changed. `whisper_model`: `auto`/null, `small`, `medium`, `large-v3-turbo`, `large-v3`. `gemini_api_key`: a key, or `""`/null to clear | `200` [SystemInfo](#systeminfo). Audited in `audit.log` (without the value) | 403 in accounts mode · 422 `Unknown speech model` |
+| PATCH* | `/api/system/settings` | [SystemSettingsUpdate](#systemsettingsupdate): only keys sent are changed. `whisper_model`: `auto`/null, `small`, `medium`, `large-v3-turbo`, `large-v3`. `gemini_api_key`: a key, or `""`/null to clear. `vocabulary` (v1.3.1): the whole list, stored trimmed with repeats dropped; `[]`/null clears it | `200` [SystemInfo](#systeminfo). Audited in `audit.log` (without the value) | 403 in accounts mode · 422 `Unknown speech model`, or a vocabulary over 100 words, a word over 40 characters or with characters a word can't have (the detail names it) |
 
 ### Auth (`backend/app/api/auth.py`)
 
@@ -601,6 +601,14 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `short` | string | yes | e.g. `Hinglish` |
 | `download_bytes` | integer \| null | no | what choosing it downloads the first time; null if nothing |
 
+### HinglishSpellingOption
+
+| Field | Type | Required | Constraints / default |
+|---|---|---|---|
+| `code` | string | yes | `everyday` or `formal` (v1.3.1) |
+| `label` | string | yes | `Everyday` / `Formal` |
+| `example` | string | yes | `pehle, liye` / `pahle, lie` |
+
 ### LanguageOption
 
 | Field | Type | Required | Constraints / default |
@@ -616,6 +624,7 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `spoken` | [LanguageOption](#languageoption)[] | yes | `auto` and the nine offered (v1.0.11); detected speech not in it is "not supported" in the UI |
 | `caption` | [LanguageOption](#languageoption)[] | yes | `same` and the nine offered. `bn`, `mr`, `ta`, `ml` (until v1.0.10) are refused with 422 for new jobs |
 | `hindi_scripts` | [HindiScriptOption](#hindiscriptoption)[] | no | how Hindi captions can be written (v1.0.9) |
+| `hinglish_spellings` | [HinglishSpellingOption](#hinglishspellingoption)[] | no | how Hinglish can be spelled, the default first (v1.3.1) |
 | `hinglish_min_confidence` | number | no | default `0.7`; Hindi detected at or above it presets Hinglish |
 | `translation_available` | boolean | yes |  |
 
@@ -702,6 +711,8 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `translator_model` | string \| null | yes |  |
 | `gemini_configured` | boolean | yes |  |
 | `gemini_source` | string \| null | no |  |
+| `vocabulary` | string[] | no | the custom vocabulary (v1.3.1); default `[]` |
+| `vocabulary_max` | integer | no | how many words it can hold: 100 |
 
 ### ModelDownload
 
@@ -716,6 +727,7 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 |---|---|---|---|
 | `gemini_api_key` | string \| null | no | maxLength 200 |
 | `whisper_model` | string \| null | no |  |
+| `vocabulary` | string[] \| null | no | the whole list, replacing the stored one (v1.3.1) |
 
 ### TokenResponse
 
@@ -733,6 +745,7 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `spoken_language` | string \| null | no |  |
 | `caption_language` | string \| null | no |  |
 | `hindi_script` | string \| null | no | `roman`, `devanagari` or `auto` (decided from detection); 422 otherwise. Also how a held upload is started |
+| `hinglish_spelling` | string \| null | no | `everyday` or `formal` (v1.3.1); 422 otherwise. Kept on the video; unset, a Hinglish job uses `everyday` |
 
 ### UserCreate
 
@@ -788,6 +801,7 @@ Enum: `auto`, `balanced`, `stacked` (v1.0.8)
 | `spoken_language` | string | no | default `"auto"` |
 | `caption_language` | string | no | default `"same"` |
 | `hindi_script` | string \| null | no | `roman`, `devanagari` or `auto`; null for a video from before v1.0.9 (Devanagari) |
+| `hinglish_spelling` | string \| null | no | `everyday` or `formal` (v1.3.1); null for a video from before v1.3.1 (formal) |
 | `detected_language` | string \| null | no | what detection heard (the language step's, or the job's) |
 | `detected_confidence` | number \| null | no | 0–1 |
 | `held` | boolean | no | default `false`; uploaded, not started (v1.0.9) |

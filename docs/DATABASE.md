@@ -104,6 +104,7 @@ erDiagram
         varchar16 spoken_language
         varchar16 caption_language
         varchar16 hindi_script "nullable"
+        varchar16 hinglish_spelling "nullable"
         varchar16 detected_language "nullable"
         float detected_confidence "nullable"
         bool held
@@ -208,6 +209,7 @@ values are applied by SQLAlchemy at flush time and are **not** in the schema.
 | `spoken_language` | varchar(16) | no | `'auto'` | `auto` or a language code |
 | `caption_language` | varchar(16) | no | `'same'` | `same` or a caption language (`services/languages.py`: `en` `hi` `bn` `mr` `ta` `ml` `fr` `de` `nl` `es` `pt` `it` `ru`) |
 | `hindi_script` | varchar(16) | yes | | how Hindi is written (v1.0.9): `roman` (Hinglish, on the Apex model), `devanagari`, or `auto` (decided from detection, then replaced by the result); NULL on older videos, which stay Devanagari until a Redo |
+| `hinglish_spelling` | varchar(16) | yes | | how Hinglish is spelled (v1.3.1): `everyday` (pehle, liye) or `formal` (the model's own); chosen with the languages, filled in (`everyday`) by a Hinglish job when none was; NULL on older videos, whose captions are formal until a Redo |
 | `detected_language` | varchar(16) | yes | | what detection heard from the first 30 s: the language step's (held upload), then the job's (v1.0.9) |
 | `detected_confidence` | double precision | yes | | its confidence, 0–1, rounded to 3 places |
 | `held` | boolean | no | `false` | uploaded while the language step is open, not started (v1.0.9): not listed, not counted, not recovered, and deleted after an hour if never started |
@@ -336,6 +338,7 @@ Keys in use (`backend/app/services/app_settings.py`):
 |---|---|---|
 | `gemini_api_key` | `PATCH /api/system/settings` | the key, **plain text** (acceptable: single-user, and Postgres is reachable only on the compose network); never returned by any response; never logged (both engines use `hide_parameters=True`); blank clears it (row deleted) |
 | `whisper_model` | `PATCH /api/system/settings` | `small`/`medium`/`large-v3-turbo`/`large-v3`; absent = automatic |
+| `vocabulary` | `PATCH /api/system/settings` | JSON list of the custom vocabulary (v1.3.1); absent = none. Read by the worker per job |
 | `worker_hardware` | worker at `worker_ready` | JSON: `cuda`, `gpu_name`, `vram_gb`, `ram_gb`, `cpu_count`, `whisper_default`, `translator`, `nvenc` (v1.2.0: whether `h264_nvenc` opens on the worker) |
 
 ### Enum types
@@ -396,7 +399,8 @@ date is the commit that introduced the file.
 | 20 | `a6d2f0c8b913` | 2026-10-30 | add `exports.quality` (v1.2.2), nullable and left null on existing rows |
 | 21 | `c3e7a9d15b42` | 2026-10-31 | existing videos keep their caption style (v1.3.0): every video with no `caption_styles` row gets one of the pre-1.3 default (Poppins Bold 54, outline 3, no shadow), so its burns don't change when the default does. No schema change; the downgrade leaves the rows |
 | 22 | `d4f8b2c6e1a7` | 2026-11-03 | add `caption_styles.shadow_blur` (v1.3.0, soft shadow), `0` (hard) on every existing row; new rows get the model's default 4 |
-| 23 | `e5a9c3d7f2b8` | 2026-11-03 | create `caption_fix_runs` and `caption_fixes` (v1.3.0, head, "Improve captions with Gemini"); both cascade with their video, fixes also with their caption |
+| 23 | `e5a9c3d7f2b8` | 2026-11-03 | create `caption_fix_runs` and `caption_fixes` (v1.3.0, "Improve captions with Gemini"); both cascade with their video, fixes also with their caption |
+| 24 | `f6b1d8e3a925` | 2026-11-04 | add `videos.hinglish_spelling` (v1.3.1, head), nullable and left NULL on existing rows: their captions stay as made until a Redo |
 
 ## 6. Migration rules
 
