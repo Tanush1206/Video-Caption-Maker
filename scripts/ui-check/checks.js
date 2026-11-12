@@ -830,6 +830,57 @@ const CHECKS = {
     await context.close();
   },
 
+  // Settings' custom vocabulary (v1.3.1): the count follows the text; a
+  // repeat is dropped on save and the list survives a reload; a word with
+  // characters a word can't have shows the server's reason; over the limit
+  // Save is disabled; fits at 375; axe 0, light and dark. Changes the
+  // install's word list and puts back what was there.
+  async vocabulary(browser, base) {
+    const { AxeBuilder } = require("@axe-core/playwright");
+    const api = await browser.newPage();
+    const before = (await (await api.request.get(`${base}/api/system`)).json()).vocabulary;
+    const lines = (...words) => words.join(String.fromCharCode(10));
+    const put = (words) => api.request.patch(`${base}/api/system/settings`, { data: { vocabulary: words }, headers: { Origin: base } });
+    try {
+      for (const [width, theme] of [[1440, "light"], [375, "dark"]]) {
+        const at = `vocabulary@${width} (${theme})`;
+        await put([]);
+        const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
+        await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+        const page = await context.newPage();
+        await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
+        const box = page.getByLabel("Words, one per line");
+        const save = page.getByRole("button", { name: "Save words" });
+        await box.scrollIntoViewIfNeeded();
+        ok(`${at}: empty, nothing to save`, (await box.inputValue()) === "" && (await save.isDisabled()));
+        // Five lines tall at every width: the shared input height once held it to one from sm up.
+        ok(`${at}: shows several lines`, (await box.boundingBox()).height >= 100, `${(await box.boundingBox()).height}px`);
+        await box.fill(lines("vlog", "Akrapovic", "VLOG", "Ladakh"));
+        ok(`${at}: the count follows`, await page.getByText("4 of 100 words").isVisible());
+        await page.waitForTimeout(400); // Save fades in from disabled
+        const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+        ok(`${at}: axe 0`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+        ok(`${at}: fits the width`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+        await save.click();
+        await page.getByText("Saved").waitFor();
+        const kept = lines("vlog", "Akrapovic", "Ladakh");
+        ok(`${at}: a repeat is dropped`, (await box.inputValue()) === kept, JSON.stringify(await box.inputValue()));
+        await page.reload({ waitUntil: "networkidle" });
+        ok(`${at}: kept after a reload`, (await page.getByLabel("Words, one per line").inputValue()) === kept);
+        await box.fill(lines("vlog", "<b>"));
+        await save.click();
+        const why = await page.getByRole("alert").filter({ hasText: "<b>" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
+        ok(`${at}: a bad word says why`, why);
+        await box.fill(lines(...Array.from({ length: 101 }, (_, i) => `word${i}`)));
+        ok(`${at}: over the limit Save is off`, (await save.isDisabled()) && (await box.getAttribute("aria-invalid")) === "true");
+        await context.close();
+      }
+    } finally {
+      await put(before);
+      await api.close();
+    }
+  },
+
   // The editor's Redo offers "Spelling" beside "Hindi in" (v1.3.1): a video
   // with none recorded (before v1.3.1) presets Everyday, one recorded Formal
   // presets Formal; disabled, not removed, for Devanagari; Redo sends the
