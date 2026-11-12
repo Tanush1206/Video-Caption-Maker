@@ -88,3 +88,8 @@ def test_twin_neighbours_reach_across_timed_words():
     segment = Segment(start_ms=0, end_ms=900, text=" ke lie", confidence=None,
                       speech=[(0, 400, " ke"), (400, 900, " lie")])
     assert [w for _, _, w in spelling.everyday_segment(segment).speech] == [" ke", " liye"]
+
+
+def test_banaata_follows_bataata():
+    """Found in leo.mp4 0:25 after v1.3.1 was built: the siblings of "bataata" -> "batata"."""
+    assert spelling.everyday("main studio banaata hoon, banaate hain, banaati hai") == "main studio banata hoon, banate hain, banati hai"

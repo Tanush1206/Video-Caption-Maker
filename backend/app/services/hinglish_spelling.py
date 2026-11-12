@@ -68,7 +68,8 @@ WORDS: dict[str, str] = {
     # a long aa where everyday writing has a short one
     "chaahe": "chahe", "chaahte": "chahte", "chaahta": "chahta", "chaahti": "chahti",
     "khaana": "khana", "baahar": "bahar", "bataata": "batata", "bataane": "batane",
-    "bataana": "batana", "bataaya": "bataya", "dikhaata": "dikhata",
+    "bataana": "batana", "bataaya": "bataya", "banaata": "banata",
+    "banaate": "banate", "banaati": "banati", "dikhaata": "dikhata",
     "dikhaana": "dikhana", "dikhaane": "dikhane", "banaane": "banane",
     "lagaana": "lagana", "lagaaya": "lagaya", "karaane": "karane", "karaaya": "karaya",
     "chalaane": "chalane", "chalaaya": "chalaya", "nikaala": "nikala",
