@@ -418,3 +418,21 @@ async def test_devanagari_captions_record_no_spelling(client, auth_headers, samp
 
     async with AsyncSessionLocal() as session:
         assert (await session.get(Video, video_id)).hinglish_spelling is None
+
+
+async def test_the_vocabulary_spells_hinglish_captions_after_everyday_spelling(
+    client, auth_headers, sample_video_bytes, fake_pipeline, monkeypatch
+):
+    """v1.3.1: "laddaakh" -> everyday "ladakh" -> the vocabulary's "Ladakh"; "block" -> "vlog"."""
+    from app.services import app_settings
+    from app.workers import transcription as job
+
+    async def words(session):
+        return ["Ladakh", "vlog"]
+
+    monkeypatch.setattr(app_settings, "vocabulary", words)
+    _apex_says(monkeypatch, "Is block ke end mein laddaakh nahin")
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="roman")
+    await job._run(video_id)
+
+    assert " ".join(await _captions(video_id)) == "Is vlog ke end mein Ladakh nahi"

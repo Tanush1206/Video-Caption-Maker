@@ -32,6 +32,7 @@ from app.services import (
     storage,
     transcription,
     translation,
+    vocabulary,
 )
 from app.services import caption as caption_service
 from app.workers.celery_app import celery_app
@@ -160,6 +161,7 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
         # Read per job, not per process: Settings can change between jobs.
         whisper_choice = await app_settings.whisper_override(session)
         gemini_key = await app_settings.gemini_key(session)
+        words = await app_settings.vocabulary(session)
 
     source = storage.resolve(source_relative)
     if not source.exists():
@@ -359,6 +361,11 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
     # spelling, and before phrasing, so the text and the timed words agree.
     if roman and not translated and spelling == hinglish_spelling.EVERYDAY:
         segments = [hinglish_spelling.everyday_segment(segment) for segment in segments]
+    # The custom vocabulary (v1.3.1, services/vocabulary.py): after spelling,
+    # so "laddaakh" -> "ladakh" -> "Ladakh". On the caption text, never given
+    # to the model, where it measured worse in every language.
+    if words:
+        segments = [vocabulary.apply_segment(segment, words) for segment in segments]
 
     # The word timings the captions are made from, kept with the video.
     spoken = [
