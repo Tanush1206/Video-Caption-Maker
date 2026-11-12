@@ -923,6 +923,8 @@ const CHECKS = {
         await page.getByRole("button", { name: /Redo/ }).click();
         await page.waitForURL(/\/dashboard/);
         ok(`${at}: Redo sends ${other}`, sent?.hinglish_spelling === other && sent?.hindi_script === "roman", JSON.stringify(sent));
+        // The editor keeps polling: stop answering before the context goes.
+        await page.unrouteAll({ behavior: "ignoreErrors" });
         await context.close();
       }
     }
@@ -2148,6 +2150,8 @@ const CHECKS = {
         } else {
           ok(`${at}: says nothing with no check running`, (await warning.count()) === 0);
         }
+        // The editor keeps polling: stop answering before the context goes.
+        await page.unrouteAll({ behavior: "ignoreErrors" });
         await context.close();
       }
     }
