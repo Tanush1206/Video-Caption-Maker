@@ -11,7 +11,9 @@ automated tests can't reach (GPU, installers, updates).
 | Backend lint | ruff (`backend/ruff.toml`) | `backend/` | **yes** (`ci.yml`, job `backend`) |
 | Backend unit and integration | pytest 8 + pytest-asyncio (`asyncio_mode = auto`, **one session-wide event loop**) + httpx `ASGITransport` | `backend/tests/` (351 collected: 350 pass, 1 skipped, on v1.0.5) | **yes** (`ci.yml`, job `backend`): the CPU dev image runs against Postgres, Redis and ChromaDB service containers |
 | Frontend static checks | `next lint` (`next/core-web-vitals`), `tsc --noEmit`, `next build` | `frontend/` | yes (`ci.yml`, job `frontend`) |
-| Installer scripts | `bash -n`, `shellcheck -S warning`, `docker compose config -q` for both compose files | `install/`, compose files | yes (`ci.yml`, job `scripts`) |
+| Installer scripts | `bash -n`, `shellcheck -S warning`, `docker compose config -q` for both compose files; `install/tests/` (`vcm pull`, `update`, `doctor`, in bash and PowerShell 7, against `fake_docker.py`) | `install/`, compose files | yes (`ci.yml`, job `scripts`) |
+| Both architectures (v1.4.0) | `scripts/ci_arch_check.sh` (build, a local registry, the real `install.sh`, containers' architecture) and `scripts/ci_smoke.py` (an English and a Hinglish-to-Spanish transcription and a burn, timed) | `ubuntu-24.04` and `ubuntu-24.04-arm` | yes (`arm64.yml`, every push; the times as a notice) |
+| The released version still installs (v1.4.0) | `weekly-check.yml`: assets against `SHA256SUMS`, every image anonymously and multi-arch, the models (`scripts/weekly_models.py`), the pinned dependencies, the site | the latest release | Mondays 06:00 UTC and by hand; a failure opens (or comments on) one `weekly-check` issue |
 | End to end | `scripts/e2e.py` (stdlib only) | against a running install or dev stack | no (manual) |
 | UI screenshots, accessibility and behaviour | Playwright 1.63 (Chromium) + axe-core 4.13 | `scripts/ui-check/` | no (manual, against a running app) |
 | Update download size | `scripts/update_layers.py` | against GHCR | no (manual, at release) |
@@ -206,7 +208,7 @@ or a dev server. On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first.
 cd scripts/ui-check && npm ci && npx playwright install chromium
 node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
-node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script unsupported-speech script-fonts
+node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script unsupported-speech script-fonts cls pipeline-stages
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 caption-timing   # read-only; VCM_CHECK_SECONDS (default 20) of playback
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 redo-script retired-language   # read-only
@@ -238,6 +240,8 @@ what the 9:16 run is for.
 | `checks.js redo-spelling` | the editor's Redo lacks "Spelling" beside "Hindi in", doesn't preset Everyday for a video with none recorded or Formal for one recorded Formal, says "Press Redo" before anything changes, isn't disabled (without moving) for Devanagari, or doesn't send the choice; axe isn't 0, light and dark. The Redo request is answered by the check. Needs a video with captions; read-only (v1.3.1) |
 | `checks.js vocabulary` | at 1440 light and 375 dark: Settings' custom vocabulary isn't five lines tall, its count doesn't follow the text, a repeat isn't dropped on save, the list doesn't survive a reload, a bad word doesn't show the server's reason, Save isn't off past 100 words, or axe isn't 0. Puts back the install's list (v1.3.1) |
 | `checks.js export-improving` | at 1440 light and 375 dark, with the check's state mocked: the export dialog doesn't warn while Improve is running, warns with none running, overflows, or axe isn't 0. Read-only (v1.3.1) |
+| `checks.js cls` | on the dashboard or settings, at 375 and 1440 px, light and dark, with every API answer 600 ms late, the layout shifts add up to more than 0.01 while the page loads (the nodes that moved are printed). Read-only (v1.4.0) |
+| `checks.js pipeline-stages` | at 1440 light and 375 dark, with a video's state mocked as `recovering` 40% and `phrasing` 70%: the stage isn't its own running row with its percentage, the one before isn't Done, the one after doesn't wait, the page overflows, or axe isn't 0. Read-only (v1.4.0) |
 | `checks.js hindi-script` | at 375 or 1440 px, with the API's answers mocked: Hindi heard at 94% doesn't preset Hinglish or say what was heard; Hindi heard at 60% doesn't ask with nothing preset, offer two answers and hold Start until one is picked; no answer in 15 s doesn't ask without holding Start; English captions ask; Back doesn't delete the upload; Start doesn't send exactly the choice (`spoken_language`, `caption_language`, `hindi_script`); axe isn't 0 with the choice open, in light and dark. Read-only (v1.0.9; Marathi's own answer removed in v1.0.11) |
 | `checks.js unsupported-speech` | at 375 or 1440 px, with detection mocked: Tamil or Marathi heard doesn't say "<Language> speech isn't supported yet, so captions would be inaccurate.", presets a choice, or lets Start go before one; the spoken-language picker offers anything but the served languages; "Try anyway" doesn't send `auto`; a language chosen isn't sent; Hindi chosen doesn't ask how it's written with nothing preset; axe isn't 0 with the notice open, light and dark. Read-only (v1.0.11) |
 | `checks.js retired-language` | a video answered as made in Tamil (v1.0.10) doesn't show its captions, isn't named Tamil, lacks the "isn't supported yet" note, or its Redo doesn't ask for an offered language; no Export. Needs a completed video; read-only (v1.0.11) |
@@ -474,7 +478,11 @@ Full layer digests are in PROGRESS.md.
 | Deleting a video deletes its export files | `test_exports.py` (`test_deleting_the_video_deletes_its_export_files`; fails without the fix) | |
 | `/api/ask` without a key says a key is needed | `test_search.py` | |
 | API version is `VCM_VERSION` | `test_version.py` | |
-| ARM machines (v1.2.1): our images are asked for as `linux/amd64`, Postgres/Redis/ChromaDB left native, with and without the GPU file; the real install.sh on an arm64 runner says the app is emulated, pulls, starts, answers, our containers run amd64 and the others arm64, and `vcm stop`/`up` work without `DOCKER_DEFAULT_PLATFORM`; a pull that fails for want of a platform is not reported as a network error | CI `scripts` job (compose config), `.github/workflows/arm64.yml` (on `ubuntu-24.04-arm`, with this commit's files served as a release) | the pull-error messages of both installers against fake failures (platform, network, other); Tanush's M2 MacBook Air |
+| ARM machines (v1.4.0): the CPU backend, worker and frontend carry no platform (native on ARM), only the CUDA images ask for `linux/amd64`; the real install.sh on both architectures installs from this commit's images (a local registry), says nothing about emulation, starts and answers; every container runs the host's architecture; an English and a Hinglish-to-Spanish transcription (faster-whisper, Apex, IndicXlit, M2M100) and a burn (FFmpeg) work, timed next to amd64; a pull that fails for want of a platform is not reported as a network error | CI `scripts` job (compose config, platform check), `.github/workflows/arm64.yml` (`ubuntu-24.04-arm` and `ubuntu-24.04`) | first run, 2026-11-12: English 31.9 s arm64 / 35.8 s amd64, Hinglish to Spanish 54.0 / 42.8 s, burn 1.1 / 1.1 s (PROGRESS.md v1.4.0); Tanush's M2 MacBook Air after each release that changes it |
+| Honest progress (v1.4.0): the job writes `extracting`, `transcribing`, `recovering`, `phrasing`, `embedding` in that order (`translating` before `phrasing` when it runs), each stage's values in the order they were made, up to 100; the second pass reports its share of stretches; phrasing follows the work (a run's cost, the cube of its length) and moves inside one long run; the splitter's prefix sums cut exactly as the v1.3.1 code did | `test_hindi_script.py::test_progress_runs_through_every_stage_in_order`, `test_transcription.py::test_the_second_pass_reports_its_share_of_stretches`, `test_caption_phrasing.py::test_phrasing_progress_follows_the_work_and_moves_inside_a_long_run`, `::test_the_faster_splitter_cuts_exactly_as_before` (against the v1.3.1 splitter, kept in the test) | `checks.js pipeline-stages`; a 60-minute Hindi video on the GPU dev stack, every progress value logged (`test-assets/results/v1.4.0/long_progress.py`): phrasing 390 s with 192 s on one value before, 85 s with no stall over 7 s after |
+| `vcm update` hands over safely (v1.4.0): the downloaded `vcm` finishes the update; a bad checksum changes nothing and pulls nothing; a `vcm` that can't start, or exits 3 before doing anything, leaves the update to the running one; no network mid-pull leaves every file as it was; an ARM install on Intel/AMD images is told it downloads them in full once, a native one isn't | `install/tests/test_vcm_update.sh` and `.ps1` (CI, against a fake docker and a local "release") | |
+| `vcm doctor` (v1.4.0): the report holds the version, variant, port, system, Docker, compose, containers, health, `/api/system` and logs, and none of the `.env`'s secrets, a Gemini key, tokens, bearer and cookie values, email addresses, video file names, the vocabulary, GPU UUIDs or the home folder; it is written in the current folder and says to review it | `install/tests/test_vcm_doctor.sh` and `.ps1` (CI) | run on the install at each release, the file read through |
+| No layout shift while loading (v1.4.0, launch audit P1): the dashboard's header is the same in its loading and loaded states, its skeleton shows as many rows as the last visit had, the stats keep their height, and settings hold the screen while they load | | `checks.js cls` (<= 0.01; 0.059-0.071 before on this machine) |
 | Forwarded headers trusted only from the frontend | `test_proxy_headers.py` | live: a container aliased `frontend` vs another (v1.0.5) |
 | No Celery limit can cut a long job | `test_worker_config.py` | measured: `--pool=solo` enforces no limit |
 | The worker is healthy while a job runs (v1.2.0): a heartbeat thread beats only while Redis answers, keeps beating while the job holds the worker, and a restart clears the old beat | `test_worker_config.py` (`test_the_heartbeat_*`, `test_a_restarted_worker_does_not_count_its_old_heartbeat`) | the health command polled every 8 s through a 15-minute transcription and burn on the GPU dev stack: healthy every time, while `celery inspect ping` got no answer; on the install after the update, `docker ps` during `burn_time.py` |
@@ -646,11 +654,15 @@ else does.
 
 **Tag and release** (maintainer)
 1. Push `main`, then the tag `vX.Y.Z`.
-2. `release.yml` must finish all 4 jobs green:
-   - images: backend cpu, backend cuda, frontend;
+2. `release.yml` must finish all 8 jobs green (v1.4.0):
+   - images: backend cpu amd64 and arm64, backend cuda, frontend amd64 and
+     arm64;
+   - manifests: backend cpu, frontend (each joins its two architectures);
    - release.
 3. GHCR gets `X.Y.Z-cpu`, `X.Y.Z-cuda`, `latest-*` and the frontend
-   `X.Y.Z`/`latest`.
+   `X.Y.Z`/`latest`. The CPU backend and frontend tags each list amd64 and
+   arm64 (`docker buildx imagetools inspect`), CUDA amd64 only; the
+   per-architecture tags (`X.Y.Z-cpu-amd64` …) are also there.
 4. The Release has **8 assets**. Download them from
    `releases/latest/download/` and check each against `SHA256SUMS`.
 5. Packages and repo are public (an anonymous manifest fetch returns 200).

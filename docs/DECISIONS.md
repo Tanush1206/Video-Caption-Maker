@@ -40,7 +40,7 @@ an image pull.
 **Trade-offs.**
 - The user needs Docker, a large prerequisite on Windows/macOS.
 - The images are 0.8 GB (CPU) and 2.3 GB (CUDA) compressed.
-- Apple Silicon runs amd64 images under emulation.
+- Apple Silicon ran amd64 images under emulation until v1.4.0 (D25).
 - Port conflicts with other local apps are handled by the installer's
   port fallback.
 - TLS-intercepting antivirus needs the `certs/` workaround.
@@ -823,6 +823,82 @@ people want names and brands spelled their way.
 **Alternatives.** A map learnt per video (can't promise it means one
 thing); Gemini respelling (sends text, not deterministic); the vocabulary as
 hotwords only where it helps (it helped nowhere).
+## D25. CPU images for amd64 and arm64; CUDA stays amd64
+
+**Date:** 2026-11-12 (`7a93a3f`, `9525450`, `ea75604`)
+
+**Context.** Until v1.3.1 every image was amd64 only, and from v1.2.1 the
+compose file asked for `linux/amd64`, so Apple silicon and ARM Linux ran the
+app emulated (Rosetta or QEMU): slow, and dependent on a Docker Desktop
+setting. Every wheel the CPU image needs has an aarch64 build.
+
+**Decision (Tanush, 2026-11-12).**
+- The CPU backend and the frontend are built for both, each on a native
+  runner (`ubuntu-24.04`, `ubuntu-24.04-arm`), and joined into one tag.
+- `platform: linux/amd64` is removed from the CPU services and kept only
+  for the CUDA images, which stay amd64.
+- The installer drops the emulation note and the Rosetta check on ARM.
+- The amd64 build keeps its cache names, so Intel/AMD updates stay small. An
+  ARM install from before v1.4.0 downloads the images in full once, and the
+  update output and the CHANGELOG say so.
+- `arm64.yml` installs and times both architectures on each push. There is
+  no macOS CI: GitHub's Apple-silicon runners can't run Docker, and an Intel
+  Mac runner would test the wrong Mac. macOS stays tested by hand.
+
+**Alternatives.** Building arm64 under QEMU on one runner (hours, and slower
+than native for the CI check); keeping emulation (works, but slow).
+
+---
+
+## D26. `vcm update` hands over to the version it downloaded
+
+**Date:** 2026-11-12 (`02ef9bf`)
+
+**Context.** `vcm update` is run by the installed `vcm`, so what an update
+says and does was always the previous version's: v1.3.1's `vcm` could not
+tell an ARM user that v1.4.0 downloads the images in full.
+
+**Decision (Tanush, 2026-11-12).** "Docs + hand-over, with a safety rule."
+- After the downloaded files pass `SHA256SUMS`, the running `vcm` asks the
+  new one for `__handover` (it must answer `vcm-handover-1`), then runs its
+  `__finish-update`.
+- The safety rule: if the new `vcm` fails its checksum, can't start, or
+  stops before doing anything (exit 3), the running `vcm` finishes the
+  update as before. Either way the install is exactly as it was until the
+  images are pulled.
+- The pull uses the staged compose files, which are moved into place only
+  after it succeeds, so no network mid-update changes nothing.
+- Tested for a bad checksum, a `vcm` that can't start, one that exits early,
+  and no network mid-update (`install/tests/test_vcm_update.{sh,ps1}`).
+- The hand-over works from v1.4.0's `vcm` on: the update *to* v1.4.0 is
+  still run by the installed one, so its ARM note is in the docs only.
+
+**Alternatives.** Docs only (the user learns about the full download after
+it starts); a separate updater script (one more thing to install and check).
+
+---
+
+## D27. CI pinned to `ubuntu-24.04`, actions pinned to commits
+
+**Date:** 2026-11-12 (`f80e414`, `df7f833`)
+
+**Context.** GitHub announced that `ubuntu-latest` moves to Ubuntu 26.04,
+and that actions on Node 20 stop running. The launch audit (S7) found
+actions pinned to tags and release permissions broader than needed.
+
+**Decision.** Every job runs on `ubuntu-24.04` (or `ubuntu-24.04-arm`), so
+the move is a commit, not a surprise; every action is pinned to the commit
+of a Node 24 release, with Dependabot proposing updates weekly; each
+workflow starts with no permissions or `contents: read`, and only what
+publishes gets more: the image jobs `packages: write`, the release job
+`contents: write`, the site `pages: write` and `id-token: write`, the weekly
+check's report job `issues: write`. Moving to 26.04 is on the ROADMAP.
+
+**Alternatives.** `ubuntu-latest` (moves under a release); 26.04 now (new
+images, untested with this build, days before the deadline).
+
+---
+
 ## Decisions recorded
 
 Answers from the maintainer (2026-10-14) to this document's former open

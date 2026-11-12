@@ -185,6 +185,21 @@ The original 10-milestone build plan is historical and lives in
   phrasing of a long video faster.
 - **Why deferred:** in the finishing plan only if time is left after v1.4.0
   item e).
+- **v1.4.0, partly done:** phrasing reports its progress from inside the
+  splitter, and the splitter's prefix sums made it 4.6x faster with the same
+  cuts (60 minutes of Hindi: 390 s to 85 s).
+- **Left: capping run length** (Tanush, 2026-11-12: keep on the roadmap).
+  The splitter's cost grows with the cube of a run's length (a run is the
+  speech between two pauses of 0.5 s or more), so one long unbroken run is
+  most of the time. Cutting a run longer than some limit at its best
+  natural break before splitting would bound it, but can change where
+  captions break; measure against the v1.4.0 cuts before shipping.
+
+### CI on Ubuntu 26.04
+- **What:** move the workflows from `ubuntu-24.04` (and `-arm`) to 26.04.
+- **Why later:** pinned to 24.04 in v1.4.0 so GitHub's move of
+  `ubuntu-latest` can't change a release build (D27); move once 26.04 has
+  been run through ci, arm64 and a manual release run.
 
 ### Translation falls back to Gemini Flash-Lite too
 - **What:** when the configured Gemini model is busy ("503 high demand"),
