@@ -730,9 +730,14 @@ def transcribe(
     language: str | None = None,
     task: str = "transcribe",
     on_progress: Callable[[int], None] | None = None,
+    on_recover: Callable[[int], None] | None = None,
 ) -> tuple[list[Segment], str]:
     """
     Transcribe an audio file, returning (segments, detected_language).
+
+    `on_recover` (v1.4.0) follows the second pass, the re-decoding of long
+    uncaptioned stretches: on an hour of Hindi it took 8 of 30 minutes,
+    shown as "Transcribing 99%" until then (docs/LAUNCH_AUDIT.md, P2).
 
     faster-whisper yields segments lazily as it decodes, so progress is
     reported from how far through the audio each segment ends — the only
@@ -752,7 +757,9 @@ def transcribe(
 
     segments, info = _decode(model, audio_path, language, task, spans, levels, on_progress)
     if segments:
-        segments = _fill_skipped(model, audio_path, segments, language or info.language, task, spans, levels)
+        segments = _fill_skipped(
+            model, audio_path, segments, language or info.language, task, spans, levels, on_progress=on_recover,
+        )
     if not segments:
         # Whisper skips a 30-second window when it thinks it is probably not
         # speech AND its words are unlikely. A small model on fast speech in
@@ -946,8 +953,12 @@ def _collapse_loops(segments: list[Segment]) -> list[Segment]:
 def _fill_skipped(
     model, audio_path, segments, language, task, spans, levels,
     within: tuple[float, float] | None = None, depth: int = 0,
+    on_progress: Callable[[int], None] | None = None,
 ) -> list[Segment]:
-    """`segments` with every long uncaptioned stretch decoded on its own and merged in."""
+    """
+    `segments` with every long uncaptioned stretch decoded on its own and
+    merged in. `on_progress` gets the share of stretches done, 0-100.
+    """
     lo, hi = within if within is not None else (0.0, _duration(audio_path))
     speaking = _speaking_level(levels)
     segments = list(segments)
@@ -957,9 +968,16 @@ def _fill_skipped(
     # decoding it again said it twice ("Hamko bas. Hamko bas SRT file").
     bounds = [lo] + [_said(s)[1] for s in segments]
     starts = [_said(s)[0] for s in segments] + [hi]
-    for index, (gap_start, gap_end) in enumerate(zip(bounds, starts)):
+
+    def worth(gap_start: float, gap_end: float) -> tuple[bool, float]:
         voiced = _voiced_seconds(gap_start, gap_end, levels, speaking) if levels else 0.0
-        if gap_end - gap_start >= SKIPPED_GAP_SECONDS or voiced > UNCAPTIONED_SPEECH_SECONDS:
+        return gap_end - gap_start >= SKIPPED_GAP_SECONDS or voiced > UNCAPTIONED_SPEECH_SECONDS, voiced
+
+    todo = sum(worth(a, b)[0] for a, b in zip(bounds, starts)) if on_progress else 0
+    done = 0
+    for index, (gap_start, gap_end) in enumerate(zip(bounds, starts)):
+        decode, voiced = worth(gap_start, gap_end)
+        if decode:
             found = _decode_stretch(model, audio_path, gap_start, gap_end, language, task, spans, levels)
             if not found and voiced > UNCAPTIONED_SPEECH_SECONDS:
                 # Never invented: what Whisper won't say stays empty.
@@ -990,8 +1008,13 @@ def _fill_skipped(
                     else:
                         segments[index] = trimmed
             filled.extend(found)
+            done += 1
+            if on_progress and todo:
+                on_progress(int(100 * done / todo))
         if index < len(segments):
             filled.append(segments[index])
+    if on_progress:
+        on_progress(100)
     filled.sort(key=lambda s: s.start_ms)
     # Never overlapping: a recovered segment ends where the next one starts.
     for a, b in zip(filled, filled[1:]):

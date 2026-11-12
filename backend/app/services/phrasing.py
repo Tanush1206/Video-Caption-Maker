@@ -28,7 +28,7 @@ repeated (`rephrase` checks it).
 """
 
 import difflib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 SENTENCE_END = (".", "!", "?", "…", "।", "॥", "。", "！", "？")
@@ -345,15 +345,29 @@ def _merge_closest(runs: list[list[tuple[int, int, str]]], count: int) -> list[l
     return runs
 
 
-def rephrase(captions: Sequence) -> list[Phrase]:
+def rephrase(captions: Sequence, on_progress: Callable[[int], None] | None = None) -> list[Phrase]:
     """
     Phrase-level captions from captions with `start_ms`, `end_ms`, `text`,
     `confidence` and, ideally, `speech` (their word timings).
+
+    `on_progress` (v1.4.0) gets 0-100 as sentences are done, each weighed by
+    the cube of its length: `split_phrases` costs that, and on an hour of
+    Hindi with few full stops phrasing took 7.4 silent minutes
+    (docs/LAUNCH_AUDIT.md, P2).
     """
     out: list[Phrase] = []
     run_index = 0
     said_until = 0
-    for sentence in _sentences(captions):
+    sentences = _sentences(captions)
+    weights = [max(1, sum(len(c.text.split()) for c in s)) ** 3 for s in sentences]
+    total, so_far, shown = sum(weights), 0, -1
+    for sentence, weight in zip(sentences, weights):
+        if on_progress:
+            percent = int(100 * so_far / total) if total else 0
+            if percent != shown:
+                on_progress(percent)
+                shown = percent
+        so_far += weight
         words = [w for caption in sentence for w in caption.text.split()]
         # Every word with its own time (`_word_times`), in order.
         timed: list[tuple[str, int, int]] = []
@@ -386,6 +400,8 @@ def rephrase(captions: Sequence) -> list[Phrase]:
         for run in runs:
             out.extend(_timed(run, sentence[0].confidence, run_index))
             run_index += 1
+    if on_progress:
+        on_progress(100)
     out.sort(key=lambda p: p.start_ms)
     _settle(out)
 

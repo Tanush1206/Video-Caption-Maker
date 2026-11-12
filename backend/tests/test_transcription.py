@@ -389,7 +389,7 @@ async def test_a_video_with_nothing_to_caption_says_so(client, auth_headers, sam
     monkeypatch.setattr(transcription, "load_model", lambda profile, *a, **k: None)
     monkeypatch.setattr(transcription, "extract_audio", lambda source, dest, *a: Path(dest).write_bytes(b""))
     monkeypatch.setattr(transcription, "detect_language", lambda path: ("en", 0.9))
-    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None: ([], language))
+    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None, on_recover=None: ([], language))
     monkeypatch.setattr(embeddings, "delete_video_vectors", lambda *a: None)
     monkeypatch.setattr(embeddings, "index_captions", lambda *a: None)
 
@@ -1407,3 +1407,15 @@ def test_lines_said_between_music_are_kept(monkeypatch, tmp_path):
     ])
     assert [c.text for c in found] == ["Aaj hogi sirph gol", "log yaad karo bhaiyon, agla."]
     assert [c.start_ms for c in found] == [440750, 806400]
+
+
+def test_the_second_pass_reports_its_share_of_stretches(stretches):
+    """v1.4.0: the re-decode of uncaptioned stretches is a stage of its own, with a real percentage."""
+    from app.services import transcription
+
+    segments = [_seg(5.0, 6.0, ["a"]), _seg(12.0, 13.0, ["b"]), _seg(20.0, 21.0, ["c"])]
+    seen = []
+    transcription._fill_skipped(None, Path("a.wav"), segments, "hi", "transcribe", [], [], on_progress=seen.append)
+    # Four stretches of 4 s or more (0-5, 6-12, 13-20, 21-30): 25% each, then done.
+    assert len(stretches.asked) == 4
+    assert seen == [25, 50, 75, 100, 100]

@@ -364,3 +364,14 @@ def test_a_guessed_last_word_does_not_push_the_next_caption_late():
     # On screen by the time it is said, whichever caption it falls in.
     start = next(p.start_ms for p in phrases if "हमको" in p.text.split())
     assert start - 43_800 <= 100, start
+
+
+def test_phrasing_reports_progress_weighed_by_sentence_cost():
+    """v1.4.0: rising to 100, and a long sentence (its cost is the cube of its length) counts for more."""
+    short = [Segment(start_ms=i * 1000, end_ms=i * 1000 + 800, text=f"word{i}.", confidence=None) for i in range(3)]
+    long_ = Segment(start_ms=5000, end_ms=25000, text=" ".join(f"w{i}" for i in range(40)) + ".", confidence=None)
+    seen = []
+    phrasing.rephrase(short + [long_], on_progress=seen.append)
+    assert seen == sorted(seen) and seen[-1] == 100
+    # The three one-word sentences are a sliver of the work; the long one is the rest.
+    assert seen[:-1] and max(seen[:-1]) < 5
