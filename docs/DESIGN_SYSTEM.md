@@ -241,7 +241,12 @@ video", unsupported speech, translation fallbacks, upload and load errors.
 - `Stepper`: Upload → Language → Export as an `<ol>` (`aria-current="step"`):
   a check for done, an accent dot and semibold for the active step, a grey
   dot ahead; hairline connectors. No box around it.
-- `Skeleton`: a pulse on the grouped tone, shaped like the content.
+- `Skeleton`: a pulse on the grouped tone, shaped like the content. A page
+  that loads keeps its layout (v1.4.0, CLS <= 0.01): the parts that don't
+  wait for data (the dashboard's header and upload) are drawn once for both
+  states, the skeleton has as many rows as the last visit showed
+  (`localStorage["vcm.library.count"]`) and the height of what replaces it,
+  and a page loading as a whole holds the screen (`min-h-screen`).
 
 ### Hints (`lib/hints.ts`)
 
@@ -270,6 +275,8 @@ helper lines that used to sit under the timeline and the video.
   large-v3" with a dot, Back (grey) and Start (primary).
 - **Processing:** the pipeline as one grouped list (check, spinner or dot;
   Done, the percentage or Queued), a thin bar on the running stage only;
+  since v1.4.0 "Checking for missed speech" and "Arranging captions" are
+  rows of their own, each with its percentage, in the order they run;
   the one-time model download as a grouped block above it.
 - **Failed:** "Processing stopped" with a small red icon, the reason in
   grey, Try again (primary), Retry with small model (grey), Open Settings

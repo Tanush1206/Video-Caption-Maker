@@ -144,7 +144,7 @@ flowchart LR
 ├── docker-compose.yml           dev stack (bind mounts, hot reload)
 ├── docker-compose.prod.yml      installed app (project `vcm`)
 ├── docker-compose.gpu.yml       NVIDIA override for either
-└── .github/workflows/           ci.yml, release.yml
+└── .github/workflows/           ci.yml, arm64.yml, release.yml, pages.yml, weekly-check.yml
 ```
 
 ## 4. The job pipeline
@@ -176,10 +176,11 @@ sequenceDiagram
     W->>DB: DELETE captions; W->>V: delete vectors (idempotent re-run)
     W->>W: 0 downloading: load Whisper (unloads translator)
     W->>W: 1 extracting: FFmpeg → <src>.transcode.wav
-    W->>W: 2 transcribing: detect language (30 s) if auto; Hindi in Roman → load the Hinglish model; decode, then re-decode skipped stretches
+    W->>W: 2 transcribing: detect language (30 s) if auto; Hindi in Roman → load the Hinglish model; decode
+    W->>W: 2a recovering: re-decode the stretches left without captions
     W->>W: 2b translating: Hinglish → IndicXlit Devanagari first; Gemini → fallback M2M100 (unloads Whisper)
     W->>W: 2c Hinglish in everyday spelling; the vocabulary's spellings (text and timed words)
-    W->>W: 3 phrases: rephrase and time to the word timestamps
+    W->>W: 3 phrasing: rephrase and time to the word timestamps
     W->>DB: INSERT captions, videos.speech
     W->>V: 4 embedding: upsert "{video}:{caption}" vectors
     W->>DB: status=completed, notice
@@ -190,8 +191,24 @@ sequenceDiagram
 
 Stage names are fixed strings, written to `videos.stage`: `detecting` (a
 held upload, v1.0.9), `downloading`, `extracting`, `transcribing`,
-`translating`, `embedding`. The UI labels for
-them are in `frontend/src/lib/stages.ts`.
+`recovering` and `phrasing` (v1.4.0), `translating`, `embedding`. The UI
+labels for them are in `frontend/src/lib/stages.ts`, and the pipeline shows
+them in the order the job runs them (`flow/video-status.tsx`).
+
+**Progress is the stage's own work** (v1.4.0). Until v1.3.1 the second pass
+and phrasing ran inside `transcribing` at 99%: on 60 minutes of Hindi, 15
+minutes at "99%". Now:
+- `transcribing` is Whisper's position in the audio; `recovering` the share
+  of the left-out stretches decoded again (`_fill_skipped`'s `on_progress`);
+- `phrasing` is weighted by the work: a translated sentence by its words, an
+  untranslated one by the cube of each run's length (the splitter's cost),
+  measured in a first pass; inside a long run the splitter reports each
+  phrase count it tries (`split_phrases`'s `on_step`), so the bar moves;
+  capped at 99 until saved;
+- reports from Whisper's and phrasing's threads go through one chain per
+  job (`_reporter`), so they are written in the order made, and are flushed
+  before the next stage starts. Measured on 60 minutes (PROGRESS.md v1.4.0):
+  phrasing 390 s with 192 s on one value, then 85 s with no stall over 7 s.
 
 Rules the code enforces:
 
@@ -314,7 +331,11 @@ Rules the code enforces:
   - then: a breath under 0.5 s closes to 2 frames (80 ms), a pause stays at
     least 0.5 s, a caption ends at most 0.5 s after its last word and lasts
     0.8-7 s (a squeezed one joins the neighbour the speech runs into);
-  - the words are checked unchanged and in order.
+  - the words are checked unchanged and in order;
+  - the splitter (v1.4.0) scores each split with prefix sums of the word
+    lengths rather than re-joining the phrase, 4.6x faster on 60 minutes of
+    Hindi, the same cuts (`test_the_faster_splitter_cuts_exactly_as_before`
+    against the v1.3.1 code).
   Only this job applies the rules: a caption retimed in the editor keeps its
   times until a Redo. `scripts/caption_quality.py` and
   `backend/scripts/timing_check.py` check a real video against them.
@@ -623,7 +644,7 @@ Other retry limits in the code:
 |---|---|---|
 | Project name | directory name (`videocaptionmaker`) | `vcm` (so `--remove-orphans` can never touch dev) |
 | Images | built locally, `target: dev`; backend `VARIANT` defaults to **cpu**, `VCM_VARIANT=cuda` for the GPU | pulled from GHCR, `VCM_VERSION`-`VCM_VARIANT` (`cpu` unless the installer found a GPU) |
-| Platform | the host's | our images (backend, worker, frontend) `platform: linux/amd64`, the only one they are built for: on Apple silicon and ARM Linux Docker emulates them instead of failing to pull (v1.2.1). Postgres, Redis and ChromaDB native. The installer reads Docker's architecture, says the app is emulated and slower, checks amd64 containers run (and Docker Desktop's Rosetta setting on a Mac), and never picks the GPU there |
+| Platform | the host's | the host's (v1.4.0): the CPU backend, the worker and the frontend are built for amd64 and arm64, so Apple silicon and ARM Linux run them natively, as Postgres, Redis and ChromaDB always were. Only the CUDA images are amd64 alone, and `docker-compose.gpu.yml` keeps `platform: linux/amd64` for them. The installer stops on ARM with `VCM_GPU=1` and never picks the GPU there (v1.2.1-1.3.1 asked for amd64 everywhere and ran it emulated) |
 | Source | bind-mounted (`./backend:/app`, `./frontend:/app`) | baked into the image |
 | Backend command | `uvicorn --reload`; **migrations are run by hand**: `docker compose exec backend alembic upgrade head` | entrypoint `api`: `alembic upgrade head`, then uvicorn `--no-proxy-headers` |
 | Worker command | `watchfiles … celery … --pool=solo` (restarts on code change) | entrypoint `worker` |
@@ -679,6 +700,14 @@ NVENC.
   last here too.
 - CI caches layers in GHCR (`buildcache*` tags), so unchanged layers keep
   their digests from release to release. See DECISIONS.md D7.
+- **Two architectures** (v1.4.0, D25). `release.yml` builds the CPU backend
+  and the frontend on native runners (`ubuntu-24.04`, `ubuntu-24.04-arm`),
+  each pushed as `<version>-<arch>` with its own cache (amd64 keeps the old
+  cache names, so its layers stay the same for `vcm update`); the
+  `manifests` job joins them into the tags an install pulls
+  (`docker buildx imagetools create`). CUDA is built once, amd64.
+  `arm64.yml` builds, installs and times both architectures on every push
+  (`scripts/ci_arch_check.sh`, `scripts/ci_smoke.py`).
 
 ## 10. Failure scenarios
 
@@ -702,6 +731,8 @@ NVENC.
 | A caller other than the frontend sends `X-Forwarded-For` | Ignored; its own address is recorded | `proxy_headers.py` |
 | A video is deleted | Row, source, thumbnail, waveform, vectors **and export files** removed | `services/video.delete_video` |
 | Downloaded install file altered | Install or update aborts; nothing replaced | `install.sh`, `vcm`, `.ps1` |
+| `vcm update`'s new `vcm` can't run, or stops before changing anything | the running `vcm` finishes the update itself (v1.4.0, D26) | `vcm`, `vcm.ps1` (`__handover`, `__finish-update`) |
+| The network drops during an update's image pull | the new compose files stay staged as `*.tmp` until the pull succeeds, then are removed: the install is exactly as it was (v1.4.0) | `finish_update` / `Complete-Update` |
 
 ## 11. Dependency rules
 

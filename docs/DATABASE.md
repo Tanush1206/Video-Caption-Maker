@@ -202,7 +202,7 @@ values are applied by SQLAlchemy at flush time and are **not** in the schema.
 | `status` | enum `video_status` | no | (ORM: `pending`) | `pending` `processing` `completed` `failed`; index `ix_videos_status` |
 | `error_message` | text | yes | | a sentence for the user (≤ 500 chars written) |
 | `progress` | integer | no | `0` | 0–100 within the current stage |
-| `stage` | varchar(32) | yes | | `downloading` `extracting` `transcribing` `translating` `embedding` |
+| `stage` | varchar(32) | yes | | `detecting` `downloading` `extracting` `transcribing` `recovering` `translating` `phrasing` `embedding` (`recovering` and `phrasing` since v1.4.0; no migration, it is free text) |
 | `stage_detail` | varchar(200) | yes | | e.g. "Downloading speech model large-v3 · 1.2 of 3.1 GB" |
 | `notice` | varchar(300) | yes | | non-fatal note on a finished job (fallbacks, low confidence) |
 | `speech` | json | yes | | `[[start_ms, end_ms], ...]`, one pair a word: the Whisper word timings the captions were timed to (v1.0.8); written by each transcription, NULL before |
