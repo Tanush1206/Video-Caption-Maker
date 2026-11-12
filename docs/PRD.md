@@ -118,9 +118,10 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
    deletes the upload and its files; one never started is deleted after an
    hour regardless.
 4. **Processing** (on the video page): the worker runs
-   download model → extract audio → transcribe → translate (if needed) → embed.
-   Each stage shows its progress, and an ETA appears once the observed rate
-   allows one (`useEta`).
+   download model → extract audio → transcribe → check for missed speech →
+   translate (if needed) → arrange captions → embed. Each stage shows its
+   own progress, so a long video never sits at 99% (v1.4.0), and an ETA
+   appears once the observed rate allows one (`useEta`).
 5. **Edit** (optional): caption text, timing on the waveform timeline,
    split/merge/add/delete, the style studio, and a Redo with another
    spoken/caption language. The Redo offers every caption language in a
@@ -489,11 +490,21 @@ removed.
 
 **Acceptance criteria**
 - `vcm update` verifies `SHA256SUMS`, pulls the images, recreates the
-  containers and runs `alembic upgrade head` on API start. Videos, captions
+  containers and runs `alembic upgrade head` on API start. Since v1.4.0 it
+  hands the rest of the update to the `vcm` it has just downloaded and
+  checked; if that one can't start or stops first, the running one finishes.
+  A pull that fails (the network drops, say) leaves the install exactly as
+  it was, its files included. Videos, captions
   and the database are kept (verified in R5 and on every release since).
 - The update downloads only the image layers that changed: 1.0.3 → 1.0.4
   downloaded 0 of 14 backend layers and 3 of 9 frontend layers, 6.1 MB
   (PROGRESS.md).
+- `vcm doctor` (v1.4.0) writes one file to attach to a bug report: the
+  version, system, Docker, GPU, containers, health and the last 300 log
+  lines of each service. It never reads the `.env` beyond the version,
+  variant and port, and takes out tokens, keys, email addresses, video file
+  names, the vocabulary, GPU serials and the home folder. The bug-report
+  template asks for it.
 - `vcm uninstall` asks first. Typing `DELETE` removes the containers, volumes,
   app images, install folder and `vcm` command. Anything else keeps the
   `vcm_*` volumes and the install folder, which holds the password the kept
@@ -599,18 +610,20 @@ What the code deliberately does not do:
 - **Must** use permissively licensed models (MIT/Apache-2.0); see
   [DECISIONS.md](DECISIONS.md).
 - **One worker, one job at a time** (`--pool=solo`).
-- **Images:** amd64 only (built on `ubuntu-latest`); Apple Silicon runs them
-  under emulation (README).
+- **Images:** the CPU backend and the frontend for amd64 and arm64, built
+  natively (v1.4.0); the CUDA backend amd64 only.
 
 ## 10. Known limitations
 
 From the README "Known limitations" and PROGRESS.md:
 
-- **macOS is untested, and stays so** until a Mac is available. The installer
-  and images are meant to work with Docker Desktop for Mac, but no one has run
-  them there. On a Mac everything
-  runs on the CPU, and Apple Silicon runs the amd64 images under emulation,
-  which is slow.
+- **macOS isn't fully tested.** It is installed by hand on an M2 MacBook Air
+  (v1.2.1, and each release that changes it); there is no Mac in CI, which
+  installs and runs the ARM build on ARM Linux. On a Mac everything
+  runs on the CPU. Since v1.4.0 Apple silicon runs the app natively (ARM
+  images); before, it ran the amd64 images emulated, which was slow. An
+  install from before v1.4.0 downloads the images in full once on its first
+  update.
 - **How well speech is heard depends on the language** (large-v3, FLEURS,
   [LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)): Spanish, Portuguese, Italian,
   Russian, French, German and Dutch 3-7% word error; English 6% (59% before

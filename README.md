@@ -140,6 +140,7 @@ The installer adds a `vcm` command. Open a new terminal after installing.
 | `vcm status` | show what's running and whether it's healthy |
 | `vcm logs` | follow the logs (`vcm logs worker` for just the processing) |
 | `vcm update` | download the newest version and restart into it |
+| `vcm doctor` | write a report to attach to a bug report, with passwords, keys and file names left out |
 | `vcm uninstall` | remove the app; it asks before deleting any of your videos |
 
 The app restarts with Docker, so after a reboot it's back once Docker is
@@ -213,7 +214,12 @@ with the default model. Settings → Speech recognition → Small is several
 times faster, with lower accuracy.
 
 **Anything else.** Run `vcm logs`, and `vcm status` to see which part isn't
-healthy.
+healthy. To report a bug, run `vcm doctor` in the folder you want the report
+in, read the file it writes, and attach it to a
+[bug report](https://github.com/Tanush1206/Video-Caption-Maker/issues/new/choose).
+A security problem goes to the
+[private report](https://github.com/Tanush1206/Video-Caption-Maker/security/advisories/new)
+instead.
 
 ## Known limitations
 

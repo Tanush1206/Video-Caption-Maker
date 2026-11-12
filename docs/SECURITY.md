@@ -350,6 +350,31 @@ which the guard already lets through.
   no model was downloaded again, and a new GPU transcription, a new font and
   an NVENC export all worked.
 
+### 5b. `vcm doctor` reports (v1.4.0)
+
+`vcm doctor` writes `vcm-doctor-<date>.txt` in the current folder for a bug
+report (the issue template asks for it). It is built so that attaching it
+gives away no secret:
+
+- **From the `.env` it reads three keys only:** `VCM_VERSION`, `VCM_VARIANT`
+  and `VCM_PORT`. The passwords and the JWT secret are never read.
+- **Everything else is filtered** before it is written (`redact` in `vcm`,
+  `Hide-Private` in `vcm.ps1`; the same patterns):
+  - `token=`, `password=`, `secret=`, `key=` values;
+  - `Authorization`, `Cookie` and `Set-Cookie` headers;
+  - Gemini keys (`AIza…`) and JWTs (`eyJ….….…`, the stream and download
+    tokens);
+  - email addresses, video and subtitle file names, the custom vocabulary,
+    GPU UUIDs and the home folder.
+- `/api/system` never holds the Gemini key (only `gemini_configured`).
+- Tested with logs that hold each of these (`install/tests/test_vcm_doctor.*`,
+  in CI).
+
+**Limits.** The filter is by pattern, so a secret in a form it doesn't know
+would pass. The report and the bug-report form both say to look it over
+before attaching it. The form's chooser sends security problems to the
+private report (§9), never to an issue.
+
 ## 6. What goes over the network
 
 With no Gemini key, after the models are downloaded, the core flow (upload,
@@ -473,6 +498,12 @@ in `install/vcm` and `install/vcm.ps1`):
 - `SHA256SUMS` is produced by the release workflow from the exact files it
   attaches (`.github/workflows/release.yml`). Tampered-file tests passed on
   both platforms (`d0fb999`).
+- **`vcm update` runs the new `vcm` only after it has passed that check**
+  (v1.4.0, D26): it asks it for `__handover`, then runs `__finish-update`.
+  If it fails the check, nothing is run or replaced; if it can't start or
+  stops first, the installed `vcm` finishes. The compose files are pulled
+  with as `*.tmp` and replace the old ones only after the pull succeeds.
+  Tested in CI (`install/tests/test_vcm_update.*`).
 
 **What it does not protect against:**
 
@@ -494,6 +525,24 @@ in `install/vcm` and `install/vcm.ps1`):
   of `google/fonts` the catalogue was built at (`83831d6f…`, checked: all
   1832 entries' paths and sizes match). The catalogue builder records the
   commit it read. On `main`, six of the catalogue's files had since moved.
+
+### 8a. The workflows (v1.4.0, launch audit S7, D27)
+
+- **Least privilege:** every workflow starts with `contents: read` or none
+  (`release.yml`: `permissions: {}`). Only the image and manifest jobs get
+  `packages: write`, only the release job `contents: write`, the site
+  `pages: write` and `id-token: write`, and the weekly check's report job
+  `issues: write`.
+- **Actions are pinned to commit SHAs** (the tag in a comment), on Node 24
+  releases; Dependabot (`.github/dependabot.yml`) proposes updates weekly.
+  The arm64 check's local registry (`registry:3.0.0`,
+  `scripts/ci_arch_check.sh`) is pinned by digest.
+- **Runners are pinned** to `ubuntu-24.04` and `ubuntu-24.04-arm`, GitHub's
+  free standard runners for a public repository; the only schedule is the
+  weekly check.
+- **The weekly check** (`weekly-check.yml`) verifies the latest release's
+  assets against `SHA256SUMS` and pulls every image anonymously, so a
+  changed or missing release file shows within a week.
 
 ## 9. Reporting a vulnerability
 
