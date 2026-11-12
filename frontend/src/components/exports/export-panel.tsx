@@ -14,6 +14,7 @@ import {
   Video,
 } from "lucide-react";
 
+import { isChecking } from "@/components/captions/improve-captions";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -26,6 +27,7 @@ import {
   useExportOptions,
   useExports,
 } from "@/hooks/use-exports";
+import { useCaptionCheck } from "@/hooks/use-captions";
 import { useDownloadOriginal } from "@/hooks/use-stream";
 import { useLanguageOptions } from "@/hooks/use-videos";
 import { formatFileSize, formatRelativeTime } from "@/lib/format";
@@ -139,6 +141,10 @@ export function ExportPanel({
   const download = useDownloadExport();
   const downloadOriginal = useDownloadOriginal(videoId);
   const { data: languages } = useLanguageOptions();
+  // Improve with Gemini applies its fixes when the whole check is done, so an
+  // export started meanwhile has the captions as they were (v1.3.1).
+  const { data: check } = useCaptionCheck(videoId);
+  const improving = hasCaptions && isChecking(check);
 
   /**
    * The height to burn at. Null means "whatever the server recommends": the
@@ -208,6 +214,12 @@ export function ExportPanel({
         {/* Says what is unavailable, not that nothing is. */}
         {!hasCaptions && (
           <Notice className="dark:bg-surface-3" title="Captions aren't ready yet. You can still download the original." />
+        )}
+        {improving && (
+          <Notice tone="warning" className="dark:bg-surface-3" title="Improve with Gemini is still checking these captions.">
+            Its fixes are applied when it finishes, so an export made now has the captions as they are. Wait for it,
+            or export again afterwards.
+          </Notice>
         )}
 
         <div>

@@ -2114,6 +2114,45 @@ const CHECKS = {
     }
   },
 
+  // v1.3.1: while Improve with Gemini is checking the video's captions, the
+  // export dialog says an export made now won't have its fixes; with no check
+  // running it says nothing. The check's state is mocked: nothing is sent to
+  // Gemini or exported. axe 0 with the warning, light and dark. Read-only.
+  async "export-improving"(browser, base) {
+    const { AxeBuilder } = require("@axe-core/playwright");
+    for (const [width, theme] of [[1440, "light"], [375, "dark"]]) {
+      for (const running of [true, false]) {
+        const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
+        await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+        const page = await context.newPage();
+        const id = await editorVideo(page, base);
+        await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+          const body = await (await route.fetch()).json();
+          await route.fulfill({ json: { ...body, status: "completed", stage: null } });
+        });
+        await page.route(new RegExp(`/api/videos/${id}/captions/improve$`), (route) => route.fulfill({ json: running
+          ? { id: 1, status: "running", batches_total: 3, batches_done: 1, seconds_left: 90, dropped: 0, fallback_batches: 0,
+              error_message: null, fixes: [], created_at: new Date().toISOString(), finished_at: null }
+          : null }));
+        await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+        await page.getByRole("button", { name: "Export", exact: true }).first().click();
+        const dialog = page.getByRole("dialog");
+        await dialog.getByRole("radiogroup").first().waitFor();
+        const warning = dialog.getByText("Improve with Gemini is still checking these captions.");
+        const at = `export-improving@${width} (${theme})`;
+        if (running) {
+          ok(`${at}: warns while Improve is running`, await warning.isVisible());
+          const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+          ok(`${at}: axe 0 with the warning`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+          ok(`${at}: no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+        } else {
+          ok(`${at}: says nothing with no check running`, (await warning.count()) === 0);
+        }
+        await context.close();
+      }
+    }
+  },
+
   // v1.2.2: a burn's Quality, its estimate, and what Export sends. The
   // export request is answered here, so nothing is rendered.
   async "export-quality"(browser, base) {
