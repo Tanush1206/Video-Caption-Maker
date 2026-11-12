@@ -343,6 +343,82 @@ function TranslationSection({ info }: { info: SystemInfo }) {
   );
 }
 
+/**
+ * The custom vocabulary (v1.3.1): applied to the caption text when captions
+ * are made (services/vocabulary.py), never given to the speech model, where
+ * it measured worse in every language.
+ */
+function VocabularySection({ info }: { info: SystemInfo }) {
+  const update = useUpdateSystemSettings();
+  const saved = info.vocabulary.join("\n");
+  const [text, setText] = useState(saved);
+  const words = text.split("\n").map((word) => word.trim()).filter(Boolean);
+  const tooMany = words.length > info.vocabulary_max;
+  const changed = words.join("\n") !== saved;
+
+  function save(event: React.FormEvent) {
+    event.preventDefault();
+    // The server keeps the list cleaned (no repeats): show what it kept.
+    update.mutate({ vocabulary: words }, { onSuccess: (next) => setText(next.vocabulary.join("\n")) });
+  }
+
+  return (
+    <SettingsSection
+      title="Custom vocabulary"
+      footnote={
+        <>
+          <p>
+            Names, brands and words like &ldquo;vlog&rdquo;, spelled the way you want them. When captions are made, a
+            word that sounds like one of these takes its spelling: &ldquo;laddaakh&rdquo; becomes &ldquo;Ladakh&rdquo;.
+            Captions already made change only when you redo them.
+          </p>
+          {update.isSuccess && !changed && (
+            <div className="mt-1 flex min-h-5 items-center">
+              <Saved />
+            </div>
+          )}
+          {update.isError && (
+            <p role="alert" className="mt-1 text-destructive">
+              {(update.error as Error).message || "Couldn't save the words. Try again."}
+            </p>
+          )}
+        </>
+      }
+    >
+      <form onSubmit={save} className="group-row flex-col items-stretch gap-2 py-3">
+        <label htmlFor="vocabulary" className="text-[15px]">
+          Words, one per line
+        </label>
+        <textarea
+          id="vocabulary"
+          name="vocabulary"
+          rows={5}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={"vlog\nAkrapovic\nLadakh…"}
+          aria-describedby="vocabulary-count"
+          aria-invalid={tooMany || undefined}
+          className={cn(inputClasses, "h-auto resize-y py-2 leading-6 sm:h-auto")}
+        />
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          <span
+            id="vocabulary-count"
+            className={cn("text-[13px] tabular-nums", tooMany ? "text-destructive" : "text-muted-foreground")}
+          >
+            {words.length} of {info.vocabulary_max} words
+          </span>
+          <Button type="submit" disabled={!changed || tooMany} loading={update.isPending}>
+            Save words
+          </Button>
+        </span>
+      </form>
+    </SettingsSection>
+  );
+}
+
 function StorageSection() {
   const { data } = useStats();
   const { preference, setPreference } = useTheme();
@@ -419,7 +495,7 @@ function StorageSection() {
   );
 }
 
-/** The install's own settings: hardware, speech model, translation, disk and theme. */
+/** The install's own settings: hardware, speech model, translation, vocabulary, disk and theme. */
 export function InstallSettings() {
   const system = useSystem();
 
@@ -448,6 +524,7 @@ export function InstallSettings() {
       <MachineSection info={system.data} />
       <ModelSection info={system.data} />
       <TranslationSection info={system.data} />
+      <VocabularySection info={system.data} />
       <StorageSection />
     </div>
   );

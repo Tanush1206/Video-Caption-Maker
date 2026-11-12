@@ -30,10 +30,16 @@ export interface SystemInfo {
   gemini_configured: boolean;
   /** Only a key from Settings can be removed from Settings. */
   gemini_source: "settings" | "env" | null;
+  /** The custom vocabulary (v1.3.1): words captions spell this way. */
+  vocabulary: string[];
+  /** How many words it can hold. */
+  vocabulary_max: number;
 }
 
 export interface SystemSettingsUpdate {
   /** An empty string removes the key. */
   gemini_api_key?: string;
   whisper_model?: string;
+  /** The whole list, replacing the stored one; [] clears it. */
+  vocabulary?: string[];
 }
