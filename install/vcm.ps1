@@ -8,6 +8,7 @@
 #   vcm update      download the newest version and restart into it
 #   vcm open        open the app in the browser
 #   vcm uninstall   remove the app; asks before deleting your videos
+#   vcm doctor      write a report to attach to a bug report (secrets left out)
 param([string]$Command = 'help', [string]$Service = '')
 
 # 'Continue', not 'Stop': on PowerShell 5.1 any stderr line from a native
@@ -128,6 +129,76 @@ function Complete-Update {
     Write-Host 'Updated.'
 }
 
+# `vcm doctor` (v1.4.0): what a bug report needs, in one file to attach.
+# Never the .env (only VCM_VERSION, VCM_VARIANT and VCM_PORT are read from it),
+# and everything written passes through Hide-Private: tokens, keys, email
+# addresses, video file names, the GPU's serial and your home folder are
+# taken out (-replace ignores case).
+function Hide-Private([string]$text) {
+    $video = '(mp4|mov|mkv|webm|avi|m4v|srt|vtt)'
+    $text = $text -replace '(token|password|secret|key)=[^&" ]*', '$1=<redacted>'
+    $text = $text -replace '(authorization|cookie|set-cookie):[^"\r\n]*', '$1: <redacted>'
+    $text = $text -replace 'AIza[0-9A-Za-z_-]{20,}', '<redacted key>'
+    $text = $text -replace 'eyJ[0-9A-Za-z_-]{10,}\.[0-9A-Za-z_-]+\.[0-9A-Za-z_-]+', '<redacted token>'
+    $text = $text -replace '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '<email>'
+    $text = $text -replace ('"[^"\r\n]*\.' + $video + '"'), '"<video>"'
+    $text = $text -replace ("'[^'\r\n]*\." + $video + "'"), "'<video>'"
+    $text = $text -replace ('[^\s"/\\]+\.' + $video + '\b'), '<video>'
+    $text = $text -replace '"vocabulary": ?\[[^\]]*\]', '"vocabulary": "<redacted>"'
+    $text = $text -replace ' \(UUID: [^)]*\)', ''
+    foreach ($home_ in @($env:USERPROFILE, $HOME) | Where-Object { $_ }) {
+        $text = $text -replace [regex]::Escape($home_), '~'
+    }
+    return $text
+}
+
+function Invoke-Doctor {
+    $out = Join-Path $PWD ("vcm-doctor-{0}.txt" -f (Get-Date -Format 'yyyy-MM-dd-HHmmss'))
+    $lines = New-Object System.Collections.Generic.List[string]
+    function Add([string]$line) { $lines.Add($line) }
+    function Run([scriptblock]$block) { (& $block 2>&1 | ForEach-Object { "$_" }) -join "`n" }
+    Add "VideoCaptionMaker doctor report, $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+    Add ''; Add '== App (from .env: these three keys only)'
+    foreach ($key in 'VCM_VERSION', 'VCM_VARIANT', 'VCM_PORT') { Add "$key=$(Get-EnvValue $key)" }
+    Add ''; Add '== System'
+    Add ([Environment]::OSVersion.VersionString)
+    try {
+        $drive = Get-PSDrive -Name ([IO.Path]::GetPathRoot($VcmHome).Substring(0, 1)) -ErrorAction Stop
+        Add ("disk free: {0:N0} GB of {1:N0} GB" -f ($drive.Free / 1GB), (($drive.Free + $drive.Used) / 1GB))
+    } catch { Add 'disk free: unknown' }
+    Add ''; Add '== Docker'
+    Add (Run { docker version --format 'docker {{.Server.Version}} on {{.Server.Os}}/{{.Server.Arch}}' })
+    Add (Run { docker compose version })
+    Add (Run { docker info --format 'CPUs {{.NCPU}}, memory {{.MemTotal}} bytes, {{.OperatingSystem}}' })
+    Add ''; Add '== GPU'
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+        Add (Run { nvidia-smi -L })
+        Add (Run { nvidia-smi --query-gpu=driver_version --format=csv,noheader })
+    } else { Add 'no nvidia-smi' }
+    $files = Get-ComposeFiles
+    $compose = @('compose', '-p', $Project, '--env-file', $EnvFile, '--project-directory', $VcmHome) + $files
+    Add ''; Add '== Containers'
+    Add (Run { docker @compose ps -a })
+    foreach ($c in (& docker @compose ps -aq 2>$null)) {
+        if ($c) { Add (Run { docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' $c }) }
+    }
+    foreach ($path in '/api/health', '/api/system') {
+        Add ''; Add "== $path"
+        try {
+            # Text whatever the content type says: 5.1 hands back bytes for an unknown one.
+            $body = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 -Uri "$Url$path").Content
+            if ($body -is [byte[]]) { $body = [Text.Encoding]::UTF8.GetString($body) }
+            Add $body
+        } catch { Add "not answering: $($_.Exception.Message)" }
+    }
+    Add ''; Add '== Logs (the last 300 lines of each service)'
+    Add (Run { docker @compose logs --no-color --tail 300 })
+    [IO.File]::WriteAllText($out, (Hide-Private ($lines -join "`n")) + "`n", (New-Object System.Text.UTF8Encoding $false))
+    Write-Host "Wrote $out"
+    Write-Host 'Review it before attaching it to a bug report: secrets, file names and'
+    Write-Host 'your home folder are taken out, but you know best what is private.'
+}
+
 function Assert-Docker {
     docker info *> $null
     if ($LASTEXITCODE -ne 0) {
@@ -211,6 +282,7 @@ try {
             }
             Complete-Update
         }
+        'doctor'  { Invoke-Doctor }
         'uninstall' {
             Assert-Docker
             Write-Host 'This removes VideoCaptionMaker from this computer.'
@@ -247,7 +319,7 @@ try {
             Write-Host 'Uninstalled.'
         }
         default {
-            Get-Content $PSCommandPath -TotalCount 10 | Select-Object -Skip 1 | ForEach-Object { $_ -replace '^# ?', '' }
+            Get-Content $PSCommandPath -TotalCount 11 | Select-Object -Skip 1 | ForEach-Object { $_ -replace '^# ?', '' }
         }
     }
 } catch {

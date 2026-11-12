@@ -9,12 +9,16 @@
 #   vcm update      download the newest version and restart into it
 #   vcm open        open the app in the browser
 #   vcm uninstall   remove the app; asks before deleting your videos
+#   vcm doctor      write a report to attach to a bug report (secrets left out)
 set -euo pipefail
 
 VCM_HOME="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
 REPO_URL="https://github.com/Tanush1206/Video-Caption-Maker"
 BASE_URL="${VCM_BASE_URL:-$REPO_URL/releases/latest/download}"
 PROJECT=vcm
+# Where vcm was run from, before it moves into its own folder (vcm doctor
+# writes its report there).
+START_DIR="$PWD"
 cd "$VCM_HOME"
 
 env_value() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- || true; }
@@ -102,6 +106,68 @@ finish_update() {
     # untagged), never anything else on the machine.
     docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker" >/dev/null 2>&1 || true
     echo "Updated."
+}
+
+# `vcm doctor` (v1.4.0): what a bug report needs, in one file to attach.
+# Never the .env (only VCM_VERSION, VCM_VARIANT and VCM_PORT are read from it),
+# and everything written passes through `redact`: tokens, keys, email
+# addresses, video file names and your home folder are taken out.
+# Portable sed (macOS has BSD sed: no I flag, no \b), so cases are spelled out.
+VIDEO_EXT='([Mm][Pp]4|[Mm][Oo][Vv]|[Mm][Kk][Vv]|[Ww][Ee][Bb][Mm]|[Aa][Vv][Ii]|[Mm]4[Vv]|[Ss][Rr][Tt]|[Vv][Tt][Tt])'
+redact() {
+    sed -E \
+        -e 's/([Tt]oken|[Pp]assword|[Ss]ecret|[Kk]ey)=[^&" ]*/\1=<redacted>/g' \
+        -e 's/([Aa]uthorization|[Cc]ookie|[Ss]et-[Cc]ookie):[^"]*/\1: <redacted>/g' \
+        -e 's/AIza[0-9A-Za-z_-]{20,}/<redacted key>/g' \
+        -e 's/eyJ[0-9A-Za-z_-]{10,}\.[0-9A-Za-z_-]+\.[0-9A-Za-z_-]+/<redacted token>/g' \
+        -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' \
+        -e "s/\"[^\"]*\\.$VIDEO_EXT\"/\"<video>\"/g" \
+        -e "s/'[^']*\\.$VIDEO_EXT'/'<video>'/g" \
+        -e "s/[^ \"\\/]+\\.$VIDEO_EXT([^A-Za-z0-9]|\$)/<video>\\2/g" \
+        -e 's/"vocabulary": ?\[[^]]*\]/"vocabulary": "<redacted>"/g' \
+        -e 's/ \(UUID: [^)]*\)//g' \
+        -e "s#${HOME:-/nonexistent}#~#g"
+}
+
+doctor() {
+    local out
+    out="$START_DIR/vcm-doctor-$(date +%Y-%m-%d-%H%M%S).txt"
+    section() { echo; echo "== $1"; }
+    {
+        echo "VideoCaptionMaker doctor report, $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        section "App (from .env: these three keys only)"
+        for key in VCM_VERSION VCM_VARIANT VCM_PORT; do echo "$key=$(env_value "$key")"; done
+        section "System"
+        uname -srm 2>/dev/null
+        [ -f /etc/os-release ] && grep -E '^(PRETTY_NAME)=' /etc/os-release
+        command -v sw_vers >/dev/null 2>&1 && sw_vers 2>/dev/null
+        df -h "$VCM_HOME" 2>/dev/null | tail -n 1 | awk '{print "disk free: "$4" of "$2}'
+        section "Docker"
+        docker version --format 'docker {{.Server.Version}} on {{.Server.Os}}/{{.Server.Arch}}' 2>&1
+        docker compose version 2>&1
+        docker info --format 'CPUs {{.NCPU}}, memory {{.MemTotal}} bytes, {{.OperatingSystem}}' 2>&1
+        section "GPU"
+        if command -v nvidia-smi >/dev/null 2>&1; then
+            nvidia-smi -L 2>&1
+            nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>&1
+        else
+            echo "no nvidia-smi"
+        fi
+        section "Containers"
+        compose ps -a 2>&1
+        for c in $(compose ps -aq 2>/dev/null); do
+            docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' "$c" 2>&1
+        done
+        section "Health"
+        curl -fsS -m 10 "$URL/api/health" 2>&1; echo
+        section "System info (/api/system)"
+        curl -fsS -m 10 "$URL/api/system" 2>&1; echo
+        section "Logs (the last 300 lines of each service)"
+        compose logs --no-color --tail 300 2>&1
+    } | redact > "$out"
+    echo "Wrote $out"
+    echo "Review it before attaching it to a bug report: secrets, file names and"
+    echo "your home folder are taken out, but you know best what is private."
 }
 
 need_docker() {
@@ -204,6 +270,7 @@ case "$cmd" in
         fi
         echo "Uninstalled."
         ;;
+    doctor)   doctor ;;
     help|-h|--help|*)
         sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
         ;;
