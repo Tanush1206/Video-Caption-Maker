@@ -6,6 +6,39 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.1] - 2026-11-12
+
+Hinglish captions spelled the way people type them, your own words spelled
+your way, and updates that get through antivirus HTTPS scanning. One
+migration, run when the app starts; the update downloads the app layers
+only.
+
+### Added
+- **Everyday Hinglish spelling.** Hinglish captions now come out as people
+  type them: "yeh", "nahi", "liye", "zyada", "wala", "pehle" rather than the
+  textbook "yah", "nahin", "lie", "zyaada", "vaala", "pahle". On the
+  measured clips this halves the words a strict comparison counts as wrong
+  on one and cuts them by a third on the other, with no word changed in
+  meaning. Choose Everyday or Formal on the language step and in Redo.
+  Videos you already have keep their captions until you redo them.
+- **Custom vocabulary** in Settings: names, brands and words like "vlog",
+  one per line. When captions are made, a word that sounds like one of them
+  takes its spelling ("laddaakh" becomes "Ladakh", "acropovic" becomes
+  "Akrapovic", "block" becomes "vlog" in a Hindi sentence).
+- The export dialog says when Improve with Gemini is still checking the
+  video, since its fixes are only in exports made after it finishes.
+
+### Fixed
+- **`vcm update` and the installer failing with "tls: error decoding
+  message".** Antivirus that scans HTTPS traffic (Quick Heal, for one)
+  breaks some of Docker's secure connections to GitHub's image registry.
+  The download is now tried three times, and if it still fails it says
+  what to change: turn off the HTTPS scanning while it runs, or add an
+  exception for ghcr.io and pkg-containers.githubusercontent.com. A failed
+  update still changes nothing.
+- Improve with Gemini keeps your captions' spelling: on everyday-spelled
+  captions it no longer offers "fixes" that only respell a word back.
+
 ## [1.3.0] - 2026-11-03
 
 Clearer captions on noisy, real-life videos: a readable default style, Find

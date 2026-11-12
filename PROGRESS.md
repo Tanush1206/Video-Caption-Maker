@@ -3,6 +3,35 @@
 Resume rule: re-read this file, take the first open item in the backlog
 (MAJOR → UI → MINOR), and continue the loop described in the task brief.
 
+## PLAN TO FINISH — deadline 25 November 2026 (set by Tanush, 2026-11-12)
+Scope is frozen: nothing beyond this list. Checked against every working day;
+a date that slips is reported as soon as it is seen, not on the day.
+
+| # | What | Due | Status |
+|---|---|---|---|
+| 1 | **v1.3.1 released** | 16 Nov | in progress |
+| 1.1 | Resume Step 1 (state check) | 12 Nov | done 12 Nov |
+| 1.2 | Everyday Hinglish spelling (map, choice on the language step and in Redo, Improve and Find & replace) | 13 Nov | done 12 Nov: built, UI-checked, measured (strict 24.0 -> 16.7% and 28.8 -> 14.0%, loose unchanged) |
+| 1.3 | Custom vocabulary | 14 Nov | done 12 Nov: on the caption text (Tanush), not the model (worse everywhere); leo 16 right, 0 wrong elsewhere |
+| 1.4 | Export dialog warns while Improve is running on that video | 14 Nov | done 12 Nov |
+| 1.5 | Norton TLS: confirm the cause; install and `vcm update` detect it and say what to do; README troubleshooting | 15 Nov | done 12 Nov: the cause is Quick Heal's HTTPS scanning (Norton had expired); retry + advice in vcm and the installers, README |
+| 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | open |
+| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | not started |
+| 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | |
+| 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | |
+| 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | |
+| 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | |
+| 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | |
+| 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | |
+| 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 25 Nov | |
+
+Deferred to the ROADMAP by this plan: the Improve review mode; caption-list
+virtualisation and long-video phrasing speed (unless time is left after 2e).
+
+Daily check:
+- 12 Nov: ahead. Step 1 reported; 1.1-1.5 done and committed. Left for
+  v1.3.1: full suites, E2E GPU and CPU, docs, CHANGELOG, release (1.6).
+
 ## Decisions (Step 0, made by Tanush — 2026-10-07)
 
 **a) Translation — both.**
@@ -1515,6 +1544,99 @@ hinglish.mp4 + truth-hi.txt (clean audio, must not get worse).
         `flow.js`, 218 and 219 by upload-proxy, 213, 214, 217 by id), all
         deleted; 84 and 140 remain; 11 media files, as in the backup.
         Dev: 7700 deleted; 7426 (not mine) remains.
+
+## v1.3.1 Everyday Hinglish spelling and custom vocabulary
+Brief from Tanush, 2026-11-04. Found on leo.mp4 (12.7 min, clean): most of
+what makes Hinglish captions look wrong is spelling style, not misheard
+words. Apex writes textbook transliteration (yah, nahin, yahaan, lie, vah,
+zyaada, vaala, kyonki, kuchh, pahle, achchha, mainne, chiz, nae, gae, sirph,
+baithakar); 207 of his 484 caption lines hold one.
+
+1. "Everyday Hinglish spelling": a deterministic word map (whole words,
+   capitalisation and punctuation kept) on Hinglish (Roman) output, by
+   default. Built from Apex output on hinglish.mp4, new.mp4 and leo.mp4;
+   unambiguous words only, the left-outs listed with why. A choice on the
+   language step: Everyday (pehle, liye) / Formal (pahle, lie). Existing
+   videos unchanged unless Redo. Improve with Gemini and Find & replace keep
+   working on the new spelling.
+2. Strict word error (no folding) before/after on his 0:00-1:28 truth and
+   truth-hi.txt, plus the loose number, which should stay the same.
+3. Custom vocabulary (ROADMAP): a per-install word list in Settings passed
+   to the model as hotwords/initial prompt; measured on leo.mp4 ("block" ->
+   "vlog" and the like) without hurting other words.
+
+- Prototype on the "Today, GPU" runs of Part C (2026-11-04): strict WER
+  24.0% -> 17.7% (his 0:00-1:31), 34.3% -> 26.5% (Gemini ref 1:32-5:00),
+  28.8% -> 15.9% (hinglish.mp4); loose 13.9 -> 13.5, 20.2 -> 18.9, 14.4 ->
+  13.3, only because Part C's fold doesn't join ~40 of the map's pairs
+  (ismen/ismein, gae/gaye, chaahie/chahiye...). leo.mp4: 268 of 467 lines
+  change (384 words).
+- Left out of the map: van ("van ke aai" is a mishearing of "ban", and an
+  English word); chhah (six: no one everyday spelling); kyon (Tanush writes
+  it so in truth-hi.txt); nai (nahi or "new"); words whose Apex spelling is
+  already everyday (poora, gaadi, saath, baat, aapko, jaata/jaate, baaki,
+  saamne, hazaar, zaroor, jaakar, phir, vo, mein, hain, main, hoon); names,
+  except laddaakh -> ladakh and paayal -> payal.
+- Decisions (Tanush, 2026-11-04):
+  - lie, ham, die, tin (also English words) change only next to a clearly
+    Hindi word ("ke lie" -> "ke liye", "I lie" stays);
+  - videos from before v1.3.1 preset Everyday in the Redo panel;
+  - the vocabulary goes to every transcription (both models, every
+    language), but where a language or clip gets measurably worse with it,
+    limit it to where it helps, and say so;
+  - the map includes the obvious siblings of seen words (vaali, karoongi,
+    jismen, pahli).
+- Measurement outputs are kept in the project, gitignored, not in the temp
+  folder (Tanush, 2026-11-12; the temp folder lost most of Part C's files
+  during the break: the Gemini reference, the runs and the table):
+  `test-assets/results/v1.3.1/` with a README: `runs/` (the real pipeline,
+  Formal and Everyday + vocabulary, leo/new/new-5min/hinglish),
+  `vocab-probe/` (24 model-hint runs), `scripts/` (scorer, probes),
+  `before_after.md`.
+- Spelling, measured 2026-11-12 on the real pipeline (Formal reproduces Part
+  C's v1.3.0 numbers to the decimal):
+
+  | | strict WER | loose (Part C fold) | loose + map pairs |
+  |---|---|---|---|
+  | his 0:00-1:31, formal (v1.3.0) | 24.0% | 13.9% | 13.5% |
+  | his 0:00-1:31, everyday | 16.7% | 13.5% | 13.5% |
+  | hinglish.mp4, formal | 28.8% | 14.4% | 13.3% |
+  | hinglish.mp4, everyday | 14.0% | 13.3% | 13.3% |
+
+  Loose is unchanged once the map's own pairs are folded; it moves under
+  Part C's fold only because that fold lacks ismen/ismein and ~40 others.
+  CER 8.0 -> 7.7 and 6.9 -> 6.6; English words unchanged (81/95, 55/59).
+  The before/after read found one more family (banaata/banaate/banaati).
+- Vocabulary as a model hint (hotwords or initial prompt), measured on
+  leo.mp4 (the list: vlog, BMW, F 450 GS, Akrapovic, Ladakh, Hyderabad,
+  S 1000 RR, Instagram), new-5min and hinglish.mp4: worse everywhere. Apex
+  is deterministic (two plain runs identical), so every change is the list.
+  - Apex fixed none of the targets (block, acropovic, laddaakh, haidraabaad
+    unchanged); 113 (hotwords) / 66 (prompt) other changes on leo, among
+    them "achchhi balcony nahin hai" -> "... hai" and dropped phrases.
+  - large-v3 Devanagari lost ~230 words on leo (hotwords), 559 changed with
+    the prompt; English captions gained "Thanks for watching ... subscribe",
+    "www.youtube.com"; unrelated clips got "S 1000 RR" inserted.
+  - Decision (Tanush, 2026-11-12): apply the list to the caption text
+    instead. A word that sounds like a list word takes its spelling; one
+    sound off only as a voiced/voiceless twin (k/g: block/vlog) next to a
+    clearly Hindi word. leo: 16 changes, all right (vlog x3, Ladakh x8,
+    Akrapovic x3, Hyderabad x2, S 1000 RR); new-5min, hinglish.mp4 and
+    every Devanagari/English run: nothing else. A first, looser rule made 9
+    wrong ones (banaunga -> vlog, kadak -> Ladakh, lambe -> BMW...): tests.
+- Export dialog: warns while Improve with Gemini is checking the video
+  (its fixes land when it finishes); `checks.js export-improving`.
+- vcm update and TLS (1.5), measured 2026-11-12: from a container, 5 of 120
+  post-quantum (X25519MLKEM768, what Docker Engine 29's Go sends) handshakes
+  to pkg-containers.githubusercontent.com failed with alert 50 "decode
+  error" (= Docker's "tls: error decoding message"), 0 of 120 classic; from
+  Windows itself 0 of 420. With Quick Heal's HTTPS scanning off: 180 of 180
+  and 0 of 9 parallel pulls failed (p ~ 0.01). Norton runs but its
+  subscription has expired. Fix: `vcm pull`/`vcm update` try three times
+  (layers already pulled are kept) and then name antivirus HTTPS scanning
+  (Quick Heal as the example) with both fixes; the installers point at it;
+  README troubleshooting. Tests: install/tests/test_vcm_pull.{sh,ps1} (in
+  CI), failing before the fix.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
