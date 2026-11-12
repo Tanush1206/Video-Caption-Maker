@@ -97,7 +97,7 @@
         </div>
 
         <p class="note os-windows">Paste it into PowerShell. You need <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>, which is free, running first.</p>
-        <p class="note os-macos">Paste it into Terminal. macOS hasn't been fully tested yet. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a> and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) the app's images run under emulation, because they're built for Intel and AMD processors: keep "Use Rosetta" on in Docker Desktop's settings, and expect transcription and exports to be slower.</p>
+        <p class="note os-macos">Paste it into Terminal. macOS hasn't been fully tested yet. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a> and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) the app runs natively: its images are built for ARM too, so there's no emulation and no Rosetta setting to turn on.</p>
         <p class="note os-linux">Paste it into a terminal. You need <a href="https://docs.docker.com/get-docker/">Docker Engine</a>, which is free, running first.</p>
         <p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
       </div>
@@ -202,7 +202,7 @@
     <section class="wrap section" id="limitations" aria-labelledby="lim-title">
       <h2 id="lim-title">Known limitations</h2>
       <ul class="limits">
-        <li><strong>macOS is untested.</strong> The installer and images are built for Docker Desktop for Mac, but nobody has run them there yet. On a Mac everything runs on the CPU, and Apple Silicon runs the images under emulation, which is slow.</li>
+        <li><strong>macOS isn't fully tested.</strong> The installer and images are built for Docker Desktop for Mac, natively for Apple silicon too, and the ARM build runs in our tests on ARM Linux, but not yet on a Mac. On a Mac everything runs on the CPU.</li>
         <li><strong>Nine languages.</strong> Measured on Google's FLEURS speech set, the European languages are heard almost word for word (3–7% of words wrong on the large model), Hindi with more misspellings (26%). Speech in any other language gets a warning before anything is made.</li>
         <li><strong>Translation into Hindi</strong> is weaker than into the European languages with the local model; a Gemini key does much better.</li>
         <li><strong>The small speech model</strong>, chosen on machines under 12 GB of RAM, is rough on fast speech outside English. A larger model in Settings is much better, if the machine has the memory.</li>

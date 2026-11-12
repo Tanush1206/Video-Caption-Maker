@@ -6,6 +6,22 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.0] - unreleased
+
+### Changed
+- **Native on Apple silicon and ARM Linux.** The app's images are now
+  built for ARM as well as Intel/AMD, so Macs with M1-M4 chips and ARM
+  Linux machines run them natively: no emulation, and no Rosetta setting
+  to turn on. The NVIDIA (CUDA) build stays Intel/AMD only.
+  **Updating an install made before v1.4.0 on Apple silicon or ARM Linux
+  downloads the native images in full once (about 1 GB)**; updates after
+  that are small again. Intel/AMD installs download as little as usual.
+- `vcm update` now hands the update over to the version it has just
+  downloaded, so what an update says and does comes from the new version.
+  If that one can't run, the current one finishes the update as before.
+  A download that fails part-way (no network, say) now leaves the install
+  exactly as it was, files included.
+
 ## [1.3.1] - 2026-11-12
 
 Hinglish captions spelled the way people type them, your own words spelled

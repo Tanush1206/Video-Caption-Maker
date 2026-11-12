@@ -32,12 +32,11 @@ curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/dow
 
 macOS hasn't been fully tested yet. It needs
 [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)
-and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) the
-app's images run under emulation, because they're built for Intel and AMD
-processors: keep "Use Rosetta for x86_64/amd64 emulation on Apple Silicon"
-on in Docker Desktop's settings (the installer checks it), and expect
-transcription and exports to be slower. Before v1.2.1 the installer
-stopped on Apple silicon with "no matching manifest for linux/arm64/v8".
+and runs on the CPU (no NVIDIA GPU on Macs). Since v1.4.0 the app's images
+are built for Apple silicon (M1–M4) too, so they run natively: no emulation,
+and no Rosetta setting to turn on. Updating an install made before v1.4.0
+on Apple silicon downloads the native images in full once (about 1 GB);
+updates after that are small again.
 
 **Linux**
 
@@ -219,12 +218,10 @@ healthy.
 ## Known limitations
 
 - **macOS isn't fully tested.** On a Mac everything runs on the CPU;
-  NVIDIA GPUs are Windows and Linux only. The images are built for Intel
-  and AMD (amd64) only, so Apple silicon (M1–M4) and ARM Linux run them
-  under emulation (v1.2.1), which is slower; native arm64 images are
-  planned for v1.3.0. On ARM Linux, amd64 emulation has to be turned on once
-  (`docker run --privileged --rm tonistiigi/binfmt --install amd64`); the
-  installer says so if it's missing.
+  NVIDIA GPUs are Windows and Linux only. Since v1.4.0 the images are built
+  for Intel/AMD and ARM, so Apple silicon (M1–M4) and ARM Linux run them
+  natively. The ARM build is installed and run in CI on GitHub's ARM Linux
+  machines, not yet on a Mac.
 - **Languages:** English, Hindi (as Hinglish in Roman letters or in
   Devanagari), Spanish, Portuguese, Italian, Russian, French, German and
   Dutch, spoken and as captions. Measured on Google's FLEURS speech set,
