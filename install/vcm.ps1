@@ -40,6 +40,40 @@ function Invoke-Compose([string[]]$arguments) {
     if ($LASTEXITCODE -ne 0) { throw "docker compose $($arguments -join ' ') failed" }
 }
 
+# Antivirus that scans HTTPS breaks a few of Docker's TLS handshakes to
+# GitHub's registry (v1.3.1): with Quick Heal's scanning on, 5 in 120 from
+# Docker failed with "tls: error decoding message", none with it off and none
+# from Windows itself. A pull keeps the layers it already has, so trying again
+# fetches only what failed.
+$PullTries = 3
+$TlsTrouble = 'tls: |x509|certificate|decoding message|bad record mac'
+$Dropped = 'i/o timeout|connection reset|unexpected eof'
+
+function Invoke-Pull {
+    $files = @('-f', (Join-Path $VcmHome 'docker-compose.prod.yml'))
+    if ((Get-EnvValue 'VCM_VARIANT') -eq 'cuda') { $files += @('-f', (Join-Path $VcmHome 'docker-compose.gpu.yml')) }
+    $all = @('compose', '-p', $Project, '--env-file', $EnvFile, '--project-directory', $VcmHome) + $files + @('pull')
+    $wait = if ($env:VCM_PULL_WAIT) { [int]$env:VCM_PULL_WAIT } else { 5 }
+    for ($try = 1; ; $try++) {
+        # Shown as it comes, and kept to decide what went wrong.
+        $said = (& docker @all 2>&1 | ForEach-Object { $line = "$_"; Write-Host $line; $line }) -join "`n"
+        if ($LASTEXITCODE -eq 0) { return }
+        if ($try -ge $PullTries -or $said -notmatch "$TlsTrouble|$Dropped") { break }
+        Write-Host "The download was interrupted; trying again ($($try + 1) of $PullTries)..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $wait
+    }
+    if ($said -match $TlsTrouble) {
+        Write-Host ''
+        Write-Host "Couldn't download the images: the secure connection to GitHub's image registry kept failing." -ForegroundColor Red
+        Write-Host 'This is usually antivirus software that scans HTTPS traffic (for example Quick Heal).'
+        Write-Host 'To fix it, either:'
+        Write-Host '  - turn off its HTTPS (web) scanning while this runs, then turn it back on; or'
+        Write-Host '  - add an exception for ghcr.io and pkg-containers.githubusercontent.com.'
+        Write-Host 'Then try again. Nothing was changed.'
+    }
+    throw 'docker compose pull failed'
+}
+
 function Assert-Docker {
     docker info *> $null
     if ($LASTEXITCODE -ne 0) {
@@ -66,7 +100,7 @@ try {
     switch ($Command) {
         'start'   { Assert-Docker; Invoke-Compose @('up', '-d'); if (Wait-Ready) { Start-Process $Url } }
         'up'      { Assert-Docker; Invoke-Compose @('up', '-d') }
-        'pull'    { Assert-Docker; Invoke-Compose @('pull') }
+        'pull'    { Assert-Docker; Invoke-Pull }
         'stop'    { Assert-Docker; Invoke-Compose @('stop'); Write-Host "Stopped. Your videos are kept; 'vcm start' brings it back." }
         'restart' { Assert-Docker; Invoke-Compose @('stop'); Invoke-Compose @('up', '-d'); Wait-Ready | Out-Null }
         'status'  { Assert-Docker; Invoke-Compose @('ps', '-a') }
@@ -100,7 +134,7 @@ try {
                 Move-Item -ErrorAction Stop -Force (Join-Path $VcmHome "$file.tmp") (Join-Path $VcmHome $file)
             }
             Remove-Item -ErrorAction SilentlyContinue (Join-Path $VcmHome 'SHA256SUMS.tmp')
-            Invoke-Compose @('pull')
+            Invoke-Pull
             Invoke-Compose @('up', '-d', '--remove-orphans')
             Wait-Ready | Out-Null
             # Only this app's old images (the ones the update just replaced, now

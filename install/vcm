@@ -27,6 +27,41 @@ compose() {
     docker compose -p "$PROJECT" --env-file .env "${files[@]}" "$@"
 }
 
+# Antivirus that scans HTTPS breaks a few of Docker's TLS handshakes to
+# GitHub's registry (v1.3.1): with Quick Heal's scanning on, 5 in 120 from
+# Docker failed with "tls: error decoding message", none with it off and
+# none from the computer itself. A pull keeps the layers it already has, so
+# trying again fetches only what failed.
+PULL_TRIES=3
+TLS_TROUBLE='tls: |x509|certificate|decoding message|bad record mac'
+DROPPED='i/o timeout|connection reset|unexpected eof'
+
+pull() {
+    local log try=1
+    log="$(mktemp)"
+    until compose pull 2>&1 | tee "$log"; do
+        if [ $try -ge $PULL_TRIES ] || ! grep -qiE "$TLS_TROUBLE|$DROPPED" "$log"; then
+            if grep -qiE "$TLS_TROUBLE" "$log"; then
+                {
+                    echo
+                    echo "Couldn't download the images: the secure connection to GitHub's image registry kept failing."
+                    echo "This is usually antivirus software that scans HTTPS traffic (for example Quick Heal)."
+                    echo "To fix it, either:"
+                    echo "  - turn off its HTTPS (web) scanning while this runs, then turn it back on; or"
+                    echo "  - add an exception for ghcr.io and pkg-containers.githubusercontent.com."
+                    echo "Then try again. Nothing was changed."
+                } >&2
+            fi
+            rm -f "$log"
+            return 1
+        fi
+        try=$((try + 1))
+        echo "The download was interrupted; trying again ($try of $PULL_TRIES)..." >&2
+        sleep "${VCM_PULL_WAIT:-5}"
+    done
+    rm -f "$log"
+}
+
 need_docker() {
     docker info >/dev/null 2>&1 || {
         echo "Docker isn't running. Start Docker (Docker Desktop, or: sudo systemctl start docker) and try again." >&2
@@ -60,7 +95,7 @@ cmd="${1:-help}"; shift || true
 case "$cmd" in
     start)    need_docker; compose up -d; wait_ready && open_browser ;;
     up)       need_docker; compose up -d ;;
-    pull)     need_docker; compose pull ;;
+    pull)     need_docker; pull ;;
     stop)     need_docker; compose stop; echo "Stopped. Your videos are kept; 'vcm start' brings it back." ;;
     restart)  need_docker; compose stop; compose up -d; wait_ready ;;
     status)   need_docker; compose ps -a ;;
@@ -85,7 +120,7 @@ case "$cmd" in
         for file in $update_files; do mv "$file.tmp" "$file"; done
         rm -f SHA256SUMS.tmp
         chmod +x vcm
-        compose pull
+        pull
         compose up -d --remove-orphans
         wait_ready
         # Only this app's old images (the ones the update just replaced, now

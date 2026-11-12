@@ -34,8 +34,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Shell syntax and lint
         run: |
-          bash -n install/install.sh install/vcm
-          shellcheck -S warning install/install.sh install/vcm
+          bash -n install/install.sh install/vcm install/tests/test_vcm_pull.sh
+          shellcheck -S warning install/install.sh install/vcm install/tests/test_vcm_pull.sh
+      - name: vcm pull tries again and names HTTPS scanning (v1.3.1)
+        run: |
+          bash install/tests/test_vcm_pull.sh
+          pwsh -NoProfile -File install/tests/test_vcm_pull.ps1
       - name: Compose files are valid
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
