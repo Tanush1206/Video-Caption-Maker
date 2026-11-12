@@ -12,7 +12,8 @@ import { formatFileSize } from "@/lib/format";
 export function StatsStrip() {
   const { data, isLoading, isError } = useStats();
 
-  if (isLoading) return <Skeleton className="mt-1.5 h-4 w-32" />;
+  // As tall as the line it stands for (mt-1 + 20 px), so nothing moves.
+  if (isLoading) return <Skeleton className="mt-1 h-5 w-32" />;
   if (isError || !data) return null;
 
   return (

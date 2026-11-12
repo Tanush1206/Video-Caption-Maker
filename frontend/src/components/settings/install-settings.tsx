@@ -501,7 +501,10 @@ export function InstallSettings() {
 
   if (system.isPending) {
     return (
-      <div className="flex flex-col gap-8" aria-busy="true" aria-label="Loading settings">
+      // At least a screen tall: the settings are, and the footer under them
+      // then never starts on screen and jumps when they arrive (v1.4.0, launch
+      // audit P1: CLS 0.37).
+      <div className="flex min-h-screen flex-col gap-8" aria-busy="true" aria-label="Loading settings">
         <Skeleton className="h-40 w-full rounded-xl" />
         <Skeleton className="h-32 w-full rounded-xl" />
       </div>

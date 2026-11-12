@@ -2116,6 +2116,50 @@ const CHECKS = {
     }
   },
 
+  // v1.4.0 (launch audit P1): nothing on the dashboard or settings moves
+  // while they load (CLS <= 0.01, far inside "good" 0.1: on this fast machine
+  // the shifts the audit measured at 0.37-0.44 read 0.06-0.07), at 375 and
+  // 1440, light and dark; the nodes that moved are printed. The API answers slowed by 600 ms so
+  // late data arrives after the first paint, as on a busy machine.
+  // Read-only.
+  async cls(browser, base) {
+    for (const [width, theme] of [[375, "light"], [1440, "light"], [375, "dark"], [1440, "dark"]]) {
+      for (const path of ["/dashboard", "/settings"]) {
+        const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
+        await context.addInitScript((t) => {
+          localStorage.setItem("vcm-theme", t);
+          window.__shifts = [];
+          new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              if (entry.hadRecentInput) continue;
+              window.__shifts.push({
+                value: entry.value,
+                nodes: (entry.sources || []).map((s) => {
+                  const n = s.node;
+                  if (!n || !n.tagName) return "?";
+                  return `${n.tagName.toLowerCase()}${n.id ? "#" + n.id : ""}.${String(n.className || "").split(" ").slice(0, 3).join(".")}`;
+                }),
+              });
+            }
+          }).observe({ type: "layout-shift", buffered: true });
+        }, theme);
+        const page = await context.newPage();
+        await page.route(/\/api\//, async (route) => {
+          await new Promise((r) => setTimeout(r, 600));
+          await route.fallback();
+        });
+        await page.goto(`${base}${path}`, { waitUntil: "networkidle" });
+        await page.waitForTimeout(1500);
+        const shifts = await page.evaluate(() => window.__shifts);
+        const total = shifts.reduce((sum, s) => sum + s.value, 0);
+        const worst = shifts.sort((a, b) => b.value - a.value).slice(0, 2).map((s) => `${s.value.toFixed(3)} ${s.nodes.join(",")}`);
+        ok(`cls ${path}@${width} (${theme}): ${total.toFixed(3)}`, total <= 0.01, worst.join(" | "));
+        await page.unrouteAll({ behavior: "ignoreErrors" });
+        await context.close();
+      }
+    }
+  },
+
   // v1.4.0: the pipeline shows the second listen ("Checking for missed
   // speech") and phrasing ("Arranging captions") as stages of their own,
   // each with its percentage, the earlier ones Done, the later ones waiting;

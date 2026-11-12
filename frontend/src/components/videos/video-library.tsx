@@ -61,6 +61,20 @@ function FirstRun() {
  * why length is the bar. This component owns the one thing a row cannot know
  * on its own: the scale every bar is drawn against.
  */
+// How many cards the first page showed last time, so the loading state is as
+// tall as what replaces it (v1.4.0, launch audit P1: CLS 0.44 on a phone).
+// A per-browser convenience: unreadable storage just means the default.
+const LAST_COUNT_KEY = "vcm.library.count";
+
+function lastCount(): number {
+  try {
+    const value = Number(localStorage.getItem(LAST_COUNT_KEY));
+    return Number.isInteger(value) && value > 0 && value <= PAGE_SIZE ? value : 4;
+  } catch {
+    return 4;
+  }
+}
+
 export function VideoLibrary() {
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState<VideoStatus | null>(null);
@@ -85,6 +99,21 @@ export function VideoLibrary() {
     setPage(0);
   }
 
+  // Remembered once the first page of everything has loaded (see lastCount).
+  const firstPageCount = !isLoading && !isPlaceholderData && page === 0 && status === null ? data?.items.length : undefined;
+  useEffect(() => {
+    if (firstPageCount === undefined) return;
+    try {
+      localStorage.setItem(LAST_COUNT_KEY, String(firstPageCount));
+    } catch {
+      // Storage off: the next load uses the default.
+    }
+  }, [firstPageCount]);
+  // Read after mount: the server render has no storage, and the first
+  // client render must match it.
+  const [skeletons, setSkeletons] = useState(4);
+  useEffect(() => setSkeletons(lastCount()), []);
+
   const filters = (
     <Segmented
       label="Filter by status"
@@ -93,6 +122,46 @@ export function VideoLibrary() {
       onChange={changeFilter}
       className="w-full sm:w-auto"
     />
+  );
+
+  // The same header loading and loaded, so nothing under it moves when the
+  // videos arrive.
+  const header = (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0">
+        <h2 className="text-xl font-semibold">Videos</h2>
+        {/* The library's figures, as one grey line. */}
+        <StatsStrip />
+      </div>
+      <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+        {filters}
+        <label className="relative flex w-full min-w-0 flex-1 items-center sm:w-56 sm:flex-none">
+          <Search
+            className="pointer-events-none absolute left-3 size-4 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="sr-only">Filter projects by name</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter by name"
+            className="h-11 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-[15px] placeholder:text-muted-foreground focus-visible:border-ring sm:h-8 sm:text-sm"
+          />
+        </label>
+        <Segmented
+          label="Layout"
+          iconOnly
+          segments={[
+            { value: "grid" as const, label: "Grid view", icon: LayoutGrid },
+            { value: "list" as const, label: "List view", icon: List },
+          ]}
+          value={view}
+          onChange={setView}
+          segmentClassName="px-2.5"
+        />
+      </div>
+    </div>
   );
 
   if (isError) {
@@ -106,10 +175,11 @@ export function VideoLibrary() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        {filters}
-        {/* Shaped like the cards, so the layout doesn't jump when they land. */}
+        {header}
+        {/* Shaped like the cards, as many as last time, so the layout doesn't
+            jump when they land. */}
         <div className="grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, i) => (
+          {Array.from({ length: skeletons }, (_, i) => (
             <div key={i} className="space-y-2.5">
               <Skeleton className="aspect-video w-full rounded-xl" />
               <Skeleton className="h-4 w-2/3" />
@@ -141,42 +211,7 @@ export function VideoLibrary() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold">Videos</h2>
-          {/* The library's figures, as one grey line. */}
-          <StatsStrip />
-        </div>
-
-        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
-          {filters}
-          <label className="relative flex w-full min-w-0 flex-1 items-center sm:w-56 sm:flex-none">
-            <Search
-              className="pointer-events-none absolute left-3 size-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <span className="sr-only">Filter projects by name</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by name"
-              className="h-11 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-[15px] placeholder:text-muted-foreground focus-visible:border-ring sm:h-8 sm:text-sm"
-            />
-          </label>
-          <Segmented
-            label="Layout"
-            iconOnly
-            segments={[
-              { value: "grid" as const, label: "Grid view", icon: LayoutGrid },
-              { value: "list" as const, label: "List view", icon: List },
-            ]}
-            value={view}
-            onChange={setView}
-            segmentClassName="px-2.5"
-          />
-        </div>
-      </div>
+      {header}
 
       {items.length === 0 ? (
         // Two different nothings. "You have no videos" is an invitation; "no
