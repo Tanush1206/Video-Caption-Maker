@@ -34,27 +34,33 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Shell syntax and lint
         run: |
-          bash -n install/install.sh install/vcm install/tests/test_vcm_pull.sh
-          shellcheck -S warning install/install.sh install/vcm install/tests/test_vcm_pull.sh
+          bash -n install/install.sh install/vcm install/tests/test_vcm_pull.sh install/tests/test_vcm_update.sh
+          shellcheck -S warning install/install.sh install/vcm install/tests/test_vcm_pull.sh install/tests/test_vcm_update.sh
       - name: vcm pull tries again and names HTTPS scanning (v1.3.1)
         run: |
           bash install/tests/test_vcm_pull.sh
           pwsh -NoProfile -File install/tests/test_vcm_pull.ps1
+      - name: vcm update hands over safely to the version it downloaded (v1.4.0)
+        run: |
+          bash install/tests/test_vcm_update.sh
+          pwsh -NoProfile -File install/tests/test_vcm_update.ps1
       - name: Compose files are valid
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml config -q
-      - name: Our images are asked for as amd64, the others are left native (v1.2.1)
+      - name: Only the CUDA images are asked for as amd64; the rest are native (v1.4.0)
         run: |
           for files in "-f docker-compose.prod.yml" "-f docker-compose.prod.yml -f docker-compose.gpu.yml"; do
             # shellcheck disable=SC2086
-            POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose $files config --format json | python3 -c '
-          import json, sys
+            POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose $files config --format json | FILES="$files" python3 -c '
+          import json, os, sys
           services = json.load(sys.stdin)["services"]
           platforms = {name: s.get("platform") for name, s in services.items()}
-          print(platforms)
-          assert all(platforms[n] == "linux/amd64" for n in ("backend", "worker", "frontend")), platforms
-          assert all(platforms[n] is None for n in ("postgres", "redis", "chromadb")), platforms
+          print(os.environ["FILES"], platforms)
+          cuda = "gpu" in os.environ["FILES"]
+          for name in ("backend", "worker"):
+              assert platforms[name] == ("linux/amd64" if cuda else None), platforms
+          assert all(platforms[n] is None for n in ("frontend", "postgres", "redis", "chromadb")), platforms
           '
           done
       - name: Dev stack builds the CPU image unless the GPU is asked for
