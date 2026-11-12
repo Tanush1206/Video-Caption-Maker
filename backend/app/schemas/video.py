@@ -154,7 +154,7 @@ class HinglishSpellingOption(BaseModel):
     code: str
     #: "Everyday" / "Formal".
     label: str
-    #: A few words spelled that way: "pehle, liye, zyada".
+    #: A few words spelled that way: "pehle, liye".
     example: str
 
 

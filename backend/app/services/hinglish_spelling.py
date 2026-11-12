@@ -25,8 +25,8 @@ FORMAL = "formal"
 DEFAULT = EVERYDAY
 # code: (label, example). Served by the API with the language options.
 SPELLINGS: dict[str, tuple[str, str]] = {
-    EVERYDAY: ("Everyday", "pehle, liye, zyada"),
-    FORMAL: ("Formal", "pahle, lie, zyaada"),
+    EVERYDAY: ("Everyday", "pehle, liye"),
+    FORMAL: ("Formal", "pahle, lie"),
 }
 
 WORDS: dict[str, str] = {
