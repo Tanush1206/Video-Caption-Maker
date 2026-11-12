@@ -129,12 +129,25 @@ redact() {
         -e "s#${HOME:-/nonexistent}#~#g"
 }
 
+# The version that is running (v1.4.1): the app's own answer, or the backend
+# image's label when the app isn't answering. An install's .env usually says
+# VCM_VERSION=latest, which tells a bug report nothing.
+running_version() {
+    local version
+    version="$(curl -fsS -m 10 "$URL/api/system" 2>/dev/null | grep -o '"version": *"[^"]*"' | head -n 1 | cut -d'"' -f4)" || true
+    if [ -n "$version" ]; then echo "$version"; return; fi
+    version="$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$PROJECT-backend-1" 2>/dev/null | head -n 1)" || true
+    if [ -n "$version" ]; then echo "$version, from the image: the app isn't answering"
+    else echo "unknown: the app isn't answering and its image wasn't found"; fi
+}
+
 doctor() {
     local out
     out="$START_DIR/vcm-doctor-$(date +%Y-%m-%d-%H%M%S).txt"
     section() { echo; echo "== $1"; }
     {
         echo "VideoCaptionMaker doctor report, $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "Version: $(running_version) (VCM_VERSION=$(env_value VCM_VERSION) in .env)"
         section "App (from .env: these three keys only)"
         for key in VCM_VERSION VCM_VARIANT VCM_PORT; do echo "$key=$(env_value "$key")"; done
         section "System"

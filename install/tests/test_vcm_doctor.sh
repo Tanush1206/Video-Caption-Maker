@@ -24,7 +24,7 @@ cat > "$work/home/.env" <<EOF
 POSTGRES_PASSWORD=pg-supersecret-123
 JWT_SECRET_KEY=jwt-supersecret-456
 GEMINI_API_KEY=AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMY1234567
-VCM_VERSION=1.4.0
+VCM_VERSION=latest
 VCM_VARIANT=cpu
 VCM_PORT=$port
 EOF
@@ -35,7 +35,11 @@ cat > "$work/bin/docker" <<EOF
 case "\$1" in
     version) echo "docker 29.9.2 on linux/amd64" ;;
     info) echo "CPUs 8, memory 16000000000 bytes, Docker Desktop" ;;
-    inspect) echo "/vcm-backend-1 ghcr.io/tanush1206/video-caption-maker-backend:latest-cpu sha256:abc" ;;
+    inspect)
+        case "\$*" in
+            *image.version*) echo "1.3.9" ;;
+            *) echo "/vcm-backend-1 ghcr.io/tanush1206/video-caption-maker-backend:latest-cpu sha256:abc" ;;
+        esac ;;
     compose)
         case "\$*" in
             *" version"*) echo "Docker Compose version v5.6.1" ;;
@@ -69,7 +73,9 @@ lacks() { if grep -qF -- "$1" <<< "$text"; then echo no; else echo yes; fi; }
 
 check "it writes a report in the current folder" "$( [ "$status" -eq 0 ] && [ -n "$report" ] && echo yes)"
 check "it says to review it before attaching" "$(grep -q "Review it before attaching" <<< "$out" && echo yes)"
-check "the version, variant and port" "$( [ "$(has "VCM_VERSION=1.4.0")" = yes ] && [ "$(has "VCM_VARIANT=cpu")" = yes ] && echo yes)"
+check "the version, variant and port" "$( [ "$(has "VCM_VERSION=latest")" = yes ] && [ "$(has "VCM_VARIANT=cpu")" = yes ] && echo yes)"
+# v1.4.1: the version that is running, not the "latest" an install's .env holds.
+check "the second line is the running version, from the app" "$( [ "$(sed -n 2p <<< "$text")" = "Version: 1.4.0 (VCM_VERSION=latest in .env)" ] && echo yes)"
 check "docker, compose, containers, health, system, logs" "$( [ "$(has "Docker Compose version v5.6.1")" = yes ] && [ "$(has "vcm-backend-1  running")" = yes ] && [ "$(has '"status":"ok"')" = yes ] && [ "$(has '"gemini_configured":true')" = yes ] && [ "$(has "worker-1")" = yes ] && echo yes)"
 check "no database password or JWT secret from .env" "$( [ "$(lacks pg-supersecret)" = yes ] && [ "$(lacks jwt-supersecret)" = yes ] && echo yes)"
 check "no Gemini key" "$(lacks "AIzaSyDUMMY")"
@@ -81,5 +87,12 @@ check "no vocabulary words" "$( [ "$(lacks "Ketan Sharma")" = yes ] && [ "$(lack
 check "no home folder" "$(lacks "$work/fakehome/me")"
 check "no GPU serial" "$(lacks "GPU-1234-fingerprint")"
 check "no file names in any case, sentence end kept" "$( [ "$(lacks "TRIP.MOV")" = yes ] && [ "$(has "burned <video>, then <video>.")" = yes ] && echo yes)"
+
+# The app not answering: the version comes from the backend image's label.
+sed "s/^VCM_PORT=.*/VCM_PORT=1/" "$work/home/.env" > "$work/home/.env.new" && mv "$work/home/.env.new" "$work/home/.env"
+mkdir "$work/cwd2"
+(cd "$work/cwd2" && HOME="$work/fakehome/me" PATH="$work/bin:$PATH" bash "$work/home/vcm" doctor >/dev/null 2>&1) || true
+down="$(sed -n 2p "$work/cwd2"/vcm-doctor-*.txt 2>/dev/null || true)"
+check "with the app down, it is the image's version, and says so" "$( [ "$down" = "Version: 1.3.9, from the image: the app isn't answering (VCM_VERSION=latest in .env)" ] && echo yes)"
 
 [ $failures -eq 0 ] && echo "ALL PASSED" || { echo "$failures FAILED"; echo "$text" | sed 's/^/    /'; exit 1; }

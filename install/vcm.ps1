@@ -152,12 +152,30 @@ function Hide-Private([string]$text) {
     return $text
 }
 
+# The version that is running (v1.4.1): the app's own answer, or the backend
+# image's label when the app isn't answering. An install's .env usually says
+# VCM_VERSION=latest, which tells a bug report nothing.
+function Get-RunningVersion {
+    try {
+        $body = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 -Uri "$Url/api/system").Content
+        if ($body -is [byte[]]) { $body = [Text.Encoding]::UTF8.GetString($body) }
+        if ($body -match '"version":\s*"([^"]*)"') { return $Matches[1] }
+    } catch { }
+    # The labels as JSON: no quotes inside the argument, which 5.1 and 7 pass differently.
+    $labels = (& docker inspect --format '{{json .Config.Labels}}' "$Project-backend-1" 2>$null | Out-String)
+    if ($labels -match '"org\.opencontainers\.image\.version":\s*"([^"]+)"') {
+        return "$($Matches[1]), from the image: the app isn't answering"
+    }
+    return "unknown: the app isn't answering and its image wasn't found"
+}
+
 function Invoke-Doctor {
     $out = Join-Path $PWD ("vcm-doctor-{0}.txt" -f (Get-Date -Format 'yyyy-MM-dd-HHmmss'))
     $lines = New-Object System.Collections.Generic.List[string]
     function Add([string]$line) { $lines.Add($line) }
     function Run([scriptblock]$block) { (& $block 2>&1 | ForEach-Object { "$_" }) -join "`n" }
     Add "VideoCaptionMaker doctor report, $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+    Add "Version: $(Get-RunningVersion) (VCM_VERSION=$(Get-EnvValue 'VCM_VERSION') in .env)"
     Add ''; Add '== App (from .env: these three keys only)'
     foreach ($key in 'VCM_VERSION', 'VCM_VARIANT', 'VCM_PORT') { Add "$key=$(Get-EnvValue $key)" }
     Add ''; Add '== System'

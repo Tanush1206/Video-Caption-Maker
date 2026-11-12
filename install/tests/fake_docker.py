@@ -13,6 +13,9 @@ args = sys.argv[1:]
 cmd = args[0] if args else ""
 if cmd == "version":
     print(os.environ.get("FAKE_ARCH", "amd64"))
+elif cmd == "inspect" and any("Config.Labels" in a for a in args):
+    # For vcm doctor (v1.4.1): the backend image's version label.
+    print('{"org.opencontainers.image.version":"1.3.9"}')
 elif cmd == "inspect":
     print("sha256:installed")
 elif cmd == "image" and args[1:2] == ["inspect"]:

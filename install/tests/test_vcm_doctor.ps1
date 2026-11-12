@@ -37,7 +37,7 @@ try {
     Set-Content -Path (Join-Path $vcmHome '.env') -Encoding ascii -Value @(
         'POSTGRES_PASSWORD=pg-supersecret-123', 'JWT_SECRET_KEY=jwt-supersecret-456',
         'GEMINI_API_KEY=AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMY1234567',
-        'VCM_VERSION=1.4.0', 'VCM_VARIANT=cpu', "VCM_PORT=$port")
+        'VCM_VERSION=latest', 'VCM_VARIANT=cpu', "VCM_PORT=$port")
     $sep = [IO.Path]::PathSeparator
     $child = @"
 `$env:PATH = '$bin' + '$sep' + `$env:PATH
@@ -62,7 +62,9 @@ exit `$LASTEXITCODE
 
     Check 'it writes a report in the current folder' ($status -eq 0 -and $null -ne $report)
     Check 'it says to review it before attaching' ($out -match 'Review it before attaching')
-    Check 'the version, variant and port' ((Has 'VCM_VERSION=1.4.0') -and (Has 'VCM_VARIANT=cpu'))
+    Check 'the version, variant and port' ((Has 'VCM_VERSION=latest') -and (Has 'VCM_VARIANT=cpu'))
+    # v1.4.1: the version that is running, not the "latest" an install's .env holds.
+    Check 'the second line is the running version, from the app' (($text -split "`r?`n")[1] -eq 'Version: 1.4.0 (VCM_VERSION=latest in .env)')
     Check 'docker, compose, containers, health, system, logs' ((Has 'Docker Compose version v5.6.1') -and (Has 'vcm-backend-1  running') -and (Has '"status":"ok"') -and (Has '"gemini_configured":true') -and (Has 'worker-1'))
     Check 'no database password or JWT secret from .env' (-not (Has 'pg-supersecret') -and -not (Has 'jwt-supersecret'))
     Check 'no Gemini key' (-not (Has 'AIzaSyDUMMY'))
@@ -73,6 +75,15 @@ exit `$LASTEXITCODE
     Check 'no vocabulary words' (-not (Has 'Ketan Sharma') -and -not (Has 'Akrapovic'))
     Check 'no home folder' (-not (Has $fakeHome))
     Check 'sentence end kept' (Has 'burned <video>, then <video>.')
+
+    # The app not answering: the version comes from the backend image's label.
+    $envFile = Join-Path $vcmHome '.env'
+    Set-Content -Path $envFile -Encoding ascii -Value ((Get-Content $envFile) -replace '^VCM_PORT=.*', 'VCM_PORT=1')
+    $cwd2 = Join-Path $work 'cwd2'; New-Item -ItemType Directory -Force -Path $cwd2 | Out-Null
+    & $exe -NoProfile -ExecutionPolicy Bypass -Command $child.Replace("Set-Location '$cwd'", "Set-Location '$cwd2'") 2>&1 | Out-Null
+    $report2 = Get-ChildItem -Path $cwd2 -Filter 'vcm-doctor-*.txt' | Select-Object -First 1
+    $down = if ($report2) { (Get-Content $report2.FullName)[1] } else { '' }
+    Check "with the app down, it is the image's version, and says so" ($down -eq "Version: 1.3.9, from the image: the app isn't answering (VCM_VERSION=latest in .env)")
 
     if ($script:failures -eq 0) { Write-Host 'ALL PASSED' } else { Write-Host "$($script:failures) FAILED"; Write-Host $out; Write-Host $text; exit 1 }
 } finally {
