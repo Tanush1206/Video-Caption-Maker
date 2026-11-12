@@ -23,7 +23,9 @@ New-Item -ItemType Directory -Force -Path (Join-Path $release 'api'), $bin | Out
 Set-Content -Path (Join-Path $release 'api/health') -Value 'ok' -Encoding ascii
 $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $listener.Start()
 $port = $listener.LocalEndpoint.Port; $listener.Stop()
-$server = Start-Process -PassThru -WindowStyle Hidden -FilePath $python -ArgumentList @('-m', 'http.server', $port, '--bind', '127.0.0.1', '--directory', $release) -ErrorAction Stop 2>$null
+# -WindowStyle exists only on Windows; pwsh on Linux refuses it.
+$hidden = if ($onWindows) { @{ WindowStyle = 'Hidden' } } else { @{} }
+$server = Start-Process -PassThru @hidden -FilePath $python -ArgumentList @('-m', 'http.server', $port, '--bind', '127.0.0.1', '--directory', $release) -ErrorAction Stop 2>$null
 try {
     Copy-Item (Join-Path $here 'fake_docker.py') $bin
     if ($onWindows) {
