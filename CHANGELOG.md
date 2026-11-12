@@ -6,6 +6,15 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.1] - unreleased
+
+### Fixed
+- `vcm doctor` now starts with the version that is actually running, for
+  example "Version: 1.4.0 (VCM_VERSION=latest in .env)". An install's
+  settings usually say "latest", so the report's first lines didn't say
+  which version a bug was found in. If the app isn't answering, the version
+  comes from the installed image, and the report says so.
+
 ## [1.4.0] - 2026-11-12
 
 Native on Apple silicon, progress that tells the truth on long videos, and

@@ -16,7 +16,7 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 1.4 | Export dialog warns while Improve is running on that video | 14 Nov | done 12 Nov |
 | 1.5 | Norton TLS: confirm the cause; install and `vcm update` detect it and say what to do; README troubleshooting | 15 Nov | done 12 Nov: the cause is Quick Heal's HTTPS scanning (Norton had expired); retry + advice in vcm and the installers, README |
 | 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | done 12 Nov |
-| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | (a)-(e) built and checked 12 Nov; release checks, then the tag (Tanush) |
+| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | done 12 Nov (tag on 3f4faef), checked on the install |
 | 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | done 12 Nov: arm64 CI green natively, times beside amd64; edge images multi-arch; macOS stays by hand (Tanush: no Intel runner) |
 | 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | done 12 Nov: stages recovering and phrasing, in order; 60 min: phrasing 390 s (192 s on one value) -> 85 s (no stall over 7 s); splitter 4.6x, same cuts |
 | 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | done 12 Nov: cold-load CLS 0.059-0.071 -> 0.000 (`checks.js cls`, <= 0.01) |
@@ -37,8 +37,12 @@ Daily check:
   Later on 12 Nov: (a)-(e) all built; ci #53 and #54, arm64 and the manual
   release run (edge tags) green; v1.4.0 docs and release checks next. Nine
   days ahead of the 21 Nov date.
+  v1.4.0 tagged and released the same evening, nine days early; the
+  install updated and checked.
   Noted for the final audit, not in this plan: the frontend runs Node 20,
-  which reached end of life in April 2026.
+  which reached end of life in April 2026; `vcm doctor`'s first lines said
+  `VCM_VERSION=latest` (fixed for v1.4.1, 13b58d9); AGENTS.md still names
+  v1.0.6 as the current release.
 
 ## Decisions (Step 0, made by Tanush — 2026-10-07)
 
@@ -1843,6 +1847,77 @@ Started 2026-11-12, after v1.3.1's after-release checks.
   Docker Desktop stopped during the first GPU E2E (the session ended);
   restarted, both stacks came back, the run was repeated from the start.
   Logs in `test-assets/results/v1.4.0/release/`.
+- [x] **Released and checked (2026-11-12, tag on 3f4faef).** `ci` green on
+      3f4faef; `arm64` did not run there (docs only: it runs when the
+      installers, compose files or images change) and was green on
+      a7e0cc2. `release` (43274658345): all 8 jobs green (5 images, 2
+      manifests, release).
+      - 8 assets matching `SHA256SUMS` and the tag (the two `.ps1` by line
+        endings only). GHCR, read anonymously:
+        - `1.4.0-cpu` = `latest-cpu`, amd64 + arm64;
+        - `1.4.0-cuda` = `latest-cuda`, amd64;
+        - frontend `1.4.0` = `latest`, amd64 + arm64;
+        - the per-arch tags single-arch.
+      - Backup before the update: `VideoCaptionMaker-backup-1.3.1` next
+        to the others (dump with all 9 tables, media 12 of 12 files, 743
+        MB, `.env` copied unread; 57 s down). The 1.1.1-1.3.0 backups are
+        kept until Tanush confirms.
+      - `vcm update` (still 1.3.1's script, so no hand-over yet) in 26 s,
+        first try: backend 3/19 layers 0.2 MB, frontend 7/13 11.0 MB;
+        Postgres, Redis, ChromaDB not recreated; no `*.tmp` left; the
+        installed files equal the release's. 1.4.0; alembic head unchanged
+        (`f6b1d8e3a925`, no migration); videos 84, 220, 221, 1105 captions
+        (text md5 unchanged), 2 exports, 3 styles, 12 media files. x86_64,
+        uid 10001 / 100, CapEff 0, NoNewPrivs 1; `/licenses` complete; the
+        image holds only the distro CA bundles.
+      - Guard, at localhost and 127.0.0.1: a POST with another origin,
+        another localhost port, cross-site or a rebinding Host is 403; the
+        app's own origin passes. (Reads pass on the Host rule alone, as
+        SECURITY.md 3 says: my first probes were GETs.)
+      - E2E (hinglish.mp4 same/en/hi/fr, SRT, VTT, MP4): ALL PASSED, the new
+        stages in order, fr by Gemini.
+      - UI checks through the guard (framing, frontend-guard, csp, cls,
+        pipeline-stages, upload-proxy, export-eta, caption-accuracy,
+        export-quality, redo-spelling, export-improving, vocabulary,
+        improve-captions): 127.0.0.1 165 PASS; localhost 164 PASS and
+        improve-captions failed once ("Gemini couldn't be reached"), then
+        passed alone (10 of 10). cls on the install 0.000-0.003. `flow.js`
+        PASS at both.
+      - `vcm doctor` on the install: the report has every section and no
+        key, token, email, file name, home folder or 64-hex secret. Its
+        first lines said `VCM_VERSION=latest` (the `.env`), the real
+        version only under `/api/system`: Tanush, fix in v1.4.1.
+      - Test videos on the install: 231-234 (E2E; 231 and 233 deleted by
+        flow.js, 232 and 234 by me), all deleted; 84, 220, 221 remain,
+        data identical to before the update. `busybox:latest`, pulled for
+        the media count, removed by name. Logs:
+        `test-assets/results/v1.4.0/release/`.
+- **v1.4.1 (unreleased), `vcm doctor` shows the running version**
+  (13b58d9): the report's second line is "Version: 1.4.0
+  (VCM_VERSION=latest in .env)", from `/api/system`, or from the backend
+  image's version label, saying so, when the app isn't answering. Bash and
+  PowerShell, a test for each case in both; the bug form points at it.
+- **Why Docker Desktop stopped on 12 Nov (investigated, nothing changed).**
+  Windows was restarted, Docker did not crash:
+  - 19:39:32 IST: a restart from the Start menu (event 1074,
+    StartMenuExperienceHost, user Admin); Docker's backend exited 1-4 s
+    later with 0x40010004 (ended by the system at shutdown);
+  - 19:42:28: a second restart by TrustedInstaller ("Operating System:
+    Upgrade (Planned)"): the 2026-11 security update KB5132061, downloaded
+    at 12:26, finished installing at 19:43:27;
+  - 19:43:27: shut down; the PC was off until 22:40:44;
+  - Docker Desktop did not start at sign-in: its own AutoStart is False
+    and its Startup entry is disabled, so it stayed off until I started
+    it at 22:49;
+  - no out-of-memory kill, panic or crash in Docker's logs or the Windows
+    Application log before the restart. Memory is not near a limit: 61 GB
+    RAM, no `.wslconfig` (WSL may use half, the VM sees 30 GB), `vmmemWSL`
+    at 5.2 GB with both stacks idle, 40 GB free.
+
+  What it cost: the GPU E2E in progress (videos 7732-7734 left behind,
+  deleted after) and three hours. Options for Tanush, none taken: turn on
+  Docker Desktop's "Start when you sign in"; set Windows active hours or
+  pause updates during long runs.
 - Test videos on dev: 7729 and 7730 (the 60-minute runs), 7731 (UI
   checks), 7732-7734 (the E2E run that was cut off), 7767-7770 (E2E GPU),
   7771 and 7772 (E2E CPU): all deleted through the API; 7426 (not mine)

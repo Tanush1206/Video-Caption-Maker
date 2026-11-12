@@ -357,7 +357,9 @@ report (the issue template asks for it). It is built so that attaching it
 gives away no secret:
 
 - **From the `.env` it reads three keys only:** `VCM_VERSION`, `VCM_VARIANT`
-  and `VCM_PORT`. The passwords and the JWT secret are never read.
+  and `VCM_PORT`. The passwords and the JWT secret are never read. The
+  running version on its second line (v1.4.1) comes from `/api/system`, or
+  from the backend image's version label when the app isn't answering.
 - **Everything else is filtered** before it is written (`redact` in `vcm`,
   `Hide-Private` in `vcm.ps1`; the same patterns):
   - `token=`, `password=`, `secret=`, `key=` values;

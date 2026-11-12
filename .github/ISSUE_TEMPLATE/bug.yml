@@ -29,7 +29,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: The first lines of the `vcm doctor` report say it (VCM_VERSION).
+      description: The second line of the `vcm doctor` report says it ("Version: …"). Before v1.4.1, look for "version" under /api/system in the report.
       placeholder: "1.4.0"
     validations:
       required: true
