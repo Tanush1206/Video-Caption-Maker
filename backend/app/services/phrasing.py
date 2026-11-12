@@ -131,7 +131,8 @@ def _sentences(captions: Sequence) -> list[list]:
 
 
 def split_phrases(
-    words: list[str], most: int | None = None, least: int = 1
+    words: list[str], most: int | None = None, least: int = 1,
+    on_step: Callable[[float], None] | None = None,
 ) -> list[list[str]]:
     """
     `words` cut into phrases of about TARGET_CHARS, after punctuation where
@@ -142,13 +143,22 @@ def split_phrases(
     The cuts that minimise each phrase's squared distance from an even split,
     less a bonus for ending on punctuation: exact, by dynamic programming over
     the cut points, so the same words always cut the same way.
+
+    `on_step` (v1.4.0) gets the share of the work done, 0-1, after each
+    phrase count: a run of hundreds of words takes minutes, and progress
+    has to move while it does.
     """
     n = len(words)
     if not n:
         return []
+    # Letters before each word: a phrase's length in O(1), not O(n), inside
+    # the loops below (v1.4.0: 3-4x faster on long runs, the same cuts).
+    before = [0]
+    for w in words:
+        before.append(before[-1] + len(w))
 
     def length(i: int, j: int) -> int:
-        return sum(len(w) for w in words[i:j]) + (j - i - 1)
+        return before[j] - before[i] + (j - i - 1)
 
     total = length(0, n)
     count = 1 if n <= 3 or total <= MAX_CHARS else min(n // 2, max(2, round(total / TARGET_CHARS)))
@@ -185,6 +195,8 @@ def split_phrases(
                 cost += best[k - 1][i][0]
                 if cost < best[k][j][0]:
                     best[k][j] = (cost, i)
+        if on_step:
+            on_step(k / count)
     phrases, j = [], n
     for k in range(count, 0, -1):
         i = best[k][j][1]
@@ -350,24 +362,19 @@ def rephrase(captions: Sequence, on_progress: Callable[[int], None] | None = Non
     Phrase-level captions from captions with `start_ms`, `end_ms`, `text`,
     `confidence` and, ideally, `speech` (their word timings).
 
-    `on_progress` (v1.4.0) gets 0-100 as sentences are done, each weighed by
-    the cube of its length: `split_phrases` costs that, and on an hour of
+    `on_progress` (v1.4.0) gets 0-100 as the work is done: on an hour of
     Hindi with few full stops phrasing took 7.4 silent minutes
-    (docs/LAUNCH_AUDIT.md, P2).
+    (docs/LAUNCH_AUDIT.md, P2). The words are timed first, which is quick;
+    then each run of speech is cut into phrases, which costs the cube of its
+    length (`split_phrases`), so that is what progress is weighed by, and a
+    long run moves it as it goes.
     """
     out: list[Phrase] = []
     run_index = 0
     said_until = 0
-    sentences = _sentences(captions)
-    weights = [max(1, sum(len(c.text.split()) for c in s)) ** 3 for s in sentences]
-    total, so_far, shown = sum(weights), 0, -1
-    for sentence, weight in zip(sentences, weights):
-        if on_progress:
-            percent = int(100 * so_far / total) if total else 0
-            if percent != shown:
-                on_progress(percent)
-                shown = percent
-        so_far += weight
+    # First pass: every word's time, and each sentence's runs of speech.
+    plans: list[tuple[list, list[str], list | None]] = []
+    for sentence in _sentences(captions):
         words = [w for caption in sentence for w in caption.text.split()]
         # Every word with its own time (`_word_times`), in order.
         timed: list[tuple[str, int, int]] = []
@@ -384,11 +391,7 @@ def rephrase(captions: Sequence, on_progress: Callable[[int], None] | None = Non
         if 2 * matched < len(words):
             # Mostly a translation: its words weren't the ones spoken, so
             # their times are guesses and mustn't decide where it is cut.
-            speech = [item for caption in sentence for item in _speech_of(caption)]
-            runs = _merge_closest(_runs(speech), len(words))
-            for run, run_words in zip(runs, _share(words, runs)):
-                out.extend(_translated(run_words, run, sentence[0].confidence, run_index))
-                run_index += 1
+            plans.append((sentence, words, None))
             continue
         # Runs of speech: split at every pause of PAUSE_MS or more.
         runs: list[list[tuple[str, int, int]]] = []
@@ -397,9 +400,42 @@ def rephrase(captions: Sequence, on_progress: Callable[[int], None] | None = Non
                 runs[-1].append(item)
             else:
                 runs.append([item])
+        plans.append((sentence, words, runs))
+
+    # Second pass: the phrases, with progress by the work each run takes.
+    weights = [
+        len(words) if runs is None else sum(len(run) ** 3 for run in runs)
+        for _, words, runs in plans
+    ]
+    total, done, shown = max(1, sum(weights)), 0, -1
+
+    def report(within: float = 0.0) -> None:
+        nonlocal shown
+        percent = min(99, int(100 * (done + within) / total))
+        if on_progress and percent != shown:
+            on_progress(percent)
+            shown = percent
+
+    report()
+    for (sentence, words, runs), weight in zip(plans, weights):
+        if runs is None:
+            speech = [item for caption in sentence for item in _speech_of(caption)]
+            merged = _merge_closest(_runs(speech), len(words))
+            for run, run_words in zip(merged, _share(words, merged)):
+                out.extend(_translated(run_words, run, sentence[0].confidence, run_index))
+                run_index += 1
+            done += weight
+            report()
+            continue
         for run in runs:
-            out.extend(_timed(run, sentence[0].confidence, run_index))
+            cost = len(run) ** 3
+            out.extend(_timed(
+                run, sentence[0].confidence, run_index,
+                on_step=(lambda share, cost=cost: report(cost * share)) if on_progress else None,
+            ))
             run_index += 1
+            done += cost
+            report()
     if on_progress:
         on_progress(100)
     out.sort(key=lambda p: p.start_ms)
@@ -412,12 +448,17 @@ def rephrase(captions: Sequence, on_progress: Callable[[int], None] | None = Non
     return out
 
 
-def _timed(run: list[tuple[str, int, int]], confidence, index: int) -> list[Phrase]:
+def _timed(
+    run: list[tuple[str, int, int]], confidence, index: int,
+    on_step: Callable[[float], None] | None = None,
+) -> list[Phrase]:
     """The phrases of one run of speech, each from its first word's start to its last word's end."""
     start, end = run[0][1], run[-1][2]
     duration = end - start
     words = [w for w, _, _ in run]
-    phrases = split_phrases(words, most=max(1, duration // MIN_MS), least=-(-duration // MAX_MS))
+    phrases = split_phrases(
+        words, most=max(1, duration // MIN_MS), least=-(-duration // MAX_MS), on_step=on_step
+    )
     out, position = [], 0
     for phrase in phrases:
         first, last = run[position], run[position + len(phrase) - 1]

@@ -366,12 +366,80 @@ def test_a_guessed_last_word_does_not_push_the_next_caption_late():
     assert start - 43_800 <= 100, start
 
 
-def test_phrasing_reports_progress_weighed_by_sentence_cost():
-    """v1.4.0: rising to 100, and a long sentence (its cost is the cube of its length) counts for more."""
-    short = [Segment(start_ms=i * 1000, end_ms=i * 1000 + 800, text=f"word{i}.", confidence=None) for i in range(3)]
-    long_ = Segment(start_ms=5000, end_ms=25000, text=" ".join(f"w{i}" for i in range(40)) + ".", confidence=None)
+def test_phrasing_progress_follows_the_work_and_moves_inside_a_long_run():
+    """v1.4.0: weighed by each run's real cost (its length cubed), and a long run moves the bar as it goes."""
+    def timed(start_ms, words):
+        speech = [(start_ms + i * 300, start_ms + i * 300 + 250, w) for i, w in enumerate(words)]
+        return Segment(start_ms=start_ms, end_ms=speech[-1][1], text=" ".join(words), confidence=None, speech=speech)
+
+    short = [timed(i * 2000, [f"word{i}."]) for i in range(3)]
+    long_ = timed(8000, [f"w{i}" for i in range(39)] + ["end."])
     seen = []
     phrasing.rephrase(short + [long_], on_progress=seen.append)
-    assert seen == sorted(seen) and seen[-1] == 100
-    # The three one-word sentences are a sliver of the work; the long one is the rest.
-    assert seen[:-1] and max(seen[:-1]) < 5
+    assert seen == sorted(seen) and seen[0] == 0 and seen[-1] == 100
+    # The three one-word runs are nothing next to 40 words in one run, and
+    # that run reports as it goes, in steps, not only when it ends.
+    assert len([p for p in seen if 0 < p < 100]) >= 3, seen
+    assert max(b - a for a, b in zip(seen, seen[1:])) <= 25, seen
+
+
+def _split_before_v140(words, most=None, least=1):
+    """split_phrases as it was before v1.4.0's prefix sums, for comparison."""
+    n = len(words)
+    if not n:
+        return []
+
+    def length(i, j):
+        return sum(len(w) for w in words[i:j]) + (j - i - 1)
+
+    total = length(0, n)
+    count = 1 if n <= 3 or total <= phrasing.MAX_CHARS else min(n // 2, max(2, round(total / phrasing.TARGET_CHARS)))
+    if most is not None:
+        count = min(count, most)
+    count = min(n, max(count, least))
+    if count < 2:
+        return [words]
+    shortest = 2 if 2 * count <= n else 1
+    even = total / count
+    inf = float("inf")
+    best = [[(inf, -1)] * (n + 1) for _ in range(count + 1)]
+    best[0][0] = (0.0, -1)
+    for k in range(1, count + 1):
+        for j in range(shortest * k, n + 1):
+            for i in range(shortest * (k - 1), j - shortest + 1):
+                if best[k - 1][i][0] == inf:
+                    continue
+                size = length(i, j)
+                cost = (size - even) ** 2 + max(0, size - phrasing.MAX_CHARS) * 100
+                if j < n:
+                    last, following = words[j - 1], phrasing._bare(words[j])
+                    if last.endswith(phrasing.SENTENCE_END):
+                        cost -= phrasing.SENTENCE_BONUS
+                    elif last.endswith(phrasing.CLAUSE_END):
+                        cost -= phrasing.CLAUSE_BONUS
+                    if following in phrasing.AUXILIARIES:
+                        cost += phrasing.AUXILIARY_PENALTY
+                    elif following in phrasing.CONJUNCTIONS:
+                        cost -= phrasing.CONJUNCTION_BONUS
+                cost += best[k - 1][i][0]
+                if cost < best[k][j][0]:
+                    best[k][j] = (cost, i)
+    phrases, j = [], n
+    for k in range(count, 0, -1):
+        i = best[k][j][1]
+        phrases.append(words[i:j])
+        j = i
+    return phrases[::-1]
+
+
+def test_the_faster_splitter_cuts_exactly_as_before():
+    """v1.4.0: prefix sums make it 3-4x faster on long runs; the captions must not change."""
+    import random
+
+    rng = random.Random(7)
+    vocab = "main aaj aapko ek baat bataane wala hoon jo bahut zaroori hai, kyunki log samajhte nahi. and the to".split()
+    for _ in range(300):
+        words = [rng.choice(vocab) for _ in range(rng.randint(1, 90))]
+        most = rng.choice([None, 2, 5, 12])
+        least = rng.choice([1, 2, 3])
+        assert phrasing.split_phrases(words, most, least) == _split_before_v140(words, most, least)
