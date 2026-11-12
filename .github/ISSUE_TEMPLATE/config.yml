@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/Tanush1206/Video-Caption-Maker/security/advisories/new
+    about: Privately, through GitHub's security advisories, never in a public issue.

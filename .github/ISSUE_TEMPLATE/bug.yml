@@ -1,0 +1,56 @@
+name: Something doesn't work
+description: A bug, a failed install or update, a wrong result
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Run `vcm doctor` first: it writes a report
+        (versions, your computer, the app's state and recent logs) with keys,
+        tokens, email addresses, video file names and your home folder taken
+        out. Look it over, then attach it below.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: |
+        1. Upload a 10-minute video in Hindi
+        2. Choose Hinglish, Everyday
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The first lines of the `vcm doctor` report say it (VCM_VERSION).
+      placeholder: "1.4.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS (Apple silicon), macOS (Intel), Linux, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: processor
+    attributes:
+      label: Running on
+      options: [NVIDIA GPU, CPU only, Not sure]
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: The vcm doctor report
+      description: Drag the `vcm-doctor-….txt` file here, after looking it over.
+    validations:
+      required: false
