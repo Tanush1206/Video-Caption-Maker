@@ -78,9 +78,15 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
     video.spoken_language === "hi";
   const offerScript = maybeHindi && (captionLanguage === "same" || captionLanguage === "hi");
   const currentScript = video.hindi_script === "roman" ? "roman" : "devanagari";
+  // How Hinglish is spelled (v1.3.1). A video from before it was formal; its
+  // Redo presets everyday, the default now, and says so only when changed.
+  const [hinglishSpelling, setHinglishSpelling] = useState(video.hinglish_spelling ?? "everyday");
+  const offerSpelling = offerScript && hindiScript === "roman";
 
   const languageChanged =
-    captionLanguage !== video.caption_language || (offerScript && hindiScript !== currentScript);
+    captionLanguage !== video.caption_language ||
+    (offerScript && hindiScript !== currentScript) ||
+    (offerSpelling && hinglishSpelling !== (video.hinglish_spelling ?? "everyday"));
   // Captions made in a language no longer offered (v1.0.11) are kept, but a
   // Redo needs one that is.
   const captionOffered = languageOptions?.caption.some((option) => option.code === captionLanguage) ?? true;
@@ -176,6 +182,7 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
         spoken_language: "auto",
         caption_language: captionLanguage,
         ...(offerScript ? { hindi_script: hindiScript } : {}),
+        ...(offerSpelling ? { hinglish_spelling: hinglishSpelling } : {}),
       },
       {
         onSuccess: () => {
@@ -386,6 +393,29 @@ export function CaptionEditor({ video, playback }: CaptionEditorProps) {
                   {languageOptions.hindi_scripts.map((option) => (
                     <option key={option.code} value={option.code}>
                       {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+
+            {/* Disabled rather than hidden for Devanagari, so the rows don't move. */}
+            {offerScript && languageOptions.hinglish_spellings.length > 0 && (
+              <div className="group-row">
+                <label htmlFor="redo-hinglish-spelling" className="shrink-0 text-sm">
+                  Spelling
+                </label>
+                <Select
+                  id="redo-hinglish-spelling"
+                  size="sm"
+                  value={hinglishSpelling}
+                  onChange={(event) => setHinglishSpelling(event.target.value)}
+                  disabled={!offerSpelling}
+                  className="w-48"
+                >
+                  {languageOptions.hinglish_spellings.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label} ({option.example})
                     </option>
                   ))}
                 </Select>
