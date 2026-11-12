@@ -74,6 +74,8 @@ export function useRetranscribe() {
       caption_language?: string;
       /** "roman", "devanagari" or "auto"; only meaningful for Hindi. */
       hindi_script?: string;
+      /** "everyday" or "formal"; only meaningful for Hinglish. */
+      hinglish_spelling?: string;
     }) => api.post<Video>(`/api/videos/${id}/transcribe`, body),
     onSuccess: (video) => {
       // Write the queued video straight in, rather than only invalidating.

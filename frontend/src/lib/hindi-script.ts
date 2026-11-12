@@ -75,9 +75,18 @@ export function scriptQuestion({
 export function startRequest(
   choice: ScriptChoice | null,
   captionLanguage: string,
-  spoken: string | null = null
-): { spoken_language: string; caption_language: string; hindi_script?: string } {
-  if (choice === "roman" || choice === "devanagari") {
+  spoken: string | null = null,
+  spelling: string | null = null
+): { spoken_language: string; caption_language: string; hindi_script?: string; hinglish_spelling?: string } {
+  if (choice === "roman") {
+    return {
+      spoken_language: "hi",
+      caption_language: captionLanguage,
+      hindi_script: choice,
+      ...(spelling ? { hinglish_spelling: spelling } : {}),
+    };
+  }
+  if (choice === "devanagari") {
     return { spoken_language: "hi", caption_language: captionLanguage, hindi_script: choice };
   }
   if (spoken !== null) return { spoken_language: spoken, caption_language: captionLanguage };

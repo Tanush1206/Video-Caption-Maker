@@ -25,6 +25,11 @@ export interface Video {
    * from detection); null on videos from before v1.0.9 (Devanagari).
    */
   hindi_script: string | null;
+  /**
+   * How Hinglish is spelled: "everyday" (pehle, liye) or "formal" (pahle,
+   * lie); null on videos from before v1.3.1 (formal).
+   */
+  hinglish_spelling: string | null;
   /** What was heard from the first 30 s, once detection has answered. */
   detected_language: string | null;
   detected_confidence: number | null;
@@ -81,10 +86,21 @@ export interface HindiScriptOption {
   download_bytes: number | null;
 }
 
+export interface HinglishSpellingOption {
+  /** "everyday" or "formal". */
+  code: string;
+  /** "Everyday" / "Formal". */
+  label: string;
+  /** A few words spelled that way: "pehle, liye". */
+  example: string;
+}
+
 export interface LanguageOptions {
   spoken: LanguageOption[];
   caption: LanguageOption[];
   hindi_scripts: HindiScriptOption[];
+  /** How Hinglish can be spelled (v1.3.1); the first is the default. */
+  hinglish_spellings: HinglishSpellingOption[];
   /** Hindi detected at or above this presets Hinglish. */
   hinglish_min_confidence: number;
   /**
