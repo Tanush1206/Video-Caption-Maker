@@ -15,7 +15,7 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 1.3 | Custom vocabulary | 14 Nov | done 12 Nov: on the caption text (Tanush), not the model (worse everywhere); leo 16 right, 0 wrong elsewhere |
 | 1.4 | Export dialog warns while Improve is running on that video | 14 Nov | done 12 Nov |
 | 1.5 | Norton TLS: confirm the cause; install and `vcm update` detect it and say what to do; README troubleshooting | 15 Nov | done 12 Nov: the cause is Quick Heal's HTTPS scanning (Norton had expired); retry + advice in vcm and the installers, README |
-| 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | open |
+| 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | checks, docs and CHANGELOG done 12 Nov; push and tag with Tanush |
 | 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | not started |
 | 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | |
 | 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | |
@@ -1637,6 +1637,23 @@ baithakar); 207 of his 484 caption lines hold one.
   (Quick Heal as the example) with both fixes; the installers point at it;
   README troubleshooting. Tests: install/tests/test_vcm_pull.{sh,ps1} (in
   CI), failing before the fix.
+- Release checks (dev stack, 2026-11-12): backend 769 passed, 2 skipped,
+  ruff clean; frontend lint, types, tests (10) and the production build
+  pass. UI: shoot.js 3 pages x 2 widths x 2 themes, axe 0; checks.js theme,
+  not-found, language-step, hindi-script, unsupported-speech, redo-script,
+  redo-spelling, retired-language, vocabulary, export-improving,
+  export-quality, export-eta, framing, frontend-guard, csp,
+  caption-accuracy, improve-captions: 265 PASS (improve-captions failed
+  once at 1440 while Gemini answered neither model, then passed; the E2E
+  Spanish run fell back to local translation in the same minutes).
+  E2E GPU: hinglish.mp4 same/en/hi/es with SRT, VTT, MP4 ALL PASSED; CPU
+  (worker without the GPU, 4 cores): same/en ALL PASSED. Logs in
+  `test-assets/results/v1.3.1/` (e2e_gpu.log, e2e_cpu.log, ui_checks.log,
+  shots/). Compose overrides now in `test-assets/compose/` (dev-3001.yml,
+  cpu4.yml): the temp copies were lost too.
+- Test videos on dev: 7708-7710 (spelling probes), 7711 (UI checks; swept
+  by the app as an hour-old held upload), 7712-7719 (measurement),
+  7720-7725 (E2E), all deleted; 7426 (not mine) remains.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
