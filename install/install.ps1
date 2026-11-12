@@ -212,6 +212,10 @@ $ErrorActionPreference = 'Continue'
             Fail "The app's images aren't available for this computer's processor ($arch)." @(
                 'Docker said there is no image for this platform, which is not a network problem.',
                 "Please report it with the text above: $RepoUrl/issues")
+        } elseif ($said -match 'scans HTTPS traffic') {
+            # vcm pull tried three times and said what to change (v1.3.1).
+            Fail "Couldn't download the images (see above)." @(
+                'Change that setting, then run the installer again; it resumes.')
         } elseif ($said -match 'dial tcp|no such host|i/o timeout|tls handshake|connection refused|connection reset|network is unreachable|unexpected eof') {
             Fail "Couldn't download the images: the connection to the image registry failed." @(
                 'Check your internet connection and run the installer again - it resumes.')

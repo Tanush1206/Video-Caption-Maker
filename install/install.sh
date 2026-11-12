@@ -251,6 +251,10 @@ if ! "$VCM_HOME/vcm" pull 2>&1 | tee "$pull_log"; then
         die "The app's images aren't available for this computer's processor ($ARCH)." \
             "Docker said there is no image for this platform, which is not a network problem." \
             "Please report it with the text above: $REPO_URL/issues"
+    elif grep -q 'scans HTTPS traffic' "$pull_log"; then
+        # vcm pull tried three times and said what to change (v1.3.1).
+        rm -f "$pull_log"
+        die "Couldn't download the images (see above)." "Change that setting, then run the installer again; it resumes."
     elif grep -qiE 'dial tcp|no such host|i/o timeout|tls handshake|connection refused|connection reset|network is unreachable|temporary failure in name resolution|unexpected eof' "$pull_log"; then
         rm -f "$pull_log"
         die "Couldn't download the images: the connection to the image registry failed." \
