@@ -4,6 +4,10 @@
 # Trigger: push a tag like v1.0.0. Produces
 #   ghcr.io/tanush1206/video-caption-maker-backend:{1.0.0,latest}-{cpu,cuda}
 #   ghcr.io/tanush1206/video-caption-maker-frontend:{1.0.0,latest}
+# The CPU backend and the frontend are multi-arch (v1.4.0): each is built on
+# a native runner per architecture (ubuntu-latest for amd64, ubuntu-24.04-arm
+# for arm64, no emulation), pushed as `<version>-<arch>`, and joined into the
+# tags above by the `manifests` job. The CUDA backend is amd64 only.
 # and a GitHub Release whose assets are what the one-line installers fetch:
 #   .../releases/latest/download/install.sh  (and install.ps1, vcm, compose files)
 #
@@ -26,27 +30,58 @@ env:
 
 jobs:
   images:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
+        # `arch` set: one half of a multi-arch image, pushed as
+        # `<tag>-<arch>` for the manifests job. `arch` empty: a single-arch
+        # image, pushed under its final tags. Each arch keeps its own registry
+        # cache; amd64 keeps the cache name it always had, so its layers stay
+        # byte-for-byte the same and `vcm update` downloads no more than before.
         include:
           - name: backend
             variant: cpu
             context: .
             file: backend/Dockerfile
             suffix: -cpu
+            arch: amd64
+            runner: ubuntu-latest
+            cache: buildcache-cpu
+          - name: backend
+            variant: cpu
+            context: .
+            file: backend/Dockerfile
+            suffix: -cpu
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            cache: buildcache-cpu-arm64
           - name: backend
             variant: cuda
             context: .
             file: backend/Dockerfile
             suffix: -cuda
+            arch: ""
+            runner: ubuntu-latest
+            cache: buildcache-cuda
           - name: frontend
             variant: ""
             context: frontend
             file: frontend/Dockerfile
             suffix: ""
+            arch: amd64
+            runner: ubuntu-latest
+            cache: buildcache
             # LICENSE and THIRD_PARTY_NOTICES.md live at the repository root.
+            build_contexts: repo=.
+          - name: frontend
+            variant: ""
+            context: frontend
+            file: frontend/Dockerfile
+            suffix: ""
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            cache: buildcache-arm64
             build_contexts: repo=.
     steps:
       # The CUDA image carries ~3 GB of cuBLAS/cuDNN on top of the CPU stack,
@@ -90,20 +125,66 @@ jobs:
           build-args: |
             VARIANT=${{ matrix.variant }}
             VERSION=${{ steps.version.outputs.version }}
+          platforms: linux/${{ matrix.arch || 'amd64' }}
+          # Half of a multi-arch image: only `<version><suffix>-<arch>`; the
+          # manifests job makes the version and `latest` tags from both halves.
           tags: |
-            ${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:${{ steps.version.outputs.version }}${{ matrix.suffix }}
-            ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/video-caption-maker-{1}:latest{2}', env.REGISTRY, matrix.name, matrix.suffix) || '' }}
+            ${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:${{ steps.version.outputs.version }}${{ matrix.suffix }}${{ matrix.arch && format('-{0}', matrix.arch) || '' }}
+            ${{ !matrix.arch && startsWith(github.ref, 'refs/tags/v') && format('{0}/video-caption-maker-{1}:latest{2}', env.REGISTRY, matrix.name, matrix.suffix) || '' }}
           # A registry cache, not the Actions cache: that one holds 10 GB per
           # repo and evicts after 7 days, and these three images overflow it.
           # A miss rebuilds the Python environment, pip writes new timestamps,
           # the 570 MB layer gets a new digest, and every user re-downloads it
           # on 'vcm update'. Cached in GHCR, unchanged layers stay byte-for-byte
           # identical from release to release.
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:buildcache${{ matrix.suffix }}
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:buildcache${{ matrix.suffix }},mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:${{ matrix.cache }}
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}:${{ matrix.cache }},mode=max
+
+  # One tag for both architectures: Docker on an Intel/AMD machine pulls the
+  # amd64 half, on Apple silicon and ARM Linux the arm64 half, natively.
+  manifests:
+    needs: images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            suffix: -cpu
+          - name: frontend
+            suffix: ""
+    steps:
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=edge" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Join the amd64 and arm64 halves
+        env:
+          IMAGE: ${{ env.REGISTRY }}/video-caption-maker-${{ matrix.name }}
+          TAG: ${{ steps.version.outputs.version }}${{ matrix.suffix }}
+          LATEST: ${{ startsWith(github.ref, 'refs/tags/v') && format('latest{0}', matrix.suffix) || '' }}
+        run: |
+          tags=(-t "$IMAGE:$TAG")
+          [ -n "$LATEST" ] && tags+=(-t "$IMAGE:$LATEST")
+          docker buildx imagetools create "${tags[@]}" "$IMAGE:$TAG-amd64" "$IMAGE:$TAG-arm64"
+          docker buildx imagetools inspect "$IMAGE:$TAG" | tee manifest.txt
+          grep -q "linux/amd64" manifest.txt && grep -q "linux/arm64" manifest.txt
 
   release:
-    needs: images
+    needs: [images, manifests]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
