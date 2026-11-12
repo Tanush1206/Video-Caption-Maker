@@ -17,7 +17,7 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 1.5 | Norton TLS: confirm the cause; install and `vcm update` detect it and say what to do; README troubleshooting | 15 Nov | done 12 Nov: the cause is Quick Heal's HTTPS scanning (Norton had expired); retry + advice in vcm and the installers, README |
 | 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | done 12 Nov |
 | 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | started 12 Nov |
-| 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | |
+| 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | built 12 Nov, waiting on the first native arm64 CI run; macOS CI question open |
 | 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | |
 | 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | |
 | 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | |
@@ -29,8 +29,10 @@ Deferred to the ROADMAP by this plan: the Improve review mode; caption-list
 virtualisation and long-video phrasing speed (unless time is left after 2e).
 
 Daily check:
-- 12 Nov: ahead. Step 1 reported; 1.1-1.5 done and committed. Left for
-  v1.3.1: full suites, E2E GPU and CPU, docs, CHANGELOG, release (1.6).
+- 12 Nov: ahead. v1.3.1 released and checked on the install (all of item
+  1). v1.4.0 (a) built the same day: multi-arch release, native-ARM
+  compose and installers, `vcm update` hand-over with its safety tests,
+  the arm64 CI job; its first run needs a push.
 
 ## Decisions (Step 0, made by Tanush — 2026-10-07)
 
@@ -1691,7 +1693,18 @@ baithakar); 207 of his 484 caption lines hold one.
 ## v1.4.0 (due 21 Nov 2026; plan item 2 at the top)
 Started 2026-11-12, after v1.3.1's after-release checks.
 
-- [ ] **(a) Multi-arch CPU images** (Tanush, 2026-11-12, adding to the plan):
+- [ ] **(a) Multi-arch CPU images** (Tanush, 2026-11-12, adding to the plan).
+  Built 2026-11-12 (7a93a3f..be4e4f7); every wheel the CPU image needs has
+  an aarch64 build (torch 2.13.0+cpu, ctranslate2, onnxruntime, av,
+  chromadb). A local emulated arm64 build twice hit Debian's CDN answering
+  "400 Bad Request" for one .deb over plain HTTP on this machine (Quick
+  Heal scans HTTP too); left to the native CI build. `vcm update` hands
+  over to the downloaded version (Tanush: with a safety rule; tests for a
+  bad checksum, a vcm that can't start, one that exits early, no network
+  mid-update), and pulls with the staged files so a failed download
+  changes nothing. GitHub's Apple-silicon macOS runners have no nested
+  virtualization; Intel ones (`macos-15-intel`, `macos-26-intel`) exist:
+  a macOS CI test there would cover Intel Macs only (question for Tanush).
   - backend CPU and frontend built for amd64 and arm64 on native runners
     (`ubuntu-latest`, `ubuntu-24.04-arm`), merged into one tag each; CUDA
     stays amd64. The amd64 build keeps its registry cache name, so its
