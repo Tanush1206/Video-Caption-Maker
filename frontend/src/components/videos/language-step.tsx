@@ -7,6 +7,7 @@ import { AccuracyInfo } from "@/components/captions/accuracy-info";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
+import { Segmented } from "@/components/ui/segmented";
 import { LanguagePicker, matchesLanguage } from "@/components/videos/language-picker";
 import { formatFileSize } from "@/lib/format";
 import type { ScriptChoice, ScriptQuestion } from "@/lib/hindi-script";
@@ -36,6 +37,8 @@ export function LanguageStep({
   question,
   script,
   onScript,
+  spelling,
+  onSpelling,
   unsupported,
   spoken,
   onSpoken,
@@ -56,6 +59,9 @@ export function LanguageStep({
   question: ScriptQuestion;
   script: ScriptChoice | null;
   onScript: (choice: ScriptChoice) => void;
+  /** How Hinglish is spelled: "everyday" or "formal". */
+  spelling: string;
+  onSpelling: (code: string) => void;
   /** What was heard isn't offered: Start waits for `spoken`. */
   unsupported: boolean;
   /** A spoken language chosen instead of what was heard, or TRY_ANYWAY. */
@@ -83,6 +89,8 @@ export function LanguageStep({
   const needsScript = question.show && question.required && script === null;
   const chosenSpoken = unsupported && spoken !== null && spoken !== TRY_ANYWAY ? spoken : null;
   const spokenOptions = (options?.spoken ?? []).filter((option) => option.code !== "auto");
+  const spellings = options?.hinglish_spellings ?? [];
+  const spellingExample = spellings.find((option) => option.code === spelling)?.example ?? "";
   const scriptLabel = (code: ScriptChoice) => {
     const option = options?.hindi_scripts.find((o) => o.code === code);
     return { label: option?.label ?? code, download: option?.download_bytes ?? null };
@@ -221,6 +229,33 @@ export function LanguageStep({
                 );
               })}
             </div>
+            {/* Shown with the script choice and disabled unless Hinglish is
+                chosen, so nothing below moves when the script changes. */}
+            {spellings.length > 0 && (
+              <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                <span className="text-[15px] font-medium" aria-hidden="true">
+                  Spelling
+                </span>
+                <Segmented
+                  kind="radio"
+                  label="Hinglish spelling"
+                  segments={spellings.map((option) => ({ value: option.code, label: option.label }))}
+                  value={spelling}
+                  onChange={onSpelling}
+                  disabled={busy || script !== "roman"}
+                  describedBy="hinglish-spelling-example"
+                  className="w-full sm:w-auto"
+                  segmentClassName="px-4"
+                />
+                <span
+                  className="text-[13px] text-muted-foreground"
+                  lang={script === "roman" ? "hi-Latn" : undefined}
+                  id="hinglish-spelling-example"
+                >
+                  {script === "roman" ? spellingExample : "For Hinglish captions"}
+                </span>
+              </div>
+            )}
           </fieldset>
         )}
       </section>

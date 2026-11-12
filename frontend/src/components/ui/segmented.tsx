@@ -27,6 +27,8 @@ export function Segmented<T extends string | number | null>({
   label,
   kind = "pressed",
   iconOnly = false,
+  disabled = false,
+  describedBy,
   className,
   segmentClassName,
 }: {
@@ -37,6 +39,10 @@ export function Segmented<T extends string | number | null>({
   label: string;
   kind?: "pressed" | "radio";
   iconOnly?: boolean;
+  /** Every segment off, the chosen one still shown (v1.3.1). */
+  disabled?: boolean;
+  /** The id of text that says more about the choice (v1.3.1). */
+  describedBy?: string;
   className?: string;
   segmentClassName?: string;
 }) {
@@ -55,6 +61,7 @@ export function Segmented<T extends string | number | null>({
     <div
       role={kind === "radio" ? "radiogroup" : "group"}
       aria-label={label}
+      aria-describedby={describedBy}
       className={cn("flex rounded-md bg-surface-3 p-0.5", className)}
     >
       {segments.map((segment, index) => {
@@ -70,12 +77,14 @@ export function Segmented<T extends string | number | null>({
             aria-label={iconOnly ? segment.label : undefined}
             title={iconOnly ? segment.label : undefined}
             tabIndex={kind === "radio" && !selected ? -1 : undefined}
+            disabled={disabled}
             onClick={() => onChange(segment.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
               "flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] px-3 text-sm text-foreground sm:min-h-7",
               "transition-colors duration-200 ease-out",
               selected ? "bg-segment font-medium" : "hover:bg-background/40",
+              "disabled:pointer-events-none disabled:opacity-50",
               segmentClassName
             )}
           >

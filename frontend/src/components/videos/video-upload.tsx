@@ -54,6 +54,8 @@ export function VideoUpload() {
   const [uploadedAt, setUploadedAt] = useState<number | null>(null);
   const [timedOut, setTimedOut] = useState(false);
   const [script, setScript] = useState<ScriptChoice | null>(null);
+  // How Hinglish is spelled (v1.3.1); everyday unless changed.
+  const [spelling, setSpelling] = useState("everyday");
   // For speech heard in a language not offered: one chosen instead, or
   // TRY_ANYWAY. Nothing until someone chooses.
   const [spoken, setSpoken] = useState<string | null>(null);
@@ -197,7 +199,7 @@ export function VideoUpload() {
     }
     setStarting(true);
     retranscribe.mutate(
-      { id: uploaded.id, ...startRequest(question.show ? script : null, language, chosenSpoken) },
+      { id: uploaded.id, ...startRequest(question.show ? script : null, language, chosenSpoken, spelling) },
       {
         onSuccess: (video) => {
           watchTranscription(video.id);
@@ -211,7 +213,7 @@ export function VideoUpload() {
         },
       }
     );
-  }, [uploaded, question.show, script, language, chosenSpoken, retranscribe, queryClient, router]);
+  }, [uploaded, question.show, script, language, chosenSpoken, spelling, retranscribe, queryClient, router]);
 
   // Start was pressed while uploading: it goes once the upload has landed.
   useEffect(() => {
@@ -304,6 +306,8 @@ export function VideoUpload() {
             question={question}
             script={script}
             onScript={chooseScript}
+            spelling={spelling}
+            onSpelling={setSpelling}
             unsupported={unsupported}
             spoken={spoken}
             onSpoken={chooseSpoken}
