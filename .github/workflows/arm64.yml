@@ -88,7 +88,7 @@ jobs:
 
       - name: amd64 and arm64 side by side
         run: |
-          python3 - <<'EOF' | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 - <<'EOF' > times.md
           import json
           runs = {a: json.load(open(f"times-{a}.json")) for a in ("amd64", "arm64")}
           print("| | amd64 | arm64 |\n|---|---|---|")
@@ -101,3 +101,6 @@ jobs:
               note = " (without model downloads)" if key == "without_downloads_s" else ""
               print(f"| {step}{note} (s) | {amd[key]} | {arm[key]} |")
           EOF
+          cat times.md | tee -a "$GITHUB_STEP_SUMMARY"
+          # Also as an annotation: readable from the API without signing in.
+          echo "::notice title=amd64 vs arm64::$(awk 'BEGIN { ORS = "%0A" } { print }' times.md)"
