@@ -192,6 +192,19 @@ run `vcm restart`:
 - Windows: `%LOCALAPPDATA%\VideoCaptionMaker`
 - macOS and Linux: `~/.videocaptionmaker`
 
+**The install or `vcm update` fails with "tls: error decoding message" (or
+another `tls:`/certificate error) while downloading the images.** This is
+usually antivirus software that scans HTTPS traffic (for example Quick Heal):
+it breaks some of Docker's secure connections to GitHub's image registry,
+while your browser still works. The installer and `vcm update` already try
+three times; if it still fails, either:
+- turn off the antivirus's HTTPS (web) scanning while you install or update,
+  then turn it back on; or
+- add an exception for `ghcr.io` and `pkg-containers.githubusercontent.com`.
+
+Then run the installer or `vcm update` again. A failed update changes
+nothing: the app keeps running the version you had.
+
 **"Ran out of memory".** Choose a smaller speech model in Settings. On
 Windows and macOS you can also give Docker Desktop more memory (Settings →
 Resources).
