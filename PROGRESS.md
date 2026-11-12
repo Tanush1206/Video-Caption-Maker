@@ -18,9 +18,9 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | done 12 Nov |
 | 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | started 12 Nov |
 | 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | built 12 Nov, waiting on the first native arm64 CI run; macOS CI question open |
-| 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | |
-| 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | |
-| 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | |
+| 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | built 12 Nov (stages recovering and phrasing, real percentages, in order); 60-min run on dev pending |
+| 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | done 12 Nov: cold-load CLS 0.059-0.071 -> 0.000 (`checks.js cls`, <= 0.01) |
+| 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | done 12 Nov: least privilege, actions on Node 24, ubuntu-24.04 pinned, Dependabot, weekly-check.yml; needs a CI run |
 | 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | |
 | 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | |
 | 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 25 Nov | |
@@ -30,9 +30,12 @@ virtualisation and long-video phrasing speed (unless time is left after 2e).
 
 Daily check:
 - 12 Nov: ahead. v1.3.1 released and checked on the install (all of item
-  1). v1.4.0 (a) built the same day: multi-arch release, native-ARM
-  compose and installers, `vcm update` hand-over with its safety tests,
-  the arm64 CI job; its first run needs a push.
+  1). v1.4.0 (a)-(d) built the same day; arm64 CI green natively on both
+  architectures; ci's scripts job failed on the PowerShell update test
+  (-WindowStyle on Linux, fixed). Next: CI on the fixes, the manual
+  release run for edge tags, (e).
+  Noted for the final audit, not in this plan: the frontend runs Node 20,
+  which reached end of life in April 2026.
 
 ## Decisions (Step 0, made by Tanush — 2026-10-07)
 
