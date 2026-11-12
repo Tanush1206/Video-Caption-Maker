@@ -1,11 +1,12 @@
-# The installer on an ARM machine (v1.2.1). Our images are Intel/AMD only;
-# the compose file asks for them by platform so Docker emulates them on
-# Apple silicon and ARM Linux. Until then `docker compose pull` failed there
-# with "no matching manifest for linux/arm64/v8".
+# The app on ARM, natively (v1.4.0; emulated from v1.2.1 until then).
 #
-# Runs the real install.sh on GitHub's arm64 Linux runner, against this
-# commit's compose files and `vcm` served as a release (with its own
-# SHA256SUMS), so it tests what the next release will ship.
+# On GitHub's arm64 Linux runner, and on an amd64 one for comparison,
+# scripts/ci_arch_check.sh builds this commit's CPU images natively, serves
+# them from a local registry and this commit's compose files and `vcm` as a
+# release, runs the real install.sh, checks every container runs as the
+# runner's architecture, and times a short transcription that uses every
+# engine (faster-whisper, Apex, IndicXlit, M2M100, FFmpeg). The `times` job
+# puts both architectures side by side in the run's summary.
 name: arm64
 
 on:
@@ -15,12 +16,26 @@ on:
       - docker-compose.prod.yml
       - docker-compose.gpu.yml
       - install/**
+      - backend/Dockerfile
+      - backend/constraints.txt
+      - backend/pyproject.toml
+      - frontend/Dockerfile
+      - frontend/package-lock.json
+      - scripts/ci_arch_check.sh
+      - scripts/ci_smoke.py
       - .github/workflows/arm64.yml
   pull_request:
     paths:
       - docker-compose.prod.yml
       - docker-compose.gpu.yml
       - install/**
+      - backend/Dockerfile
+      - backend/constraints.txt
+      - backend/pyproject.toml
+      - frontend/Dockerfile
+      - frontend/package-lock.json
+      - scripts/ci_arch_check.sh
+      - scripts/ci_smoke.py
       - .github/workflows/arm64.yml
   workflow_dispatch:
 
@@ -29,56 +44,60 @@ permissions:
 
 jobs:
   install:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: amd64
+            runner: ubuntu-latest
+    name: install (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: amd64 emulation, as the installer tells ARM Linux users to turn it on
-        run: docker run --privileged --rm tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0 --install amd64
+      - name: Build, install, check and time this commit on ${{ matrix.arch }}
+        run: bash scripts/ci_arch_check.sh ${{ matrix.arch }} "$RUNNER_TEMP/times-${{ matrix.arch }}.json"
 
-      - name: Serve this commit's files as a release
-        run: |
-          mkdir -p "$RUNNER_TEMP/release"
-          cp docker-compose.prod.yml docker-compose.gpu.yml install/vcm "$RUNNER_TEMP/release/"
-          (cd "$RUNNER_TEMP/release" && sha256sum docker-compose.prod.yml docker-compose.gpu.yml vcm > SHA256SUMS)
-          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$RUNNER_TEMP/release" > /dev/null 2>&1 &
+      - name: Keep the times for the comparison
+        if: success()
+        run: cp "$RUNNER_TEMP/times-${{ matrix.arch }}.json" "times-${{ matrix.arch }}.json"
 
-      - name: Install
-        env:
-          VCM_BASE_URL: http://127.0.0.1:8000
-          VCM_HOME: ${{ runner.temp }}/vcm
-          VCM_NO_OPEN: "1"
-        run: |
-          bash install/install.sh 2>&1 | tee "$RUNNER_TEMP/install.log"
-          grep -q "ARM processor" "$RUNNER_TEMP/install.log"
-          grep -q "Docker can run Intel/AMD containers here (emulated)" "$RUNNER_TEMP/install.log"
-
-      - name: Our images run as amd64, the others natively
-        run: |
-          for c in backend worker frontend; do
-            arch="$(docker image inspect --format '{{.Architecture}}' "$(docker inspect --format '{{.Image}}' "vcm-$c-1")")"
-            echo "$c: $arch"; [ "$arch" = amd64 ]
-          done
-          for c in postgres redis chromadb; do
-            arch="$(docker image inspect --format '{{.Architecture}}' "$(docker inspect --format '{{.Image}}' "vcm-$c-1")")"
-            echo "$c: $arch"; [ "$arch" = arm64 ]
-          done
-
-      - name: The app answers, and vcm works without DOCKER_DEFAULT_PLATFORM
-        run: |
-          [ -z "${DOCKER_DEFAULT_PLATFORM:-}" ]
-          port="$(grep '^VCM_PORT=' "$RUNNER_TEMP/vcm/.env" | cut -d= -f2)"
-          curl -fsS "http://localhost:$port/api/health"
-          curl -fsS "http://localhost:$port/api/system" | grep -q '"version"'
-          vcm="$RUNNER_TEMP/vcm/vcm"
-          "$vcm" status
-          "$vcm" stop
-          "$vcm" up
-          for _ in $(seq 1 120); do curl -fsS "http://localhost:$port/api/health" > /dev/null 2>&1 && break; sleep 3; done
-          curl -fsS "http://localhost:$port/api/health"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success()
+        with:
+          name: times-${{ matrix.arch }}
+          path: times-${{ matrix.arch }}.json
+          retention-days: 30
 
       - name: Logs
         if: failure()
         run: |
-          cd "$RUNNER_TEMP/vcm" 2>/dev/null && docker compose -p vcm --env-file .env -f docker-compose.prod.yml logs --tail 80 || true
+          cd "$RUNNER_TEMP/vcm" 2>/dev/null && docker compose -p vcm --env-file .env -f docker-compose.prod.yml logs --tail 120 || true
+
+  times:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: times-*
+          merge-multiple: true
+
+      - name: amd64 and arm64 side by side
+        run: |
+          python3 - <<'EOF' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          runs = {a: json.load(open(f"times-{a}.json")) for a in ("amd64", "arm64")}
+          print("| | amd64 | arm64 |\n|---|---|---|")
+          print(f"| speech model | {runs['amd64']['whisper']} | {runs['arm64']['whisper']} |")
+          for part in ("backend", "frontend"):
+              print(f"| build {part} (s) | {runs['amd64']['build_s'][part]} | {runs['arm64']['build_s'][part]} |")
+          for step, amd in runs["amd64"]["steps"].items():
+              arm = runs["arm64"]["steps"][step]
+              key = "without_downloads_s" if "without_downloads_s" in amd else "total_s"
+              note = " (without model downloads)" if key == "without_downloads_s" else ""
+              print(f"| {step}{note} (s) | {amd[key]} | {arm[key]} |")
+          EOF
