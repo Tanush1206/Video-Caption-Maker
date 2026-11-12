@@ -186,6 +186,13 @@ The original 10-milestone build plan is historical and lives in
 - **Why deferred:** in the finishing plan only if time is left after v1.4.0
   item e).
 
+### Translation falls back to Gemini Flash-Lite too
+- **What:** when the configured Gemini model is busy ("503 high demand"),
+  translation asks Flash-Lite once, as Improve does (D23), before falling
+  back to the local model.
+- **Why:** on 2026-11-12 Flash answered 503 three times during the v1.3.1
+  release checks and French went to M2M100 instead.
+
 (Custom vocabulary shipped in v1.3.1, applied to the caption text: D24.)
 
 ## Possible, not planned

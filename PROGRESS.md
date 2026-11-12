@@ -9,14 +9,14 @@ a date that slips is reported as soon as it is seen, not on the day.
 
 | # | What | Due | Status |
 |---|---|---|---|
-| 1 | **v1.3.1 released** | 16 Nov | in progress |
+| 1 | **v1.3.1 released** | 16 Nov | done 12 Nov (tag on 6bc8227), checked on the install |
 | 1.1 | Resume Step 1 (state check) | 12 Nov | done 12 Nov |
 | 1.2 | Everyday Hinglish spelling (map, choice on the language step and in Redo, Improve and Find & replace) | 13 Nov | done 12 Nov: built, UI-checked, measured (strict 24.0 -> 16.7% and 28.8 -> 14.0%, loose unchanged) |
 | 1.3 | Custom vocabulary | 14 Nov | done 12 Nov: on the caption text (Tanush), not the model (worse everywhere); leo 16 right, 0 wrong elsewhere |
 | 1.4 | Export dialog warns while Improve is running on that video | 14 Nov | done 12 Nov |
 | 1.5 | Norton TLS: confirm the cause; install and `vcm update` detect it and say what to do; README troubleshooting | 15 Nov | done 12 Nov: the cause is Quick Heal's HTTPS scanning (Norton had expired); retry + advice in vcm and the installers, README |
-| 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | checks, docs and CHANGELOG done 12 Nov; push and tag with Tanush |
-| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | not started |
+| 1.6 | All suites, UI checks, E2E GPU and CPU, docs, CHANGELOG; push, CI, tag (Tanush), after-release checklist | 16 Nov | done 12 Nov |
+| 2 | **v1.4.0 released**, in this priority order; on 19 Nov, anything behind drops from the bottom to the ROADMAP | 21 Nov | started 12 Nov |
 | 2a | Multi-arch CPU images (amd64 + arm64, native arm64 runners), arm64 checks (faster-whisper/CTranslate2, M2M100, IndicXlit, Apex, FFmpeg), speed comparison; drop `platform: linux/amd64` for CPU; site and README macOS note; macOS CI only if a runner can run Docker | 18 Nov | |
 | 2b | Honest progress on long videos (no 15 minutes at 99%) | 19 Nov | |
 | 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | |
@@ -1651,9 +1651,70 @@ baithakar); 207 of his 484 caption lines hold one.
   `test-assets/results/v1.3.1/` (e2e_gpu.log, e2e_cpu.log, ui_checks.log,
   shots/). Compose overrides now in `test-assets/compose/` (dev-3001.yml,
   cpu4.yml): the temp copies were lost too.
+- [x] **Released and checked (2026-11-12, tag on 6bc8227).** CI first
+      failed without starting (Actions locked by $0 budgets), then the
+      scripts job on SC2034 in the new pull test (ShellCheck 0.11 on the
+      runners; fixed in 6bc8227, release.yml unaffected); `ci`, `arm64` and
+      `release` (4/4) green; 8 assets matching `SHA256SUMS` and the tag (the
+      two `.ps1` only by CRLF); six GHCR tags anonymous, `latest` = `1.3.1`.
+      Billing check: only standard runners, no schedules, GHCR public.
+      - Backup before the update: `VideoCaptionMaker-backup-1.3.0` (dump
+        with all 9 tables, media 12 of 12 files, 744 MB, `.env` copied
+        unread; 18 s down). The 1.1.1-1.2.2 backups are kept until Tanush
+        confirms.
+      - `vcm update` (still 1.3.0's script) in 29 s, first try: backend 4/19
+        layers 0.3 MB, frontend 7/13 11.0 MB; Postgres, Redis, ChromaDB not
+        recreated. 1.3.1; alembic head `f6b1d8e3a925`; videos 84, 220, 221,
+        1105 captions (text md5 unchanged), 2 exports, 3 styles. amd64, uid
+        10001 / 100, CapEff 0, NoNewPrivs 1; `/licenses` complete; the image
+        alone has no proxy CA, no key, dump or `.env` (the install's
+        `proxy-root` comes from its `certs/` mount).
+      - E2E (hinglish.mp4 same/en/hi/fr, SRT, VTT, MP4): ALL PASSED; fr fell
+        back to local translation (Gemini 503 "high demand" x3; Tanush has
+        since set a key; translation has no Flash-Lite fallback: ROADMAP).
+        Hinglish run: everyday spelling recorded and written ("batane wala
+        hoon"), no non-Latin captions.
+      - At localhost and 127.0.0.1: framing, frontend-guard, csp,
+        upload-proxy, export-eta, caption-accuracy, export-quality,
+        redo-spelling, export-improving, vocabulary, improve-captions (a real
+        Gemini check, undone): 145 PASS each, after fixing two of the new
+        checks to stop answering the editor's polling before closing (they
+        crashed the run on the install; their log printed a 30-minute local
+        token, deleted). `flow.js` PASS at both. Vocabulary left empty.
+      - Test videos on the install: 222-230 (mine; 223, 224 by flow.js,
+        227-230 by upload-proxy), all deleted; 84, 220, 221 remain; 12 media
+        files as in the backup. Logs: `test-assets/results/v1.3.1/release/`.
 - Test videos on dev: 7708-7710 (spelling probes), 7711 (UI checks; swept
   by the app as an hour-old held upload), 7712-7719 (measurement),
   7720-7725 (E2E), all deleted; 7426 (not mine) remains.
+
+## v1.4.0 (due 21 Nov 2026; plan item 2 at the top)
+Started 2026-11-12, after v1.3.1's after-release checks.
+
+- [ ] **(a) Multi-arch CPU images** (Tanush, 2026-11-12, adding to the plan):
+  - backend CPU and frontend built for amd64 and arm64 on native runners
+    (`ubuntu-latest`, `ubuntu-24.04-arm`), merged into one tag each; CUDA
+    stays amd64. The amd64 build keeps its registry cache name, so its
+    layers stay byte-identical for `vcm update`;
+  - `platform: linux/amd64` removed from the CPU backend, worker and
+    frontend in the compose files, kept only where an image is still
+    amd64-only (CUDA), or Macs keep running the amd64 images emulated;
+  - installers: on arm64 with native images, no emulation note and no
+    Rosetta check; both kept only for anything still amd64-only;
+  - `vcm update` on an existing Apple-silicon install switches
+    architecture and downloads the full images once: said in the update
+    output and the CHANGELOG;
+  - the arm64 CI job checks the containers run as arm64 and runs a short
+    transcription there (faster-whisper, Apex, M2M100, IndicXlit, FFmpeg),
+    with times next to amd64;
+  - site and README macOS note say what is now native;
+  - a macOS CI test only if a GitHub runner can run Docker; otherwise macOS
+    stays tested by hand.
+- [ ] (b) honest progress on long videos; (c) CLS fix on dashboard and
+  settings; (d) S7 workflow permissions and the weekly health check, plus
+  the two Actions notices (actions/checkout on Node 24, `ubuntu-latest`
+  moving to Ubuntu 26); (e) `vcm doctor` and an issue template asking for
+  its output.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
