@@ -595,6 +595,11 @@ const CHECKS = {
       await page.waitForTimeout(1000);
       const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
       ok(`hindi-script: axe 0 with the choice open (${theme})`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+      // And with Hinglish chosen, the spelling enabled (v1.3.1).
+      await group(page).locator("label").nth(0).click();
+      await page.waitForTimeout(300);
+      const spelled = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+      ok(`hindi-script: axe 0 with the spelling open (${theme})`, spelled.length === 0, spelled.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
       await context.close();
     }
 
@@ -608,7 +613,29 @@ const CHECKS = {
       ok(`${at}: says what it heard`, await page.getByText("Hindi · heard at 94%").isVisible());
       await start(page).click();
       await page.waitForURL(/\/editor\//);
-      ok(`${at}: Start sends Hinglish`, JSON.stringify(log.started) === JSON.stringify({ spoken_language: "hi", caption_language: "same", hindi_script: "roman" }), JSON.stringify(log.started));
+      ok(`${at}: Start sends Hinglish, spelled everyday`, JSON.stringify(log.started) === JSON.stringify({ spoken_language: "hi", caption_language: "same", hindi_script: "roman", hinglish_spelling: "everyday" }), JSON.stringify(log.started));
+      await page.context().close();
+
+      // Everyday Hinglish spelling (v1.3.1): offered with Hinglish, Everyday
+      // first; Formal is sent when picked; the row stays, disabled, for
+      // Devanagari, and nothing is sent for it.
+      page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      log = await mockHeldUpload(page, base, ["hi", 0.94]);
+      await pick(page);
+      await group(page).waitFor();
+      const spelling = page.getByRole("radiogroup", { name: "Hinglish spelling" });
+      ok(`${at}: spelling offered with Hinglish, Everyday chosen`, (await spelling.getByRole("radio", { checked: true }).textContent()) === "Everyday" && (await spelling.getByRole("radio", { name: "Formal" }).isEnabled()));
+      ok(`${at}: the example says how`, await page.getByText("pehle, liye").isVisible());
+      ok(`${at}: the spelling fits the width`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+      const below = await page.getByRole("heading", { name: "Caption into" }).boundingBox();
+      await group(page).locator("label").nth(1).click();
+      ok(`${at}: Devanagari disables the spelling, nothing moves`, (await spelling.getByRole("radio", { name: "Formal" }).isDisabled()) && (await page.getByRole("heading", { name: "Caption into" }).boundingBox()).y === below.y);
+      await group(page).locator("label").nth(0).click();
+      await spelling.getByRole("radio", { name: "Formal" }).click();
+      ok(`${at}: the example follows`, await page.getByText("pahle, lie").isVisible());
+      await start(page).click();
+      await page.waitForURL(/\/editor\//);
+      ok(`${at}: Start sends Formal`, log.started?.hinglish_spelling === "formal" && log.started?.hindi_script === "roman", JSON.stringify(log.started));
       await page.context().close();
 
       page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
@@ -622,7 +649,7 @@ const CHECKS = {
       ok(`${at}: an answer enables Start`, await start(page).isEnabled());
       await start(page).click();
       await page.waitForURL(/\/editor\//);
-      ok(`${at}: Start sends Devanagari`, log.started?.hindi_script === "devanagari" && log.started?.spoken_language === "hi", JSON.stringify(log.started));
+      ok(`${at}: Start sends Devanagari, no spelling`, log.started?.hindi_script === "devanagari" && log.started?.spoken_language === "hi" && !("hinglish_spelling" in log.started), JSON.stringify(log.started));
       await page.context().close();
 
       page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
@@ -801,6 +828,53 @@ const CHECKS = {
       }
     }
     await context.close();
+  },
+
+  // The editor's Redo offers "Spelling" beside "Hindi in" (v1.3.1): a video
+  // with none recorded (before v1.3.1) presets Everyday, one recorded Formal
+  // presets Formal; disabled, not removed, for Devanagari; Redo sends the
+  // choice. axe 0, light and dark. The Redo request is answered by the
+  // check: nothing is transcribed. Needs a completed video (VCM_CHECK_VIDEO
+  // or the newest). Read-only.
+  async "redo-spelling"(browser, base) {
+    const { AxeBuilder } = require("@axe-core/playwright");
+    for (const theme of ["light", "dark"]) {
+      for (const recorded of [null, "formal"]) {
+        const context = await browser.newContext({ colorScheme: theme, viewport: { width: 1440, height: 900 } });
+        await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+        const page = await context.newPage();
+        const id = await editorVideo(page, base);
+        let sent = null;
+        await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+          const body = await (await route.fetch()).json();
+          await route.fulfill({ json: { ...body, status: "completed", stage: null, caption_language: "same", spoken_language: "auto", hindi_script: "roman", hinglish_spelling: recorded, detected_language: "hi" } });
+        });
+        await page.route(new RegExp(`/api/videos/${id}/transcribe$`), async (route) => {
+          sent = route.request().postDataJSON();
+          const body = await (await page.request.get(`${base}/api/videos/${id}`)).json();
+          await route.fulfill({ json: { ...body, status: "pending" } });
+        });
+        await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+        const spelling = page.getByLabel("Spelling");
+        await spelling.waitFor();
+        const at = `redo-spelling (${theme}, ${recorded ?? "none recorded"})`;
+        ok(`${at}: presets ${recorded ?? "everyday"}`, (await spelling.inputValue()) === (recorded ?? "everyday"));
+        ok(`${at}: no "Press Redo" until something changes`, !(await page.getByText("Press Redo to apply").isVisible()));
+        const found = (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations;
+        ok(`${at}: axe 0`, found.length === 0, found.map((v) => `${v.id} ${v.nodes[0]?.target}`).join(" | "));
+        const row = await spelling.boundingBox();
+        await page.getByLabel("Hindi in").selectOption("devanagari");
+        ok(`${at}: Devanagari disables it, nothing moves`, (await spelling.isDisabled()) && (await spelling.boundingBox()).y === row.y);
+        await page.getByLabel("Hindi in").selectOption("roman");
+        const other = recorded === "formal" ? "everyday" : "formal";
+        await spelling.selectOption(other);
+        ok(`${at}: a change says Press Redo`, await page.getByText("Press Redo to apply").isVisible());
+        await page.getByRole("button", { name: /Redo/ }).click();
+        await page.waitForURL(/\/dashboard/);
+        ok(`${at}: Redo sends ${other}`, sent?.hinglish_spelling === other && sent?.hindi_script === "roman", JSON.stringify(sent));
+        await context.close();
+      }
+    }
   },
 
   // Every style-panel slider, by drag, click and arrow keys: the value moves
