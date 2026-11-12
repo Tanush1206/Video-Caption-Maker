@@ -21,9 +21,10 @@ env_value() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- || true; }
 PORT="$(env_value VCM_PORT)"; PORT="${PORT:-3000}"
 URL="http://localhost:$PORT"
 
+# COMPOSE_SUFFIX=.tmp: the files an update has staged, not the installed ones.
 compose() {
-    local files=(-f docker-compose.prod.yml)
-    [ "$(env_value VCM_VARIANT)" = "cuda" ] && files+=(-f docker-compose.gpu.yml)
+    local files=(-f "docker-compose.prod.yml${COMPOSE_SUFFIX:-}")
+    [ "$(env_value VCM_VARIANT)" = "cuda" ] && files+=(-f "docker-compose.gpu.yml${COMPOSE_SUFFIX:-}")
     docker compose -p "$PROJECT" --env-file .env "${files[@]}" "$@"
 }
 
@@ -60,6 +61,47 @@ pull() {
         sleep "${VCM_PULL_WAIT:-5}"
     done
     rm -f "$log"
+}
+
+# `vcm update` (v1.4.0) hands the update over to the version it has just
+# downloaded and checked, so what an update says and does is the new
+# version's own. The new one first answers `__handover` with this token,
+# then runs `__finish-update`; if it can't start, or exits 3 (stopped before
+# changing anything), the running version finishes the update itself.
+HANDOVER="vcm-handover-1"
+UPDATE_FILES="docker-compose.prod.yml docker-compose.gpu.yml vcm"
+
+# An ARM install made before v1.4.0 runs the Intel/AMD images, emulated;
+# its first update to native images downloads them in full.
+switching_to_arm() {
+    local image
+    case "$(docker version --format '{{.Server.Arch}}' 2>/dev/null)" in arm64|aarch64) ;; *) return 1 ;; esac
+    image="$(docker inspect --format '{{.Image}}' "$PROJECT-backend-1" 2>/dev/null)" || return 1
+    [ "$(docker image inspect --format '{{.Architecture}}' "$image" 2>/dev/null)" = amd64 ]
+}
+
+# The files staged as *.tmp (checked against SHA256SUMS) put to use: pulled
+# with first and moved into place only after, so a download that fails
+# leaves the install exactly as it was.
+finish_update() {
+    if switching_to_arm; then
+        echo "This update moves the app to native ARM images, so it downloads them in full"
+        echo "once (about 1 GB). Updates after this one are small again."
+    fi
+    if ! COMPOSE_SUFFIX=.tmp pull; then
+        rm -f ./*.tmp
+        echo "The update stopped before changing anything: the app is still on the version you had." >&2
+        return 1
+    fi
+    for file in $UPDATE_FILES; do mv "$file.tmp" "$file"; done
+    rm -f SHA256SUMS.tmp
+    chmod +x vcm
+    compose up -d --remove-orphans
+    wait_ready
+    # Only this app's old images (the ones the update just replaced, now
+    # untagged), never anything else on the machine.
+    docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker" >/dev/null 2>&1 || true
+    echo "Updated."
 }
 
 need_docker() {
@@ -104,29 +146,33 @@ case "$cmd" in
     update)
         need_docker
         echo "Fetching the latest version…"
-        update_files="docker-compose.prod.yml docker-compose.gpu.yml vcm"
         # All downloaded and checked against SHA256SUMS before any is replaced.
-        for file in $update_files SHA256SUMS; do
+        for file in $UPDATE_FILES SHA256SUMS; do
             curl -fsSL --retry 3 "$BASE_URL/$file" -o "$file.tmp" \
                 || { rm -f ./*.tmp; echo "Couldn't download $file; nothing was changed." >&2; exit 1; }
         done
-        for file in $update_files; do
+        for file in $UPDATE_FILES; do
             expected="$(awk -v f="$file" '$2 == f || $2 == "*"f { print $1 }' SHA256SUMS.tmp)"
             if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$file.tmp" | cut -d' ' -f1)"
             else actual="$(shasum -a 256 "$file.tmp" | cut -d' ' -f1)"; fi
             [ -n "$expected" ] && [ "$actual" = "$expected" ] \
                 || { rm -f ./*.tmp; echo "$file didn't match the release's SHA256SUMS; nothing was changed." >&2; exit 1; }
         done
-        for file in $update_files; do mv "$file.tmp" "$file"; done
-        rm -f SHA256SUMS.tmp
-        chmod +x vcm
-        pull
-        compose up -d --remove-orphans
-        wait_ready
-        # Only this app's old images (the ones the update just replaced, now
-        # untagged), never anything else on the machine.
-        docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker" >/dev/null 2>&1 || true
-        echo "Updated."
+        if [ "$(bash ./vcm.tmp __handover 2>/dev/null)" = "$HANDOVER" ]; then
+            status=0
+            bash ./vcm.tmp __finish-update || status=$?
+            [ "$status" -ne 3 ] && exit "$status"
+            echo "The new version couldn't finish the update; this one will." >&2
+        fi
+        finish_update
+        ;;
+    __handover) echo "$HANDOVER" ;;
+    __finish-update)
+        # Run by the previous version, the new files staged as *.tmp. Exit 3:
+        # nothing done yet, so the previous version can finish instead.
+        docker info >/dev/null 2>&1 || exit 3
+        for file in $UPDATE_FILES SHA256SUMS; do [ -f "$file.tmp" ] || exit 3; done
+        finish_update
         ;;
     uninstall)
         need_docker

@@ -32,9 +32,17 @@ function Get-EnvValue([string]$key) {
 $Port = Get-EnvValue 'VCM_PORT'; if (-not $Port) { $Port = '3000' }
 $Url = "http://localhost:$Port"
 
+# '.tmp': the files an update has staged, not the installed ones.
+$ComposeSuffix = ''
+
+function Get-ComposeFiles {
+    $files = @('-f', (Join-Path $VcmHome "docker-compose.prod.yml$script:ComposeSuffix"))
+    if ((Get-EnvValue 'VCM_VARIANT') -eq 'cuda') { $files += @('-f', (Join-Path $VcmHome "docker-compose.gpu.yml$script:ComposeSuffix")) }
+    return $files
+}
+
 function Invoke-Compose([string[]]$arguments) {
-    $files = @('-f', (Join-Path $VcmHome 'docker-compose.prod.yml'))
-    if ((Get-EnvValue 'VCM_VARIANT') -eq 'cuda') { $files += @('-f', (Join-Path $VcmHome 'docker-compose.gpu.yml')) }
+    $files = Get-ComposeFiles
     $all = @('compose', '-p', $Project, '--env-file', $EnvFile, '--project-directory', $VcmHome) + $files + $arguments
     & docker @all
     if ($LASTEXITCODE -ne 0) { throw "docker compose $($arguments -join ' ') failed" }
@@ -50,8 +58,7 @@ $TlsTrouble = 'tls: |x509|certificate|decoding message|bad record mac'
 $Dropped = 'i/o timeout|connection reset|unexpected eof'
 
 function Invoke-Pull {
-    $files = @('-f', (Join-Path $VcmHome 'docker-compose.prod.yml'))
-    if ((Get-EnvValue 'VCM_VARIANT') -eq 'cuda') { $files += @('-f', (Join-Path $VcmHome 'docker-compose.gpu.yml')) }
+    $files = Get-ComposeFiles
     $all = @('compose', '-p', $Project, '--env-file', $EnvFile, '--project-directory', $VcmHome) + $files + @('pull')
     $wait = if ($env:VCM_PULL_WAIT) { [int]$env:VCM_PULL_WAIT } else { 5 }
     for ($try = 1; ; $try++) {
@@ -72,6 +79,53 @@ function Invoke-Pull {
         Write-Host 'Then try again. Nothing was changed.'
     }
     throw 'docker compose pull failed'
+}
+
+# `vcm update` (v1.4.0) hands the update over to the version it has just
+# downloaded and checked, so what an update says and does is the new
+# version's own. The new one first answers `__handover` with this token,
+# then runs `__finish-update`; if it can't start, or exits 3 (stopped before
+# changing anything), the running version finishes the update itself.
+$Handover = 'vcm-handover-1'
+$UpdateFiles = @('docker-compose.prod.yml', 'docker-compose.gpu.yml', 'vcm.ps1', 'vcm.cmd')
+
+# An ARM install made before v1.4.0 runs the Intel/AMD images, emulated;
+# its first update to native images downloads them in full.
+function Test-SwitchingToArm {
+    $arch = (docker version --format '{{.Server.Arch}}') 2>$null
+    if ($arch -notin @('arm64', 'aarch64')) { return $false }
+    $image = (docker inspect --format '{{.Image}}' "$Project-backend-1") 2>$null
+    if (-not $image) { return $false }
+    return ((docker image inspect --format '{{.Architecture}}' $image) 2>$null) -eq 'amd64'
+}
+
+# The files staged as *.tmp (checked against SHA256SUMS) put to use: pulled
+# with first and moved into place only after, so a download that fails
+# leaves the install exactly as it was.
+function Complete-Update {
+    if (Test-SwitchingToArm) {
+        Write-Host 'This update moves the app to native ARM images, so it downloads them in full'
+        Write-Host 'once (about 1 GB). Updates after this one are small again.'
+    }
+    $script:ComposeSuffix = '.tmp'
+    try {
+        Invoke-Pull
+    } catch {
+        ($UpdateFiles + @('SHA256SUMS')) | ForEach-Object { Remove-Item -ErrorAction SilentlyContinue (Join-Path $VcmHome "$_.tmp") }
+        throw 'The update stopped before changing anything: the app is still on the version you had.'
+    } finally {
+        $script:ComposeSuffix = ''
+    }
+    foreach ($file in $UpdateFiles) {
+        Move-Item -ErrorAction Stop -Force (Join-Path $VcmHome "$file.tmp") (Join-Path $VcmHome $file)
+    }
+    Remove-Item -ErrorAction SilentlyContinue (Join-Path $VcmHome 'SHA256SUMS.tmp')
+    Invoke-Compose @('up', '-d', '--remove-orphans')
+    Wait-Ready | Out-Null
+    # Only this app's old images (the ones the update just replaced, now
+    # untagged), never anything else on the machine.
+    docker image prune -f --filter 'label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker' *> $null
+    Write-Host 'Updated.'
 }
 
 function Assert-Docker {
@@ -110,7 +164,7 @@ try {
             Assert-Docker
             Write-Host 'Fetching the latest version...'
             # All downloaded and checked against SHA256SUMS before any is replaced.
-            $files = @('docker-compose.prod.yml', 'docker-compose.gpu.yml', 'vcm.ps1', 'vcm.cmd')
+            $files = $UpdateFiles
             $temps = ($files + @('SHA256SUMS')) | ForEach-Object { Join-Path $VcmHome "$_.tmp" }
             try {
                 foreach ($file in $files + @('SHA256SUMS')) {
@@ -130,17 +184,32 @@ try {
                 $temps | ForEach-Object { Remove-Item -ErrorAction SilentlyContinue $_ }
                 throw
             }
-            foreach ($file in $files) {
-                Move-Item -ErrorAction Stop -Force (Join-Path $VcmHome "$file.tmp") (Join-Path $VcmHome $file)
+            # Run as a .ps1 (-File needs the extension), from this folder.
+            $next = Join-Path $VcmHome 'vcm-next.ps1'
+            Copy-Item -Force (Join-Path $VcmHome 'vcm.ps1.tmp') $next
+            $exe = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+            try {
+                $token = (& $exe -NoProfile -ExecutionPolicy Bypass -File $next __handover) 2>$null
+                if ("$token".Trim() -eq $Handover) {
+                    & $exe -NoProfile -ExecutionPolicy Bypass -File $next __finish-update
+                    if ($LASTEXITCODE -ne 3) { exit $LASTEXITCODE }
+                    Write-Host "The new version couldn't finish the update; this one will." -ForegroundColor Yellow
+                }
+            } finally {
+                Remove-Item -ErrorAction SilentlyContinue $next
             }
-            Remove-Item -ErrorAction SilentlyContinue (Join-Path $VcmHome 'SHA256SUMS.tmp')
-            Invoke-Pull
-            Invoke-Compose @('up', '-d', '--remove-orphans')
-            Wait-Ready | Out-Null
-            # Only this app's old images (the ones the update just replaced, now
-            # untagged), never anything else on the machine.
-            docker image prune -f --filter 'label=org.opencontainers.image.source=https://github.com/Tanush1206/Video-Caption-Maker' *> $null
-            Write-Host 'Updated.'
+            Complete-Update
+        }
+        '__handover' { Write-Output $Handover }
+        '__finish-update' {
+            # Run by the previous version, the new files staged as *.tmp. Exit 3:
+            # nothing done yet, so the previous version can finish instead.
+            docker info *> $null
+            if ($LASTEXITCODE -ne 0) { exit 3 }
+            foreach ($file in $UpdateFiles + @('SHA256SUMS')) {
+                if (-not (Test-Path (Join-Path $VcmHome "$file.tmp"))) { exit 3 }
+            }
+            Complete-Update
         }
         'uninstall' {
             Assert-Docker
