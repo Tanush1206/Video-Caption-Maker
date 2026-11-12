@@ -51,9 +51,15 @@ class SystemInfo(BaseModel):
     gemini_configured: bool
     # "settings" (removable from the UI), "env", or None.
     gemini_source: str | None = None
+    #: The custom vocabulary (v1.3.1): words captions spell this way.
+    vocabulary: list[str] = []
+    #: How many words it can hold.
+    vocabulary_max: int = 100
 
 
 class SystemSettingsUpdate(BaseModel):
     # Omit a field to leave it alone. An empty string or null clears the key.
     gemini_api_key: str | None = Field(default=None, max_length=200)
     whisper_model: str | None = None
+    #: The whole list, replacing the one stored; [] or null clears it.
+    vocabulary: list[str] | None = Field(default=None, max_length=1000)

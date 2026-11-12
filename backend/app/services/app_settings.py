@@ -16,6 +16,8 @@ from app.models.app_setting import AppSetting
 
 GEMINI_API_KEY = "gemini_api_key"
 WHISPER_MODEL = "whisper_model"
+# The custom vocabulary (v1.3.1, services/vocabulary.py), a JSON list.
+VOCABULARY = "vocabulary"
 # Written by the worker when it starts: only it can see the GPU.
 WORKER_HARDWARE = "worker_hardware"
 
@@ -64,6 +66,15 @@ async def whisper_override(session: AsyncSession) -> str | None:
 
     value = await get_value(session, WHISPER_MODEL)
     return value if value in WHISPER_CHOICES else None
+
+
+async def vocabulary(session: AsyncSession) -> list[str]:
+    raw = await get_value(session, VOCABULARY)
+    try:
+        words = json.loads(raw) if raw else []
+    except ValueError:
+        return []
+    return [w for w in words if isinstance(w, str)] if isinstance(words, list) else []
 
 
 async def worker_hardware(session: AsyncSession) -> dict | None:

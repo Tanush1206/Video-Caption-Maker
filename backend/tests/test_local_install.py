@@ -107,7 +107,8 @@ async def preserved_settings(db_session):
     """Put the install's real settings back after a test changes them."""
     before = await app_settings.get_all(db_session)
     yield
-    for key in (app_settings.GEMINI_API_KEY, app_settings.WHISPER_MODEL, app_settings.WORKER_HARDWARE):
+    for key in (app_settings.GEMINI_API_KEY, app_settings.WHISPER_MODEL, app_settings.WORKER_HARDWARE,
+                app_settings.VOCABULARY):
         await app_settings.set_value(db_session, key, before.get(key))
 
 
@@ -128,6 +129,24 @@ async def test_the_gemini_key_is_stored_but_never_returned(
     cleared = await client.patch("/api/system/settings", json={"gemini_api_key": ""})
     assert cleared.json()["gemini_configured"] is False
     assert cleared.json()["translation_engine"] == "local"
+
+
+@pytest.mark.asyncio
+async def test_the_vocabulary_is_stored_cleaned_and_validated(client, local_mode, preserved_settings):
+    """v1.3.1: the whole list is sent and stored; repeats and blanks dropped."""
+    body = (await client.patch("/api/system/settings", json={"vocabulary": [" vlog ", "VLOG", "", "S 1000 RR", "हैदराबाद"]})).json()
+    assert body["vocabulary"] == ["vlog", "S 1000 RR", "हैदराबाद"]
+    assert body["vocabulary_max"] == 100
+    assert (await client.get("/api/system")).json()["vocabulary"] == ["vlog", "S 1000 RR", "हैदराबाद"]
+
+    bad = await client.patch("/api/system/settings", json={"vocabulary": ["vlog", "<script>"]})
+    assert bad.status_code == 422 and "<script>" in bad.json()["detail"]
+    too_many = await client.patch("/api/system/settings", json={"vocabulary": [f"word{i}" for i in range(101)]})
+    assert too_many.status_code == 422
+    assert (await client.get("/api/system")).json()["vocabulary"] == ["vlog", "S 1000 RR", "हैदराबाद"]
+
+    cleared = (await client.patch("/api/system/settings", json={"vocabulary": []})).json()
+    assert cleared["vocabulary"] == []
 
 
 @pytest.mark.asyncio

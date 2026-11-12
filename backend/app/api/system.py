@@ -6,6 +6,8 @@ this is a local install (no login) and whether a Gemini key is set (which
 decides whether search offers written answers).
 """
 
+import json
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.config import get_settings
@@ -18,7 +20,7 @@ from app.schemas.system import (
     SystemSettingsUpdate,
     WhisperInfo,
 )
-from app.services import app_settings, hardware, hinglish
+from app.services import app_settings, hardware, hinglish, vocabulary
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -54,6 +56,8 @@ async def _info(db) -> SystemInfo:
         translator_model=translator,
         gemini_configured=bool(key),
         gemini_source="settings" if stored else ("env" if key else None),
+        vocabulary=await app_settings.vocabulary(db),
+        vocabulary_max=vocabulary.MAX_WORDS,
     )
 
 
@@ -87,5 +91,13 @@ async def update_settings(
         )
     if "gemini_api_key" in fields:
         await app_settings.set_value(db, app_settings.GEMINI_API_KEY, payload.gemini_api_key)
+    if "vocabulary" in fields:
+        words = vocabulary.clean(payload.vocabulary or [])
+        problem = vocabulary.invalid(words)
+        if problem:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=problem)
+        await app_settings.set_value(
+            db, app_settings.VOCABULARY, json.dumps(words, ensure_ascii=False) if words else None
+        )
 
     return await _info(db)
