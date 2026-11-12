@@ -51,12 +51,12 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
     name: install (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build, install, check and time this commit on ${{ matrix.arch }}
         run: bash scripts/ci_arch_check.sh ${{ matrix.arch }} "$RUNNER_TEMP/times-${{ matrix.arch }}.json"
@@ -79,7 +79,7 @@ jobs:
 
   times:
     needs: install
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
