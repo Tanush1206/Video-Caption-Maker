@@ -1,0 +1,94 @@
+# Does the released version still install? (v1.4.0, launch audit M2)
+#
+# Every Monday and by hand: the release's assets against SHA256SUMS; every
+# image an install pulls, anonymously (ours multi-arch where they should be);
+# the models a release downloads, still on Hugging Face (scripts/weekly_
+# models.py, run inside the released image); the pinned dependencies still
+# resolving; the website up. A failure opens an issue labelled
+# `weekly-check`, or comments on the open one, so it is one issue per problem.
+name: weekly-check
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REPO_URL: https://github.com/${{ github.repository }}
+  REGISTRY: ghcr.io/tanush1206
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Release assets match SHA256SUMS
+        run: |
+          mkdir assets && cd assets
+          for f in install.sh install.ps1 vcm vcm.ps1 vcm.cmd docker-compose.prod.yml docker-compose.gpu.yml SHA256SUMS; do
+            curl -fsSLO "$REPO_URL/releases/latest/download/$f"
+          done
+          sha256sum -c SHA256SUMS
+
+      - name: Every image an install pulls, anonymously
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          platforms() { docker manifest inspect "$1" | python3 -c 'import json, sys; d = json.load(sys.stdin); print(" ".join(sorted({m["platform"]["architecture"] for m in d.get("manifests", []) if m["platform"]["architecture"] != "unknown"})) or "single")'; }
+          # Multi-arch from v1.4.0 on; the releases before are amd64 only.
+          tag="$(curl -fsS "https://api.github.com/repos/${{ github.repository }}/releases/latest" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])')"
+          if [ "$(printf '%s\nv1.4.0\n' "$tag" | sort -V | head -1)" = v1.4.0 ]; then want="amd64 arm64"; else want="amd64"; fi
+          echo "latest release $tag: CPU images should be $want"
+          for image in backend:latest-cpu frontend:latest; do
+            got="$(platforms "$REGISTRY/video-caption-maker-$image")"
+            echo "$image: $got"; [ "$got" = "$want" ]
+          done
+          got="$(platforms "$REGISTRY/video-caption-maker-backend:latest-cuda")"
+          echo "backend:latest-cuda: $got"; [ -n "$got" ]
+          # The services the compose file pins, and the installer's busybox.
+          for image in $(grep -Eo 'image: (postgres|redis|chromadb)[^ ]*' assets/docker-compose.prod.yml | cut -d' ' -f2) busybox:1.37; do
+            docker manifest inspect "$image" > /dev/null && echo "$image: ok"
+          done
+          # One real pull, end to end.
+          docker pull -q "$REGISTRY/video-caption-maker-frontend:latest"
+
+      - name: The models a release downloads are still there
+        run: |
+          docker run --rm -v "$PWD/scripts:/s:ro" --entrypoint python \
+            "$REGISTRY/video-caption-maker-backend:latest-cpu" /s/weekly_models.py
+
+      - name: Pinned dependencies still resolve
+        run: |
+          docker run --rm -v "$PWD/backend:/b:ro" --entrypoint sh "$REGISTRY/video-caption-maker-backend:latest-cpu" -c \
+            'pip install --dry-run --quiet --ignore-installed --no-deps --report /dev/null \
+               --extra-index-url https://download.pytorch.org/whl/cpu -r /b/constraints.txt'
+          cd frontend && npm ci --dry-run --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: The website is up
+        run: curl -fsS -o /dev/null https://tanush1206.github.io/Video-Caption-Maker/
+
+  report:
+    needs: check
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue, or add to the open one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create weekly-check --color D93F0B --description "The weekly release check failed" 2>/dev/null || true
+          open="$(gh issue list --label weekly-check --state open --json number --jq '.[0].number')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Failed again: $RUN"
+          else
+            gh issue create --label weekly-check --title "Weekly check failed: the release may not install" \
+              --body "The weekly check of the latest release failed: $RUN. Each step's log says which part."
+          fi
