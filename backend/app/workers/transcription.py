@@ -45,7 +45,12 @@ logger = logging.getLogger(__name__)
 STAGE_DOWNLOADING = "downloading"
 STAGE_EXTRACTING = "extracting"
 STAGE_TRANSCRIBING = "transcribing"
+# The second pass over long uncaptioned stretches, and arranging captions:
+# each its own stage with its own percentage (v1.4.0), where an hour of
+# Hindi sat at "Transcribing 99%" for 15 of 30 minutes.
+STAGE_RECOVERING = "recovering"
 STAGE_TRANSLATING = "translating"
+STAGE_PHRASING = "phrasing"
 STAGE_EMBEDDING = "embedding"
 
 
@@ -69,6 +74,32 @@ async def _set_progress(
         video.stage_detail = detail
         video.status = VideoStatus.PROCESSING
         await session.commit()
+
+
+def _reporter(video_id: int, loop: asyncio.AbstractEventLoop):
+    """
+    `report(stage, percent)` for a worker thread, and `flush()` to await.
+
+    Each write waits for the one before, so a late "phrasing 100%" never lands
+    after "embedding 0%"; the job flushes before it moves to the next stage.
+    """
+    last: list = [None]
+
+    def report(stage: str, percent: int) -> None:
+        before = last[0]
+
+        async def write() -> None:
+            if before is not None:
+                await asyncio.wrap_future(before)
+            await _set_progress(video_id, stage, percent)
+
+        last[0] = asyncio.run_coroutine_threadsafe(write(), loop)
+
+    async def flush() -> None:
+        if last[0] is not None:
+            await asyncio.wrap_future(last[0])
+
+    return report, flush
 
 
 async def _mark_failed(video_id: int, message: str) -> None:
@@ -213,11 +244,13 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
 
         # transcribe() is blocking and CPU/GPU-bound. It runs on a thread so
         # the progress callback's event loop stays responsive.
+        progress, flush_progress = _reporter(video_id, loop)
 
         def report(percent: int) -> None:
-            asyncio.run_coroutine_threadsafe(
-                _set_progress(video_id, STAGE_TRANSCRIBING, percent), loop
-            )
+            progress(STAGE_TRANSCRIBING, percent)
+
+        def report_recovery(percent: int) -> None:
+            progress(STAGE_RECOVERING, percent)
 
         # Detect first, in its own pass, because the task below has to be
         # chosen before transcribing and it depends on what is being spoken:
@@ -267,7 +300,9 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
             # translate path to reach English.
             task="transcribe" if roman else languages.whisper_task(hint, wanted),
             on_progress=report,
+            on_recover=report_recovery,
         )
+        await flush_progress()
         if roman:
             # It is Hindi, whatever token it was decoded under.
             language = "hi"
@@ -377,12 +412,20 @@ async def _run(video_id: int, keep_breaks: bool = False) -> dict:
     # again after translation, cut at punctuation and natural word groups,
     # timed to the speech's word timestamps, 0.8-7 s each, no flicker gaps
     # and no caption across a pause (services/phrasing.py).
+    # On a thread, reporting its own progress: on an hour of speech it can
+    # take minutes, and the event loop has to stay free to write that.
+    await _set_progress(video_id, STAGE_PHRASING, 0)
+    progress, flush_progress = _reporter(video_id, loop)
+    phrases = await asyncio.to_thread(
+        phrasing.rephrase, segments, lambda percent: progress(STAGE_PHRASING, percent)
+    )
+    await flush_progress()
     segments = [
         transcription.Segment(
             start_ms=phrase.start_ms, end_ms=phrase.end_ms, text=phrase.text,
             confidence=phrase.confidence,
         )
-        for phrase in phrasing.rephrase(segments)
+        for phrase in phrases
     ]
 
     # ── 4. Persist captions ─────────────────────────────────────────────

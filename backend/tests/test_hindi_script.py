@@ -166,7 +166,7 @@ def fake_pipeline(monkeypatch):
     monkeypatch.setattr(transcription, "detect_language", lambda path: ("hi", 0.94))
     segments = [SimpleNamespace(start_ms=0, end_ms=1500, text="Aap SRT file kaise banate ho", confidence=-0.1, speech=[])]
 
-    def transcribe(path, language, task, on_progress=None):
+    def transcribe(path, language, task, on_progress=None, on_recover=None):
         calls.transcribed.append((language, task))
         return segments, language
 
@@ -225,7 +225,7 @@ async def test_hinglish_drops_captions_with_no_latin_letter(
         SimpleNamespace(start_ms=4000, end_ms=5500, text="緘.", confidence=-0.9, speech=[]),
         SimpleNamespace(start_ms=8000, end_ms=9500, text="Diwali party vlog 2026", confidence=-0.2, speech=[]),
     ]
-    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None: (segments, language))
+    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None, on_recover=None: (segments, language))
 
     video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="roman")
     await job._run(video_id)
@@ -361,7 +361,7 @@ def _apex_says(monkeypatch, text, speech=()):
     from app.services import transcription
 
     segments = [SimpleNamespace(start_ms=0, end_ms=3000, text=text, confidence=-0.1, speech=list(speech))]
-    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None: (segments, language))
+    monkeypatch.setattr(transcription, "transcribe", lambda path, language, task, on_progress=None, on_recover=None: (segments, language))
 
 
 async def test_hinglish_is_spelled_everyday_by_default_and_recorded(
@@ -436,3 +436,41 @@ async def test_the_vocabulary_spells_hinglish_captions_after_everyday_spelling(
     await job._run(video_id)
 
     assert " ".join(await _captions(video_id)) == "Is vlog ke end mein Ladakh nahi"
+
+
+async def test_progress_runs_through_every_stage_in_order(
+    client, auth_headers, sample_video_bytes, fake_pipeline, monkeypatch
+):
+    """v1.4.0: the second pass and phrasing are stages of their own, in order, nothing written late."""
+    from app.services import transcription
+    from app.workers import transcription as job
+
+    segments = [SimpleNamespace(start_ms=0, end_ms=1500, text="Aap SRT file kaise banate ho", confidence=-0.1, speech=[])]
+
+    def transcribe(path, language, task, on_progress=None, on_recover=None):
+        for percent in (10, 60, 99):
+            on_progress(percent)
+        for percent in (0, 50, 100):
+            on_recover(percent)
+        return segments, language
+
+    monkeypatch.setattr(transcription, "transcribe", transcribe)
+    written = []
+    real = job._set_progress
+
+    async def record(video_id, stage, percent, detail=None):
+        written.append((stage, percent))
+        await real(video_id, stage, percent, detail)
+
+    monkeypatch.setattr(job, "_set_progress", record)
+    video_id = await _video(client, auth_headers, sample_video_bytes, hindi_script="devanagari")
+    await job._run(video_id)
+
+    stages = [stage for stage, _ in written if stage != "downloading"]
+    order = ["extracting", "transcribing", "recovering", "phrasing", "embedding"]
+    assert [s for i, s in enumerate(stages) if i == 0 or stages[i - 1] != s] == order
+    assert ("recovering", 100) in written and ("phrasing", 100) in written
+    # Each stage's own writes in the order they were made.
+    for stage in ("transcribing", "recovering", "phrasing"):
+        mine = [p for s, p in written if s == stage]
+        assert mine == sorted(mine), (stage, mine)
