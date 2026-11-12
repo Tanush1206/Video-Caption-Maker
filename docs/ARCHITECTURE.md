@@ -168,16 +168,17 @@ sequenceDiagram
     loop every 1 s until heard (15 s, then the step asks without a preset)
       UI->>API: GET /api/videos/{id}
     end
-    UI->>API: POST /api/videos/{id}/transcribe (spoken, caption, hindi_script) = Start
+    UI->>API: POST /api/videos/{id}/transcribe (spoken, caption, hindi_script, hinglish_spelling) = Start
     API->>DB: held=false, status=pending
     API->>Q: transcribe_video.delay(id)
     Q->>W: deliver (prefetch 1, acks_late)
-    W->>DB: read languages, Settings (whisper_model, gemini key)
+    W->>DB: read languages, Settings (whisper_model, gemini key, vocabulary)
     W->>DB: DELETE captions; W->>V: delete vectors (idempotent re-run)
     W->>W: 0 downloading: load Whisper (unloads translator)
     W->>W: 1 extracting: FFmpeg → <src>.transcode.wav
     W->>W: 2 transcribing: detect language (30 s) if auto; Hindi in Roman → load the Hinglish model; decode, then re-decode skipped stretches
     W->>W: 2b translating: Hinglish → IndicXlit Devanagari first; Gemini → fallback M2M100 (unloads Whisper)
+    W->>W: 2c Hinglish in everyday spelling; the vocabulary's spellings (text and timed words)
     W->>W: 3 phrases: rephrase and time to the word timestamps
     W->>DB: INSERT captions, videos.speech
     W->>V: 4 embedding: upsert "{video}:{caption}" vectors
@@ -227,6 +228,16 @@ Rules the code enforces:
   English captions are always Whisper's own `translate` pass, which read far
   better than M2M100 from either script (PROGRESS.md, v1.0.9). The job also
   stores what it heard, so the editor's Redo offers the script choice.
+- **Spelling and vocabulary** (v1.3.1). Captions that stay in Hinglish are
+  put in everyday spelling (`services/hinglish_spelling.py`, unless the
+  video's `hinglish_spelling` is `formal`) after any translation (IndicXlit
+  was measured on the model's own spelling) and before phrasing, on the text
+  and the timed words alike so they still match. Then the install's custom
+  vocabulary (`services/vocabulary.py`) respells words that sound like one
+  of its words, on every caption language (Latin words only). Neither is
+  ever given to Whisper: as hotwords or an initial prompt the vocabulary
+  changed 100-400 words a clip and fixed none of its targets on the
+  Hinglish model (D24).
 - **Nothing Whisper heard is skipped** (v1.0.8). Each window is decoded
   without the previous one's text (`condition_on_previous_text=False`), no
   word's timing is believed past 3 s (`WORD_MAX_SECONDS`: alignment hands

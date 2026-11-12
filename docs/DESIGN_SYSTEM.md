@@ -200,7 +200,9 @@ One grey track (`surface-3`, 8 px), the chosen segment lifted on
 `--segment`. `kind="pressed"` is a group of toggle buttons (the library
 filters, search mode); `kind="radio"` is one setting with several values,
 arrow keys between them (the inspector's tools, the theme, export
-resolution). `iconOnly` keeps the label as the accessible name.
+resolution). `iconOnly` keeps the label as the accessible name. `disabled`
+dims every segment and keeps the chosen one shown; `describedBy` ties a
+hint to the group (v1.3.1, the Hinglish spelling).
 
 ### Menu (`menu.tsx`) and Popover (`popover.tsx`)
 
@@ -285,6 +287,20 @@ helper lines that used to sit under the timeline and the video.
     one player row; the inspector is a bottom sheet that, lowered, fills the
     rest of the screen and **peeks** at the current caption (its time, and
     its text, editable in place), and rises to 72 vh for a tool.
+- **Hinglish spelling** (v1.3.1): on the language step, a "Spelling" row
+  under the Hindi script tiles: a radio Segmented (Everyday · Formal) and
+  the example in grey ("pehle, liye"), inline from `sm`, stacked on a phone;
+  disabled, with "For Hinglish captions", unless Hinglish is chosen, so
+  nothing below moves. In the editor's Redo group, a "Spelling" select under
+  "Hindi in" ("Everyday (pehle, liye)"), disabled for Devanagari.
+- **Custom vocabulary** (v1.3.1, Settings, between Gemini and Storage): one
+  group with "Words, one per line" over a 5-line textarea, the count ("3 of
+  100 words", red past the limit) and Save words (primary, active only when
+  something changed); the footnote says how it is used, then Saved or the
+  server's reason as an alert.
+- **Export while Improve runs** (v1.3.1): a warning notice at the top of
+  the export dialog, "Improve with Gemini is still checking these
+  captions.", saying an export made now has the captions as they are.
 - **Find and replace** (v1.3.0, the caption list's Replace button): Find and
   Replace with as rows of a group, Match case and Whole word as checkboxes,
   the count in words, then each caption it occurs in as a hairline row (its

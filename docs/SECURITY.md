@@ -402,7 +402,11 @@ transcribe, translate, export, search) makes **no outbound requests**.
 
 1. **The caption language** must be `same` or one of the nine codes, and
    the spoken language `auto` or one of them, or 422 (v1.0.11); the Hindi script (`hindi_script`) must be `roman`, `devanagari` or
-   `auto`, or 422.
+   `auto`, or 422; the Hinglish spelling `everyday` or `formal`, or 422
+   (v1.3.1). The custom vocabulary (Settings, v1.3.1) is at most 100 words
+   of 40 characters, letters and digits of any script with ` '&.-` between
+   them, or 422; it stays on the machine and is never sent to a model or
+   service.
 2. **Both** the declared content type **and** the extension must be on the
    allow-lists (415 otherwise). The extensions are `.mp4 .mov .mkv .webm
    .avi .m4v`; the types are the matching `video/*`.
