@@ -202,7 +202,15 @@ jobs:
              docker-compose.prod.yml docker-compose.gpu.yml dist/
           chmod +x dist/install.sh dist/vcm
           (cd dist && sha256sum -- * > SHA256SUMS)
+      # The Release shows what changed, from the CHANGELOG (v1.4.1); GitHub's
+      # own compare link follows it. A version with no section still
+      # releases, with a warning: the images are already published.
+      - name: Release notes from the CHANGELOG
+        run: |
+          bash scripts/release_notes.sh "${GITHUB_REF_NAME#v}" > notes.md
+          [ -s notes.md ] || echo "::warning::CHANGELOG.md has no section for ${GITHUB_REF_NAME#v}: the Release has only the compare link."
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: dist/*
+          body_path: notes.md
           generate_release_notes: true

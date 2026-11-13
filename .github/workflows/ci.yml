@@ -38,8 +38,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Shell syntax and lint
         run: |
-          bash -n install/install.sh install/vcm install/tests/test_vcm_pull.sh install/tests/test_vcm_update.sh install/tests/test_vcm_doctor.sh
-          shellcheck -S warning install/install.sh install/vcm install/tests/test_vcm_pull.sh install/tests/test_vcm_update.sh install/tests/test_vcm_doctor.sh
+          bash -n install/install.sh install/vcm install/tests/test_vcm_pull.sh install/tests/test_vcm_update.sh install/tests/test_vcm_doctor.sh scripts/release_notes.sh
+          shellcheck -S warning install/install.sh install/vcm install/tests/test_vcm_pull.sh install/tests/test_vcm_update.sh install/tests/test_vcm_doctor.sh scripts/release_notes.sh
       - name: vcm pull tries again and names HTTPS scanning (v1.3.1)
         run: |
           bash install/tests/test_vcm_pull.sh
@@ -54,6 +54,17 @@ jobs:
           pwsh -NoProfile -File install/tests/test_vcm_doctor.ps1
       - name: A stopped Windows install ends with its own message, no error block (v1.4.1)
         run: pwsh -NoProfile -File install/tests/test_install_stop.ps1
+      - name: A Release's notes are its CHANGELOG section, and only that (v1.4.1)
+        run: |
+          bash scripts/release_notes.sh 1.4.0 > notes.md
+          grep -q "Native on Apple silicon" notes.md
+          # (`! grep` would not stop the step: bash -e ignores a negated command.)
+          if grep -q "^## \[" notes.md; then echo "a version heading is in the notes"; exit 1; fi
+          if grep -q "Everyday Hinglish spelling" notes.md; then echo "1.3.1's text is in 1.4.0's notes"; exit 1; fi
+          [ -z "$(bash scripts/release_notes.sh 0.0.0)" ]
+          # The newest version has a section too.
+          newest="$(grep -m1 -oE '^## \[[0-9.]+\]' CHANGELOG.md | tr -d '#[] ')"
+          [ -n "$(bash scripts/release_notes.sh "$newest")" ]
       - name: Compose files are valid
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q
