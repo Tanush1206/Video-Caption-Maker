@@ -427,6 +427,23 @@ const CHECKS = {
     await page.close();
   },
 
+  // v1.4.1 (launch audit P4): the app has an icon, so the browser no longer
+  // asks for /favicon.ico and logs a 404 on every page. Read-only.
+  async favicon(browser, base) {
+    const page = await browser.newPage();
+    for (const path of ["/dashboard", "/settings"]) {
+      await page.goto(`${base}${path}`, { waitUntil: "networkidle" });
+      const href = await page.locator('link[rel="icon"]').first().getAttribute("href").catch(() => null);
+      ok(`favicon ${path}: the page names an icon`, Boolean(href), String(href));
+      if (!href) continue;
+      const response = await page.request.get(new URL(href, base).toString());
+      ok(`favicon ${path}: the icon is served as an SVG image`,
+        response.status() === 200 && (response.headers()["content-type"] || "").includes("image/svg+xml"),
+        `${response.status()} ${response.headers()["content-type"]}`);
+    }
+    await page.close();
+  },
+
   // The failed screen's "Retry with small model": sets the speech model to
   // small through Settings' own API, then queues the video again, in that
   // order. Read-only: the video is shown as failed and both writes are
