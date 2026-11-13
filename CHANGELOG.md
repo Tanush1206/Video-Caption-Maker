@@ -8,12 +8,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.4.1] - unreleased
 
+Fixes from the final audit of v1.4.0. No migration; the update downloads the
+app layers only.
+
+### Changed
+- A release's page on GitHub now shows what changed, taken from this file,
+  above the link that compares it with the previous release.
+
 ### Fixed
 - `vcm doctor` now starts with the version that is actually running, for
   example "Version: 1.4.0 (VCM_VERSION=latest in .env)". An install's
   settings usually say "latest", so the report's first lines didn't say
   which version a bug was found in. If the app isn't answering, the version
   comes from the installed image, and the report says so.
+- The installer and `vcm update` try again when an image registry answers
+  once with "server gave HTTP response to HTTPS client", instead of
+  stopping at the first such answer.
+- On Windows, an install that stops (Docker not installed or not running,
+  say) ends with its message and what to do next. PowerShell no longer
+  adds a red error block under it.
+- The app has its icon in the browser tab, and no longer logs a missing
+  "favicon.ico" on every page.
 
 ## [1.4.0] - 2026-11-12
 

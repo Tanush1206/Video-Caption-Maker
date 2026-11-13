@@ -41,6 +41,28 @@ The original 10-milestone build plan is historical and lives in
   images, and it is served from the same place as the files it checks
   ([SECURITY.md §8](SECURITY.md#8-installer-checksum-verification-and-its-limits)).
 
+### Image patching, with a scan that stops a release
+- **What:** `apt-get upgrade` in the backend's runtime stage (or a newer
+  base image), newer Python constraints, no pip, setuptools or wheel (or
+  the unused Authlib) in the runtime, and a Trivy step in `release.yml`
+  that fails on a critical or high advisory that has a fix.
+- **Why:** the base layers are cached from release to release, which
+  keeps updates small and the packages old. At v1.4.0 Trivy counts 73
+  fixable critical or high advisories in Debian packages and 23 in Python
+  packages; none was found reachable
+  ([FINAL_AUDIT.md](FINAL_AUDIT.md) D1, launch audit S6).
+- **Cost:** every user downloads the backend in full once (0.8 GB CPU,
+  2.3 GB CUDA), and the GPU stack needs a full regression.
+
+### A model mirror, and pinned Whisper repositories
+- **What:** pin the three Whisper repositories to a commit, as M2M100,
+  MiniLM and the Hinglish model are, and keep a copy of every model in a
+  Hugging Face organisation of the project's own, used when the first
+  source is gone.
+- **Why:** the models come from other people's repositories; one has
+  already moved (launch audit M1). The weekly check (v1.4.0) says when one
+  disappears, but can't bring it back.
+
 ### Right-to-left caption languages: Arabic and Urdu
 - **What:** captions in Arabic (`ar`) and Urdu (`ur`). Both are in M2M100's
   language list.

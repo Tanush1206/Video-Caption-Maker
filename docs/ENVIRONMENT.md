@@ -31,6 +31,7 @@ Read by `install/install.sh`, `install/install.ps1`, `install/vcm` and
 | `VCM_REGISTRY` | image registry, written to `.env` if set | `ghcr.io/tanush1206` | no |
 | `VCM_BASE_URL` | where release assets are fetched from (tests point it at a local server) | `https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download` | no |
 | `VCM_NO_OPEN` | `1` = don't open the browser after install | `0` | no |
+| `VCM_PULL_WAIT` | seconds `vcm pull` (and so the installer and `vcm update`) waits before trying an interrupted download again (v1.3.1; the tests set `0`) | `5` | no |
 
 ## 2. The install's `.env` (generated)
 

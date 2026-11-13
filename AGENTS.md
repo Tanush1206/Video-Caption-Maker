@@ -18,7 +18,8 @@ MP4 with burned-in captions, or SRT/VTT/JSON.
   - FastAPI + Celery (`backend/`, one image, `api`/`worker` commands);
   - Postgres 16, Redis 7, ChromaDB 1.0;
   - installers in `install/`, release automation in `.github/workflows/`.
-- **Current release:** v1.0.6 (2026-10-15). Progress, decisions and the
+- **Current release:** the newest dated entry in [CHANGELOG.md](CHANGELOG.md)
+  (v1.4.0, 2026-11-12, when this line was written). Progress, decisions and the
   backlog are in
   [PROGRESS.md](PROGRESS.md); later work is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
