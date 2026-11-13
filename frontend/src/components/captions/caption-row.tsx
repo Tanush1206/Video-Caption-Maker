@@ -124,7 +124,9 @@ export function CaptionRow({
     <div
       ref={registerRow}
       className={cn(
-        "group relative px-3 py-2 transition-colors duration-200 ease-out",
+        // sm: 2 px from the bottom go above the text (below), so the 24 px
+        // buttons that overhang the 16 px row are not covered by it (v1.4.1).
+        "group relative px-3 py-2 transition-colors duration-200 ease-out sm:pb-1.5",
         isActive ? "bg-surface-2" : "hover:bg-surface-2/50"
       )}
     >
@@ -136,7 +138,9 @@ export function CaptionRow({
           onClick={onSeek}
           title="Jump the video here"
           className={cn(
-            "flex items-center gap-1 rounded-sm font-mono text-xs leading-4 tabular-nums transition-colors duration-200 ease-out hover:text-primary",
+            // 24 px tall (WCAG 2.2 target size, v1.4.1), overhanging the
+            // 16 px row as the tools do, so the row keeps its height.
+            "flex min-h-6 shrink-0 items-center gap-1 rounded-sm font-mono text-xs leading-4 tabular-nums transition-colors duration-200 ease-out hover:text-primary",
             isActive ? "text-primary" : "text-muted-foreground"
           )}
         >
@@ -219,7 +223,7 @@ export function CaptionRow({
         className={cn(
           // Reads as text, not a form field, until it is touched: DESIGN.md's
           // "transparent background and seamless borders".
-          "-mx-1.5 mt-0.5 block w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-0 text-[15px] leading-[22px] transition-colors duration-200 ease-out",
+          "-mx-1.5 mt-0.5 block sm:mt-1 w-[calc(100%+0.75rem)] resize-none rounded-md border bg-transparent px-1.5 py-0 text-[15px] leading-[22px] transition-colors duration-200 ease-out",
           "hover:border-border focus:border-ring focus:bg-background focus:outline-none",
           dirty ? "border-accent/60" : "border-transparent"
         )}

@@ -131,7 +131,15 @@ export function LanguagePicker({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`${label}: ${selected ? (selected.native ?? selected.label) : "none"}`}
+        // The name holds the text the button shows (WCAG 2.5.3, v1.4.1): both
+        // names of a language, or "Choose…".
+        aria-label={`${label}: ${
+          selected
+            ? selected.native && selected.native !== selected.label
+              ? `${selected.native} ${selected.label}`
+              : (selected.native ?? selected.label)
+            : "Choose…"
+        }`}
         onClick={() => setOpen((was) => !was)}
         className={cn(
           "flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 text-left text-[15px] sm:h-8 sm:text-sm",
@@ -145,7 +153,11 @@ export function LanguagePicker({
                 {selected.native ?? selected.label}
               </span>
               {selected.native && selected.native !== selected.label && (
-                <span className="ml-1.5 text-muted-foreground">{selected.label}</span>
+                // A real space, so the text reads "हिन्दी Hindi" to a machine too.
+                <>
+                  {" "}
+                  <span className="ml-0.5 text-muted-foreground">{selected.label}</span>
+                </>
               )}
             </>
           ) : (

@@ -731,7 +731,7 @@ const CHECKS = {
       await pick(page);
       await anyway(page).waitFor();
       ok(`${at}: says Tamil isn't supported`, await page.getByText("Tamil speech isn't supported yet, so captions would be inaccurate.").isVisible());
-      ok(`${at}: nothing chosen`, (await anyway(page).getAttribute("aria-pressed")) === "false" && (await picker(page).getAttribute("aria-label")) === "Spoken language: none");
+      ok(`${at}: nothing chosen`, (await anyway(page).getAttribute("aria-pressed")) === "false" && (await picker(page).getAttribute("aria-label")) === "Spoken language: Choose…");
       ok(`${at}: Start waits for a choice`, await start(page).isDisabled());
       await picker(page).click();
       const offered = await page.getByRole("listbox", { name: "Spoken language" }).getByRole("option").allInnerTexts();
@@ -2241,6 +2241,60 @@ const CHECKS = {
       await page.getByText("No speech was found in this video.").isVisible().catch(() => false));
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
+  },
+
+  // v1.4.1 (final audit D3): two things Lighthouse found in the editor that
+  // WCAG 2 A/AA with axe does not test. A caption's time button is a target
+  // of at least 24 px each way (WCAG 2.2, 2.5.8; it was 16 px tall), and the
+  // language pickers' accessible names contain the text they show (2.5.3:
+  // "Caption language: हिन्दी" showed "हिन्दी Hindi"). axe's own two rules for
+  // these find nothing on the page. Read-only.
+  async "editor-targets"(browser, base) {
+    const { AxeBuilder } = require("@axe-core/playwright");
+    for (const [width, theme] of [[1440, "light"], [375, "dark"]]) {
+      const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
+      await context.addInitScript((t) => localStorage.setItem("vcm-theme", t), theme);
+      const page = await context.newPage();
+      const id = await editorVideo(page, base);
+      // Shown as captioned into Hindi, a language written with its own name
+      // and its English one ("हिन्दी Hindi"); nothing is changed.
+      await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const body = await (await route.fetch()).json();
+        await route.fulfill({ json: { ...body, caption_language: "hi" } });
+      });
+      await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+      const at = `editor-targets@${width} (${theme})`;
+      // On a phone the caption list is in the lowered sheet.
+      if (width === 375) await page.getByRole("button", { name: "Raise the inspector" }).click();
+      const times = page.getByTitle("Jump the video here");
+      await times.first().waitFor();
+      const sizes = await times.evaluateAll((buttons) => buttons.map((b) => {
+        const r = b.getBoundingClientRect();
+        return [Math.round(r.width), Math.round(r.height)];
+      }));
+      const small = sizes.filter(([w, h]) => w < 24 || h < 24);
+      ok(`${at}: every caption's time button is at least 24 px each way (${sizes.length} rows)`,
+        sizes.length > 0 && small.length === 0, `smallest ${JSON.stringify(small[0] || sizes[0])}`);
+      // A click on the taller button still seeks, and its row keeps its height.
+      const row = await times.first().evaluate((b) => Math.round(b.parentElement.getBoundingClientRect().height));
+      ok(`${at}: the row above the text is as tall as before (${width < 640 ? 44 : 16} px)`, row === (width < 640 ? 44 : 16), String(row));
+
+      const picker = page.getByRole("button", { name: /^Caption language:/ });
+      if (await picker.count()) {
+        const name = await picker.first().getAttribute("aria-label");
+        const text = (await picker.first().innerText()).replace(/\s+/g, " ").trim();
+        ok(`${at}: the caption-language button's name contains what it shows`, name.includes(text), `${name} / ${text}`);
+      } else {
+        // The picker is in the Redo panel, shown when the tab holds it.
+        ok(`${at}: the caption-language button is on the page`, false, "not found");
+      }
+      const found = (await new AxeBuilder({ page }).withRules(["target-size", "label-content-name-mismatch"]).analyze()).violations;
+      ok(`${at}: axe target-size and label-content-name-mismatch 0`, found.length === 0,
+        found.map((v) => `${v.id} x${v.nodes.length} ${v.nodes[0]?.target}`).join(" | "));
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await context.close();
+    }
   },
 
   // v1.4.0: the pipeline shows the second listen ("Checking for missed
