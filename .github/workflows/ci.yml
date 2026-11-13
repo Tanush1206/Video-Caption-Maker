@@ -52,6 +52,8 @@ jobs:
         run: |
           bash install/tests/test_vcm_doctor.sh
           pwsh -NoProfile -File install/tests/test_vcm_doctor.ps1
+      - name: A stopped Windows install ends with its own message, no error block (v1.4.1)
+        run: pwsh -NoProfile -File install/tests/test_install_stop.ps1
       - name: Compose files are valid
         run: |
           POSTGRES_PASSWORD=x JWT_SECRET_KEY=x docker compose -f docker-compose.prod.yml config -q

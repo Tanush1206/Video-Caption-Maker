@@ -10,6 +10,7 @@
 # VCM_VERSION, VCM_REGISTRY, VCM_BASE_URL, VCM_NO_OPEN (1).
 
 & {
+  try {
     # 'Continue', not 'Stop': on PowerShell 5.1 any stderr line from a native
 # command (docker prints progress there) becomes a terminating error under
 # 'Stop', even when redirected. Native exit codes are checked explicitly, and
@@ -241,4 +242,12 @@ $ErrorActionPreference = 'Continue'
     Info 'The first video also downloads the speech model (0.5-3 GB, once).'
     Info 'vcm start | stop | update | status | logs | uninstall'
     Write-Host ""
+  } catch {
+    # Fail has already said what is wrong and what to do; without this,
+    # PowerShell adds its own red error block under it (v1.4.1). Anything
+    # else is a real error and is shown. No `exit` when piped into iex: that
+    # would close the user's window.
+    if ("$_" -notlike 'Installation stopped:*') { throw }
+    if ($PSCommandPath) { exit 1 }
+  }
 }
