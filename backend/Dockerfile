@@ -14,7 +14,7 @@
 # Targets: `runtime` (what ships) and `dev` (adds the test tools; used by
 # docker-compose.yml with the source bind-mounted over /app).
 
-ARG PYTHON_IMAGE=python:3.11.15-slim-trixie
+ARG PYTHON_IMAGE=python:3.11.18-slim-trixie
 
 # ── deps: a virtualenv with exactly the pinned stack ─────────────────────────
 FROM ${PYTHON_IMAGE} AS deps
@@ -60,7 +60,15 @@ LABEL org.opencontainers.image.source="https://github.com/Tanush1206/Video-Capti
 # dependency, apt stops pulling it in. Noto Core is the fallback for
 # scripts the chosen caption font lacks (Devanagari, Arabic, Thai, Cyrillic…):
 # without it libass draws empty boxes.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+#
+# `apt-get upgrade` (v1.4.1, final audit D1): the base image is as old as its
+# last push, and this layer is cached from release to release, so Debian's
+# security fixes arrive only when it is rebuilt. Change APT_REFRESH to
+# rebuild it; every user then downloads the image in full once.
+ARG APT_REFRESH=2026-11-14
+RUN echo "packages as of ${APT_REFRESH}" \
+    && apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
         ffmpeg fonts-dejavu-core fonts-liberation fonts-noto-core fontconfig ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -88,20 +96,6 @@ ENV PATH=/opt/venv/bin:$PATH \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
     TOKENIZERS_PARALLELISM=false
-
-# HarfBuzz, the shaper libass uses, for measuring caption lines on the same
-# font files (services/caption_layout.py). Its own layer, not a line in
-# pyproject.toml: that file and constraints.txt feed the deps layer above, and
-# touching either rebuilds the whole virtualenv — every user would download
-# 0.8 GB (CPU) or 2.3 GB (CUDA) on update for one 2 MB wheel. Fold it into
-# pyproject.toml the next time the dependencies change anyway.
-RUN --mount=type=secret,id=extra_ca,required=false \
-    if [ -s /run/secrets/extra_ca ]; then \
-        cat /etc/ssl/certs/ca-certificates.crt /run/secrets/extra_ca > /tmp/ca.pem \
-        && export PIP_CERT=/tmp/ca.pem SSL_CERT_FILE=/tmp/ca.pem REQUESTS_CA_BUNDLE=/tmp/ca.pem; \
-    fi \
-    && PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 pip install --no-deps uharfbuzz==0.56.3 \
-    && rm -f /tmp/ca.pem
 
 COPY frontend/public/fonts/ /usr/share/fonts/truetype/vcm/
 RUN fc-cache -f

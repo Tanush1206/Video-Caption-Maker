@@ -46,6 +46,9 @@ dependencies = [
     # pins the axes and writes a genuine static cut, which both renderers then
     # read from the same file.
     "fonttools>=4.53.0",
+    # HarfBuzz, the shaper libass uses, for measuring caption lines on the
+    # same font files (services/caption_layout.py).
+    "uharfbuzz>=0.56.0",
 
     # Utilities
     "python-dotenv>=1.0.0",
