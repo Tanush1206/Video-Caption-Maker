@@ -269,10 +269,14 @@ function Failed({ video }: { video: Video }) {
  * it, or made before), a non-fatal notice from the job (e.g. a translation
  * fallback), or that no speech was found at all.
  */
-function CompletedNotes({ video, captionCount }: { video: Video; captionCount: number }) {
+function CompletedNotes({ video, captionCount }: { video: Video; captionCount: number | undefined }) {
   const { data: options } = useLanguageOptions();
   const heard = video.detected_language;
   const unsupported = heard !== null && options !== undefined && !isOfferedSpeech(heard, options) ? heard : null;
+  // Nothing until the captions have loaded (v1.4.1): with the count still
+  // unknown this said "No speech was found" on every video for a moment,
+  // then took it away and moved the page.
+  if (captionCount === undefined) return null;
   if (unsupported === null && !video.notice && captionCount > 0) return null;
   return (
     <div className="mx-auto mb-6 flex max-w-[880px] flex-col gap-2">
@@ -302,7 +306,7 @@ export function VideoStatus({
   captionCount,
 }: {
   video: Video;
-  captionCount: number;
+  captionCount: number | undefined;
   onEdit?: () => void;
 }) {
   if (video.status === "completed") return <CompletedNotes video={video} captionCount={captionCount} />;

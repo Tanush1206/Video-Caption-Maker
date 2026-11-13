@@ -202,7 +202,9 @@ function EditorWorkspace({ videoId }: { videoId: number }) {
       <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-8 [&:has(>*)]:pt-6">
         <VideoStatus
           video={video}
-          captionCount={captions.length}
+          // Not a count until the captions have arrived: "no captions yet"
+          // is not "no speech found" (v1.4.1).
+          captionCount={captionData ? captions.length : undefined}
           onEdit={() =>
             document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" })
           }

@@ -2177,6 +2177,72 @@ const CHECKS = {
     }
   },
 
+  // v1.4.1 (final audit D3): the editor of a video that has captions holds
+  // still while it loads. Until 1.4.0 it showed "No speech was found in this
+  // video." above the workspace until the captions arrived, then took it
+  // away: 0.15-0.20 of layout shift on a phone, and a wrong message. Under
+  // 0.1 ("good") at 375 and 1440 with every API answer 600 ms late; the
+  // message never appears; the nodes that moved are printed. Read-only.
+  async "editor-cls"(browser, base) {
+    for (const [width, theme] of [[375, "light"], [1440, "light"], [375, "dark"]]) {
+      const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
+      await context.addInitScript((t) => {
+        localStorage.setItem("vcm-theme", t);
+        window.__shifts = [];
+        window.__noSpeech = false;
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (entry.hadRecentInput) continue;
+            window.__shifts.push({
+              value: entry.value,
+              nodes: (entry.sources || []).map((s) => {
+                const n = s.node;
+                if (!n || !n.tagName) return "?";
+                return `${n.tagName.toLowerCase()}${n.id ? "#" + n.id : ""}.${String(n.className || "").split(" ").slice(0, 3).join(".")}`;
+              }),
+            });
+          }
+        }).observe({ type: "layout-shift", buffered: true });
+        // On `document`: an init script runs before there is a root element.
+        new MutationObserver(() => {
+          if (document.body && document.body.innerText.includes("No speech was found")) window.__noSpeech = true;
+        }).observe(document, { childList: true, subtree: true, characterData: true });
+      }, theme);
+      const page = await context.newPage();
+      const id = await editorVideo(page, base);
+      const captions = (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items;
+      if (!captions.length) throw new Error("needs a video with captions");
+      await page.route(/\/api\//, async (route) => {
+        await new Promise((r) => setTimeout(r, 600));
+        await route.fallback();
+      });
+      await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(2000);
+      const { shifts, noSpeech } = await page.evaluate(() => ({ shifts: window.__shifts, noSpeech: window.__noSpeech }));
+      const total = shifts.reduce((sum, s) => sum + s.value, 0);
+      const worst = shifts.sort((a, b) => b.value - a.value).slice(0, 2).map((s) => `${s.value.toFixed(3)} ${s.nodes.join(",")}`);
+      const at = `editor-cls@${width} (${theme})`;
+      ok(`${at}: ${total.toFixed(3)} of layout shift, under 0.1`, total < 0.1, worst.join(" | "));
+      ok(`${at}: "No speech was found" is never shown for a video with captions`, !noSpeech);
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await context.close();
+    }
+    // And it still is said when the captions arrive and there are none (the
+    // list answered empty here; nothing is changed).
+    const page = await browser.newPage();
+    const id = await editorVideo(page, base);
+    await page.route(new RegExp(`/api/videos/${id}/captions(\\?.*)?$`), async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const body = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...body, items: [], total: 0 } });
+    });
+    await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
+    ok("editor-cls: a video whose captions came back empty says no speech was found",
+      await page.getByText("No speech was found in this video.").isVisible().catch(() => false));
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.close();
+  },
+
   // v1.4.0: the pipeline shows the second listen ("Checking for missed
   // speech") and phrasing ("Arranging captions") as stages of their own,
   // each with its percentage, the earlier ones Done, the later ones waiting;
