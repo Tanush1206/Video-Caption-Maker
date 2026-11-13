@@ -22,7 +22,7 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | done 12 Nov: cold-load CLS 0.059-0.071 -> 0.000 (`checks.js cls`, <= 0.01) |
 | 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | done 12 Nov: least privilege, actions on Node 24, ubuntu-24.04 pinned, Dependabot, weekly-check.yml; ci, arm64 and the manual release run green |
 | 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | done 12 Nov: bash and PowerShell, redacted, tested in CI; bug and idea forms |
-| 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | |
+| 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | started 13 Nov (Tanush: now, not 22 Nov); written 14 Nov, no blocker; F1-F9 fixed for v1.4.1; waiting on D1-D3, F10, the weekly check's first run and the Mac rows |
 | 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 25 Nov | |
 
 Deferred to the ROADMAP by this plan: the Improve review mode; caption-list
@@ -43,6 +43,10 @@ Daily check:
   which reached end of life in April 2026; `vcm doctor`'s first lines said
   `VCM_VERSION=latest` (fixed for v1.4.1, 13b58d9); AGENTS.md still names
   v1.0.6 as the current release.
+- 13-14 Nov: ahead. The five older install backups deleted (Tanush; only
+  `…-backup-1.3.1` kept until the audit is closed). The final audit done
+  eight days early except the Mac rows: docs/FINAL_AUDIT.md. Nine fixes
+  committed for v1.4.1; four decisions and one workflow run are Tanush's.
 
 ## Decisions (Step 0, made by Tanush — 2026-10-07)
 
@@ -1922,6 +1926,78 @@ Started 2026-11-12, after v1.3.1's after-release checks.
   checks), 7732-7734 (the E2E run that was cut off), 7767-7770 (E2E GPU),
   7771 and 7772 (E2E CPU): all deleted through the API; 7426 (not mine)
   remains. The dev worker is back on the GPU.
+
+## Final deployment audit of v1.4.0 (13-14 Nov 2026; plan item 3)
+Brief (Tanush, 2026-11-13): start now instead of 22 Nov; docs/FINAL_AUDIT.md;
+leave the Mac rows open for his results; release the fixes as v1.4.1 at the
+end.
+
+- **Result:** no blocker. docs/FINAL_AUDIT.md has the evidence, each of the
+  launch audit's 40 findings with its state at v1.4.0, and 15 new entries:
+  F1-F10 (bugs and stale docs), D1-D3 (decisions), T1-T2 (only Tanush can
+  do).
+- **Fixed for v1.4.1, each with its test:**
+  - F1 `vcm doctor`'s version line (13b58d9);
+  - F2 a registry's one-off plain-HTTP answer is tried again (ea929d6);
+  - F3 a stopped Windows install ends with its own message, no red block
+    (302473e, `install/tests/test_install_stop.ps1`);
+  - F4 the app has an icon (35499df, `checks.js favicon`);
+  - F8 a Release's notes are its CHANGELOG section (5573c3b,
+    `scripts/release_notes.sh`, a CI step);
+  - F5-F7 and F9, docs: AGENTS.md's release line, `VCM_PULL_WAIT`, the
+    test count, two ROADMAP entries (f0cf359).
+- **Waiting on Tanush:**
+  - D1 image patching (73 + 23 fixable critical/high, none found
+    reachable): a maintenance release later (recommended), v1.4.1, or
+    accept;
+  - D2 Node 20 past end of life, 4 high npm advisories: Node 22 and `npm
+    audit fix` in v1.4.1 (recommended) or later;
+  - D3 the editor's layout shift on a phone, small targets, one label:
+    ROADMAP recommended;
+  - F10 an empty unnamed Redis volume after keep-data uninstall, reinstall,
+    `DELETE`: ROADMAP recommended;
+  - T1 run weekly-check once by hand (0 runs so far);
+  - T2 repository topics and the settings only he can see;
+  - the macOS rows (FINAL_AUDIT 2.3).
+- **Clean machine** (`vcm-clean`, a nested Docker with no images, the
+  README's command):
+  - the first run stopped at the image download on "server gave HTTP
+    response to HTTPS client" from Docker Hub (F2);
+  - the nested download was then too slow to finish, so the released
+    images were loaded from the host by digest (the host pulled the CPU
+    backend in 118 s);
+  - install 28 s; version 1.4.0, CPU, large-v3-turbo; only 127.0.0.1:3000;
+    non-root, no capabilities; `.env` 600;
+  - E2E: en_clip same, hi_clip same and en, with SRT, VTT, MP4: ALL
+    PASSED;
+  - `vcm doctor` clean; `vcm update` a no-op in 7 s (the first real
+    hand-over);
+  - uninstall keeping the data, reinstall (the video and its captions
+    back), uninstall with `DELETE`: nothing left but one unnamed volume
+    (F10).
+- **Scans:** Trivy 0.76.1 on `backend:1.4.0-cuda` and `frontend:1.4.0`;
+  gitleaks 8.30.1 on 554 commits (6 false positives); `npm audit`;
+  Lighthouse 12.8.2 on 8 app views and 3 site pages; axe 0 on the install
+  (with the editor) and the site; 36 outside links answer; API.md 53 of 53
+  routes; 24 migrations.
+- **Checks on the v1.4.1 commits so far:** installer tests ALL PASSED in
+  bash and Windows PowerShell 5.1 (pull, update, doctor, install stop);
+  shellcheck clean; frontend lint, types, tests (10), production build;
+  `checks.js favicon`, csp, frontend-guard; axe 0. The full release checks
+  run on the final commit, before the tag.
+- **Test data:** on the clean machine, videos 1-3, deleted through the API
+  (1 and 2 before the first uninstall, 3 before the second). Nothing was
+  created on the install (84, 220, 221) or on dev (7426).
+- **Removed by name:** container `vcm-clean` with its volume; images
+  `docker:29-dind`, `aquasec/trivy:0.76.1`, `zricethezav/gitleaks:v8.30.1`,
+  `backend:1.4.0-cpu`, and the frontend test builds; volume
+  `vcm-audit-trivy-cache`. Checked against the image list taken before the
+  release: nothing else was added or removed.
+- Outputs: `test-assets/results/v1.4.0/audit/` (Lighthouse and Trivy JSON,
+  logs), `test-assets/results/v1.4.1/`.
+- Docker restarted once more during the audit (the session ended); with
+  "Start Docker Desktop when you sign in" now on, both stacks came back by
+  themselves.
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
