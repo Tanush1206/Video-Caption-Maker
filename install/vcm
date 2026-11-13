@@ -39,7 +39,9 @@ compose() {
 # trying again fetches only what failed.
 PULL_TRIES=3
 TLS_TROUBLE='tls: |x509|certificate|decoding message|bad record mac'
-DROPPED='i/o timeout|connection reset|unexpected eof'
+# "HTTP response to HTTPS client" (v1.4.1): a registry answered once in plain
+# HTTP on a clean install and was fine seconds later.
+DROPPED='i/o timeout|connection reset|unexpected eof|HTTP response to HTTPS client'
 
 pull() {
     local log try=1

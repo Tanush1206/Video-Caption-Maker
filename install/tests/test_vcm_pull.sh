@@ -61,4 +61,9 @@ run 9 "no matching manifest for linux/arm64/v8 in the manifest list entries"
 check "a non-network failure is not tried again" "$( [ "$status" -ne 0 ] && [ "$calls" = 1 ] && echo yes)"
 check "and says nothing about antivirus" "$(grep -qi "antivirus" <<< "$out" || echo yes)"
 
+# v1.4.1: a registry answering once in plain HTTP (seen on a clean install,
+# gone seconds later) is a passing fault like a dropped connection.
+run 1 'failed to do request: Head "https://registry-1.docker.io/v2/chromadb/chroma/manifests/1.0.0": http: server gave HTTP response to HTTPS client'
+check "a plain-HTTP answer from the registry is tried again" "$( [ "$status" -eq 0 ] && [ "$calls" = 2 ] && echo yes)"
+
 [ $failures -eq 0 ] && echo "ALL PASSED" || { echo "$failures FAILED"; exit 1; }

@@ -56,7 +56,9 @@ function Invoke-Compose([string[]]$arguments) {
 # fetches only what failed.
 $PullTries = 3
 $TlsTrouble = 'tls: |x509|certificate|decoding message|bad record mac'
-$Dropped = 'i/o timeout|connection reset|unexpected eof'
+# "HTTP response to HTTPS client" (v1.4.1): a registry answered once in plain
+# HTTP on a clean install and was fine seconds later.
+$Dropped = 'i/o timeout|connection reset|unexpected eof|HTTP response to HTTPS client'
 
 function Invoke-Pull {
     $files = Get-ComposeFiles

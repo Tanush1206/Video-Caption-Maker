@@ -67,6 +67,11 @@ exit `$LASTEXITCODE
     Check 'a non-network failure is not tried again' ($r.Status -ne 0 -and $r.Calls -eq 1) $r
     Check 'and says nothing about antivirus' (-not ($r.Out -match 'antivirus')) $r
 
+    # v1.4.1: a registry answering once in plain HTTP (seen on a clean install,
+    # gone seconds later) is a passing fault like a dropped connection.
+    $r = Invoke-Vcm 1 'failed to do request: Head "https://registry-1.docker.io/v2/chromadb/chroma/manifests/1.0.0": http: server gave HTTP response to HTTPS client'
+    Check 'a plain-HTTP answer from the registry is tried again' ($r.Status -eq 0 -and $r.Calls -eq 2) $r
+
     if ($script:failures -eq 0) { Write-Host 'ALL PASSED' } else { Write-Host "$($script:failures) FAILED"; exit 1 }
 } finally {
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
