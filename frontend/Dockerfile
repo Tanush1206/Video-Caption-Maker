@@ -3,7 +3,7 @@
 # Targets: `runtime` (a standalone production server, what ships) and `dev`
 # (the Next dev server, used by docker-compose.yml with the source mounted).
 
-ARG NODE_IMAGE=node:20.20.2-alpine
+ARG NODE_IMAGE=node:22.23.5-alpine
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
