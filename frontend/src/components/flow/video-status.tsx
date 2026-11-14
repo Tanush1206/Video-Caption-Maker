@@ -273,18 +273,20 @@ function CompletedNotes({ video, captionCount }: { video: Video; captionCount: n
   const { data: options } = useLanguageOptions();
   const heard = video.detected_language;
   const unsupported = heard !== null && options !== undefined && !isOfferedSpeech(heard, options) ? heard : null;
-  // Nothing until the captions have loaded (v1.4.1): with the count still
-  // unknown this said "No speech was found" on every video for a moment,
-  // then took it away and moved the page.
-  if (captionCount === undefined) return null;
-  if (unsupported === null && !video.notice && captionCount > 0) return null;
+  // "No speech was found" waits for the captions (v1.4.1): with the count
+  // still unknown it was said on every video for a moment, then taken away,
+  // which moved the page. What the video itself says doesn't wait: held
+  // back too, a job's notice came in above a workspace already drawn
+  // whenever the captions answered late (0.12 of layout shift on a phone).
+  const empty = captionCount === 0;
+  if (unsupported === null && !video.notice && !empty) return null;
   return (
     <div className="mx-auto mb-6 flex max-w-[880px] flex-col gap-2">
-      {unsupported !== null && captionCount > 0 && (
+      {unsupported !== null && !empty && (
         <Notice tone="warning" title={unsupportedSpeech(languageName(unsupported, options), true)} />
       )}
-      {video.notice && captionCount > 0 && <Notice title={video.notice} />}
-      {captionCount === 0 && (
+      {video.notice && !empty && <Notice title={video.notice} />}
+      {empty && (
         // The job says "No speech was found in this video." since v1.0.11,
         // after anything else it had to say; older videos say nothing.
         <Notice title={video.notice ?? "No speech was found in this video."}>

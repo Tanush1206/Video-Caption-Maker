@@ -68,7 +68,9 @@ again.
   you to fix in the editor.
 - Opening a video no longer shows "No speech was found in this video" for a
   moment before its captions appear, which also made the page jump (most
-  on a phone).
+  on a phone). A note about the video, such as a translation made on this
+  computer because Gemini couldn't be used, shows at once and no longer
+  pushes the page down when it appears.
 - In the caption list, the time button and the row's tools are easier to
   hit (at least 24 px, as WCAG 2.2 asks), and the language buttons are
   announced by the text they show ("Caption language: हिन्दी Hindi").

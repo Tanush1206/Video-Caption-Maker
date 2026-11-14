@@ -460,6 +460,13 @@ layout and needs the UI checks at both widths.
   below. It now says so only when the captions have come back empty. Every
   API answer 600 ms late: 0.157 → 0.005 on a phone, 0.085 → 0.014 on a
   desktop (`checks.js editor-cls`, under 0.1).
+  The release checks then found the same shift on a video with a job notice
+  ("Gemini couldn't be used…"), 0.122 on a phone: that fix had held the
+  notice back with the rest, and when the captions answered late it came in
+  above a workspace already drawn. The notice now shows with the video;
+  only "No speech was found" waits. With the captions 1.2 s late: 0.121 →
+  0.000 on a phone, 0.058 → 0.000 on a desktop (`checks.js editor-cls`,
+  now with that case).
 - **Targets (`17decf5`).** The time button is 24 px tall and the row's
   tools are no longer covered by the text below; the row keeps its height.
   axe's `target-size` finds nothing in the editor.

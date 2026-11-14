@@ -2190,9 +2190,14 @@ const CHECKS = {
   // video." above the workspace until the captions arrived, then took it
   // away: 0.15-0.20 of layout shift on a phone, and a wrong message. Under
   // 0.1 ("good") at 375 and 1440 with every API answer 600 ms late; the
-  // message never appears; the nodes that moved are printed. Read-only.
+  // message never appears; the nodes that moved are printed. Also with a
+  // job notice on the video ("Gemini couldn't be used…"), answered here: it
+  // was held back with the rest until the captions came, 0.122 on a phone
+  // (found in v1.4.1's release checks). Read-only.
   async "editor-cls"(browser, base) {
-    for (const [width, theme] of [[375, "light"], [1440, "light"], [375, "dark"]]) {
+    // The translation fallback's own words (services/translation.py).
+    const NOTICE = "Gemini couldn't be used, so the captions were translated on this computer instead.";
+    for (const [width, theme, notice] of [[375, "light"], [1440, "light"], [375, "dark"], [375, "light", NOTICE], [1440, "light", NOTICE]]) {
       const context = await browser.newContext({ colorScheme: theme, viewport: { width, height: 900 } });
       await context.addInitScript((t) => {
         localStorage.setItem("vcm-theme", t);
@@ -2221,7 +2226,14 @@ const CHECKS = {
       const captions = (await (await page.request.get(`${base}/api/videos/${id}/captions`)).json()).items;
       if (!captions.length) throw new Error("needs a video with captions");
       await page.route(/\/api\//, async (route) => {
-        await new Promise((r) => setTimeout(r, 600));
+        // With a notice the captions come 1.2 s after the rest, as on a
+        // busy machine: the video, and its notice, are known well before.
+        const late = notice && new URL(route.request().url()).pathname === `/api/videos/${id}/captions`;
+        await new Promise((r) => setTimeout(r, late ? 1800 : 600));
+        if (route.request().method() === "GET" && new URL(route.request().url()).pathname === `/api/videos/${id}`) {
+          const video = await (await route.fetch()).json();
+          return route.fulfill({ json: { ...video, notice: notice ?? null } });
+        }
         await route.fallback();
       });
       await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
@@ -2229,8 +2241,9 @@ const CHECKS = {
       const { shifts, noSpeech } = await page.evaluate(() => ({ shifts: window.__shifts, noSpeech: window.__noSpeech }));
       const total = shifts.reduce((sum, s) => sum + s.value, 0);
       const worst = shifts.sort((a, b) => b.value - a.value).slice(0, 2).map((s) => `${s.value.toFixed(3)} ${s.nodes.join(",")}`);
-      const at = `editor-cls@${width} (${theme})`;
+      const at = `editor-cls@${width} (${theme}${notice ? ", with a notice" : ""})`;
       ok(`${at}: ${total.toFixed(3)} of layout shift, under 0.1`, total < 0.1, worst.join(" | "));
+      if (notice) ok(`${at}: the notice is shown`, await page.getByText(NOTICE).isVisible());
       ok(`${at}: "No speech was found" is never shown for a video with captions`, !noSpeech);
       await page.unrouteAll({ behavior: "ignoreErrors" });
       await context.close();
@@ -2243,6 +2256,12 @@ const CHECKS = {
       if (route.request().method() !== "GET") return route.fallback();
       const body = await (await route.fetch()).json();
       await route.fulfill({ json: { ...body, items: [], total: 0 } });
+    });
+    // Without a notice: a job's own notice stands in for the sentence.
+    await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const video = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...video, notice: null } });
     });
     await page.goto(`${base}/editor/${id}`, { waitUntil: "networkidle" });
     ok("editor-cls: a video whose captions came back empty says no speech was found",
