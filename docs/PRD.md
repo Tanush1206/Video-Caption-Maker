@@ -213,7 +213,10 @@ Install ──► Upload ──► Language ──► (processing) ──► Edi
   sound off only for a voiced/voiceless twin next to a clearly Hindi word
   ("block" -> "vlog"). Applied to the caption text, never given to the
   speech model, which measured worse in every language (D24). Latin words
-  only; up to 100 words of 40 characters.
+  only; up to 100 words of 40 characters. Used on new videos and on Redo;
+  Settings says so, and that it corrects spelling, not what the model hears
+  (v1.4.1): a word heard as a different one ("wife" for "vibe") is for the
+  editor or Improve with Gemini.
 - Other targets from Hinglish are translated from Devanagari: IndicXlit
   transliterates it first (138 MB, first use), because M2M100 can't read
   Roman Hinglish. English captions are still Whisper's own translation.

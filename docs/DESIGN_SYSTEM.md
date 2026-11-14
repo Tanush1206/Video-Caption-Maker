@@ -308,7 +308,10 @@ helper lines that used to sit under the timeline and the video.
   group with "Words, one per line" over a 5-line textarea, the count ("3 of
   100 words", red past the limit) and Save words (primary, active only when
   something changed); the footnote says how it is used, then Saved or the
-  server's reason as an alert.
+  server's reason as an alert. Two short paragraphs (v1.4.1), both
+  describing the textarea (`aria-describedby`): where the list is used (new
+  videos and Redo), and what it can't do (change what the speech model
+  hears).
 - **Export while Improve runs** (v1.3.1): a warning notice at the top of
   the export dialog, "Improve with Gemini is still checking these
   captions.", saying an export made now has the captions as they are.
