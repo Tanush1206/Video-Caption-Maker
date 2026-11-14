@@ -41,18 +41,35 @@ The original 10-milestone build plan is historical and lives in
   images, and it is served from the same place as the files it checks
   ([SECURITY.md §8](SECURITY.md#8-installer-checksum-verification-and-its-limits)).
 
-### Image patching, with a scan that stops a release
-- **What:** `apt-get upgrade` in the backend's runtime stage (or a newer
-  base image), newer Python constraints, no pip, setuptools or wheel (or
-  the unused Authlib) in the runtime, and a Trivy step in `release.yml`
-  that fails on a critical or high advisory that has a fix.
-- **Why:** the base layers are cached from release to release, which
-  keeps updates small and the packages old. At v1.4.0 Trivy counts 73
-  fixable critical or high advisories in Debian packages and 23 in Python
-  packages; none was found reachable
-  ([FINAL_AUDIT.md](FINAL_AUDIT.md) D1, launch audit S6).
-- **Cost:** every user downloads the backend in full once (0.8 GB CPU,
-  2.3 GB CUDA), and the GPU stack needs a full regression.
+### A scan that stops a release, and the advisories v1.4.1 left
+- **Done in v1.4.1:** the base image refreshed, Debian's fixes applied
+  (`APT_REFRESH` in `backend/Dockerfile` rebuilds that layer), and every
+  Python package whose fix was a patch or minor version outside the ML
+  core moved to it ([FINAL_AUDIT.md](FINAL_AUDIT.md) D1).
+- **What is left:**
+  - a Trivy step in `release.yml` that fails on a critical or high
+    advisory that has a fix, so the layer is refreshed when it needs to be
+    and not only when someone looks;
+  - the packages whose fix is a major version: filelock, oauthlib, pip,
+    and setuptools with the wheel and jaraco.context it carries
+    (setuptools is a CTranslate2 dependency); in the frontend, zod and the
+    postcss inside Next;
+  - Authlib, installed and never imported: remove it;
+  - chromadb's client package has no fixed version yet (its advisories
+    are in the server): move to it when one exists.
+- **Cost of each refresh:** every user downloads the backend in full once
+  (0.8 GB CPU, 2.3 GB CUDA), and the GPU stack needs a full regression.
+
+### An unnamed volume left after uninstalling twice
+- **What:** after `vcm uninstall` keeping the data, a reinstall, and then
+  `vcm uninstall` with `DELETE`, one empty unnamed volume remains: Redis's
+  `/data`, which the first uninstall orphaned
+  ([FINAL_AUDIT.md](FINAL_AUDIT.md) F10). A single `DELETE` uninstall
+  leaves nothing.
+- **How:** remove Redis with its volume in the keep-data path (`compose rm
+  -sfv redis`, in `vcm` and `vcm.ps1`), or mount `/data` as `tmpfs`.
+- **Tanush, 2026-11-14:** ROADMAP. The PowerShell uninstall can't be run
+  in a test without touching the machine's own PATH setting.
 
 ### A model mirror, and pinned Whisper repositories
 - **What:** pin the three Whisper repositories to a commit, as M2M100,

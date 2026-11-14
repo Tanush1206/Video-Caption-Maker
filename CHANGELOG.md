@@ -8,8 +8,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.4.1] - unreleased
 
-Fixes from the final audit of v1.4.0. No migration; the update downloads the
-app layers only.
+Fixes and security updates from the final audit of v1.4.0. No migration.
+**This update downloads the backend image in full once** (about 0.8 GB, or
+2.3 GB with an NVIDIA GPU): its operating-system packages and some Python
+packages were replaced with patched versions. Updates after it are small
+again.
+
+### Security
+- The backend image is rebuilt on a current Debian base with every
+  available package fix, and the Python packages that had a fix in a patch
+  or minor version (aiohttp, urllib3, certifi and others) are updated. The
+  speech and translation libraries are unchanged. None of the replaced
+  packages was found to be reachable in the app; this closes the list a
+  scanner reports.
+- Sign-in and link tokens are signed with PyJWT in place of python-jose,
+  which is no longer maintained and has an advisory that will get no fix.
+  Nothing changes for an install: the tokens are the same, and open pages
+  keep working through the update.
+- The frontend runs on Node 22 (Node 20 reached end of life in April 2026)
+  with Next.js 15.5.29 and the other fixes `npm audit` offers.
 
 ### Changed
 - A release's page on GitHub now shows what changed, taken from this file,
@@ -29,6 +46,12 @@ app layers only.
   adds a red error block under it.
 - The app has its icon in the browser tab, and no longer logs a missing
   "favicon.ico" on every page.
+- Opening a video no longer shows "No speech was found in this video" for a
+  moment before its captions appear, which also made the page jump (most
+  on a phone).
+- In the caption list, the time button and the row's tools are easier to
+  hit (at least 24 px, as WCAG 2.2 asks), and the language buttons are
+  announced by the text they show ("Caption language: हिन्दी Hindi").
 
 ## [1.4.0] - 2026-11-12
 

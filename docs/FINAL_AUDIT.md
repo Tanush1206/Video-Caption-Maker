@@ -39,7 +39,8 @@ rows in §2.3 are open.
 **No blocker was found.** v1.4.0 installs, updates, captions and exports as
 documented, on the GPU and on the CPU, on the updated install and on a
 clean machine. Nine findings are clear, small bugs or stale docs, fixed for
-v1.4.1. Four need a decision from Tanush.
+v1.4.1. Four needed a decision from Tanush, made on 14 Nov: three are done
+in v1.4.1 and one is on the ROADMAP.
 
 | ID | Area | Severity | Finding | Outcome |
 |---|---|---|---|---|
@@ -52,12 +53,12 @@ v1.4.1. Four need a decision from Tanush.
 | F7 | Docs | Low | TESTING.md still counts 351 backend tests (v1.0.5); there are 775 | fixed (`f0cf359`) |
 | F8 | Release | Low | A GitHub Release's notes are only a compare link; the CHANGELOG text is not on the Releases page | fixed for v1.4.1 (`5573c3b`) |
 | F9 | Release | Low | Open launch-audit items on no list (S6, M1's mirror) | on the ROADMAP (`f0cf359`) |
-| F10 | Install | Low | After a keep-data uninstall, a reinstall and a `DELETE` uninstall, one empty unnamed volume remains | **decision** (recommend ROADMAP) |
-| D1 | Security | Medium | Patch level (launch audit S6, never done): 73 fixable critical/high OS advisories and 23 in Python packages, none found reachable | **decision** |
-| D2 | Security | Medium | The frontend runs on Node 20, end of life since April 2026; 4 high npm advisories with fixes | **decision** |
-| D3 | Quality | Low | Editor: 0.15 layout shift on a phone, a 16 px tall time button, one label that differs from its name | **decision** (recommend ROADMAP) |
-| T1 | Release | Medium | The weekly check has never run (0 runs); its first schedule is Monday 16 Nov | Tanush: run it once by hand |
-| T2 | Release | Low | The repository has no topics; the GitHub settings of the launch audit §1.12 can't be read from outside | Tanush |
+| F10 | Install | Low | After a keep-data uninstall, a reinstall and a `DELETE` uninstall, one empty unnamed volume remains | on the ROADMAP (Tanush, 14 Nov) |
+| D1 | Security | Medium | Patch level (launch audit S6, never done): 73 fixable critical/high OS advisories and 23 in Python packages, none found reachable | done in v1.4.1, scoped (Tanush, 14 Nov): 0 fixable critical or high left in Debian packages, 7 high in Python packages that need a major version |
+| D2 | Security | Medium | The frontend runs on Node 20, end of life since April 2026; 4 high npm advisories with fixes | done in v1.4.1 (`7dd0fc0`): Node 22, `npm audit fix` |
+| D3 | Quality | Low | Editor: 0.15 layout shift on a phone, a 16 px tall time button, one label that differs from its name | fixed in v1.4.1 (`5a72dba`, `17decf5`) |
+| T1 | Release | Medium | The weekly check has never run (0 runs); its first schedule is Monday 16 Nov | run by hand on 14 Nov (Tanush): green |
+| T2 | Release | Low | The repository has no topics; the GitHub settings of the launch audit §1.12 can't be read from outside | done (Tanush, 14 Nov): topics added, settings checked |
 
 ## 1. The launch audit, finding by finding
 
@@ -68,7 +69,7 @@ v1.4.1. Four need a decision from Tanush.
 | S3 | Backend and worker ran as root | **Fixed** (v1.1.1). On the install: uid 10001, `CapEff 0`, `NoNewPrivs 1` |
 | S4 | No security headers, frameable | **Fixed** (v1.1.1). CSP, `X-Frame-Options: DENY`, nosniff, Referrer-Policy and Permissions-Policy served; `checks.js framing` passes |
 | S5 | emSign roots trusted | **Fixed** (v1.1.1) |
-| S6 | Patch level depends on releases | **Open**: see D1 |
+| S6 | Patch level depends on releases | Patched in v1.4.1 (D1); the scan that stops a release is on the ROADMAP |
 | S7 | Actions pinned to tags, wide permissions | **Fixed** (v1.1.1 SHAs; v1.4.0 least privilege, Dependabot) |
 | S8 | Criticals that don't apply here | Unchanged, still not reachable (python-jose, chromadb client, ecdsa, npm's own tar and minimatch) |
 | S9 | Service images behind on patches | Unchanged: Postgres 16.14 and Redis 7.4.10 pinned, ChromaDB 1.0.0; internal network only. Not rescanned |
@@ -202,6 +203,8 @@ the machine's own PATH setting.
 
 **Recommendation:** ROADMAP. A few kilobytes, after uninstalling twice.
 
+**Decided (Tanush, 14 Nov):** ROADMAP.
+
 ## 3. Core flows
 
 On the updated install, through the browser's address (so the request guard
@@ -233,7 +236,7 @@ Translation asking Flash-Lite first is on the ROADMAP.
 | Workflows | least privilege, actions pinned to commits, standard runners, one schedule |
 | Update | files checked against `SHA256SUMS` before anything runs or is replaced |
 
-### D1 · Medium · Patch level (launch audit S6, still open) — decision
+### D1 · Medium · Patch level (launch audit S6) — done in v1.4.1
 
 **Evidence (Trivy, `backend:1.4.0-cuda`, Debian 13.6):**
 
@@ -274,7 +277,65 @@ table, nothing new is reachable:
    2.3 GB one, days before the close.
 3. **Accept as is.**
 
-### D2 · Medium · Node 20 is past end of life — decision
+**Decided (Tanush, 14 Nov): in v1.4.1, scoped.** All fixable Debian
+packages; Python packages only where the fix is a patch or minor version
+and the package is not ML core (torch, CTranslate2, faster-whisper,
+transformers and what they need). Then: python-jose replaced if the swap is
+small.
+
+**Done:**
+- `a64a57b`: the base image is `python:3.11.18-slim-trixie` and the runtime
+  stage runs `apt-get upgrade` (`APT_REFRESH` rebuilds that layer). Moved
+  to their fixed versions: Authlib, Mako, aiohttp (with yarl and multidict),
+  certifi, dnspython, joserfc, pyasn1, urllib3 and the opentelemetry
+  packages.
+- `e0a43d6`: opentelemetry 1.45.2, released after the first pass and found
+  by the rescan.
+- `ba771e2`: **python-jose is replaced with PyJWT 2.15.1.** The app used it
+  in one file (`utils/security.py`) for HS256 tokens only. ecdsa and rsa,
+  installed only for it, are gone. Tokens are the same, so one issued
+  before the update is still accepted
+  (`tests/test_security_tokens.py`, 13 tests).
+- The speech and translation stack is unchanged: torch 2.13.0, CTranslate2
+  4.8.1, faster-whisper 1.2.1.
+
+**After (Trivy 0.76.1, the images built from `2ff7ca7`; the CUDA and CPU
+backends scan the same):**
+
+| | Critical | High | With a fix: critical | With a fix: high |
+|---|---|---|---|---|
+| Debian packages (13.7) | 1 | 285 | 0 | 0 |
+| Python packages | 2 | 9 | 0 | 7 |
+| Frontend, Alpine 3.24.4 | 0 | 0 | 0 | 0 |
+| Frontend, npm packages | 0 | 12 | 0 | 12 |
+
+The frontend's 12: 10 in npm's own packages, which the installed app never
+runs (launch audit S8), and 2 for the postcss inside Next (D2).
+
+**What is left in Python packages, and why none is reachable:**
+
+| Package | Advisories | Fix | Why it stays | Why it isn't reachable |
+|---|---|---|---|---|
+| chromadb 1.5.9 | 2 critical, 2 high: code injection before sign-in, and missing authorization checks | none exists | no fixed version | all four are in the ChromaDB **server**. The backend only uses the client (`chromadb.HttpClient`, `services/embeddings.py`). The server is its own container, reachable only inside the compose network, with no published port |
+| filelock 3.32.2 | 1 high (a lock's database file reopened unsafely), 9 medium | 4.2.1 | a major version, and an ML-core dependency (torch, huggingface_hub) | it locks files in the model cache while a model downloads. Exploiting it needs another local user writing in that folder; the container has one user and the cache is the app's own volume |
+| oauthlib 3.3.1 | 2 high (OAuth **server** grant handling, device-code check), 2 medium | 4.0.1 | a major version | never imported. It arrives through chromadb → kubernetes → requests-oauthlib; the app runs no OAuth server and no Kubernetes client |
+| wheel 0.45.1 | 1 high (unpacking a malicious wheel file) | 0.46.2 | it is the copy inside setuptools 79, not a package of its own; the fix is setuptools 83, a major version, and setuptools is a CTranslate2 and torch dependency | only runs when a package is installed or built. Nothing is installed in a running install |
+| jaraco.context 5.3.0 | 1 high (path traversal in a malicious tar archive) | 6.1.0 | the same: inside setuptools | the same |
+| pip 24.0, setuptools 79.0.1 | medium only | pip 26, setuptools 83 | major versions | not run in the installed app |
+
+wheel and jaraco.context are each counted twice by the scanner (the
+system Python's setuptools and the app's), which makes the 7.
+
+**The one critical left in Debian packages** is libxml2 (a use-after-free
+on crafted XML), with no fix in Debian 13 yet. FFmpeg reads XML only in
+its DASH demuxer, which the v1.1.1 format allow-list removes (launch audit
+S6).
+
+**Still on the ROADMAP:** the Trivy step that stops a release, the major
+versions above, removing Authlib (installed, never imported), and dropping
+pip and setuptools from the runtime where CTranslate2 allows it.
+
+### D2 · Medium · Node 20 is past end of life — done in v1.4.1
 
 **Evidence:** the frontend image and CI use `node:20.20.2-alpine`; Node 20
 reached end of life in April 2026 and gets no security fixes. `npm audit`
@@ -289,6 +350,12 @@ own guard.
    60 MB in full), so the update stays small. Needs the frontend suite, the
    production build, the UI checks and one E2E.
 2. **With D1's maintenance release.**
+
+**Decided (Tanush, 14 Nov): in v1.4.1. Done (`7dd0fc0`):** the image and
+CI use `node:22.23.5-alpine`; `npm audit fix` moved Next to 15.5.29, nanoid
+and source-map-js to their fixed versions. Left: zod (the fix is v4) and
+the postcss inside Next (the fix is Next 16), both found unreachable at the
+launch audit, both on the ROADMAP.
 
 ### Not changed, noted
 
@@ -356,7 +423,7 @@ an error (launch audit P4). The site has `favicon.svg`.
 **Fixed (`35499df`):** the app serves the same icon (`app/icon.svg`);
 `checks.js favicon`.
 
-### D3 · Low · The editor's remaining audit failures — decision
+### D3 · Low · The editor's remaining audit failures — fixed in v1.4.1
 
 **Evidence (Lighthouse, video 84):**
 - on a phone, 0.150 of layout shift while the editor loads (`<main>`
@@ -371,6 +438,22 @@ an error (launch audit P4). The site has `favicon.svg`.
 
 **Recommendation:** ROADMAP. None blocks use; each changes the editor's
 layout and needs the UI checks at both widths.
+
+**Decided (Tanush, 14 Nov): fix the first three in v1.4.1.**
+- **Layout shift (`5a72dba`).** The cause: while the captions were still
+  loading, the editor showed "No speech was found in this video" above the
+  workspace and took it away when they arrived, which moved everything
+  below. It now says so only when the captions have come back empty. Every
+  API answer 600 ms late: 0.157 → 0.005 on a phone, 0.085 → 0.014 on a
+  desktop (`checks.js editor-cls`, under 0.1).
+- **Targets (`17decf5`).** The time button is 24 px tall and the row's
+  tools are no longer covered by the text below; the row keeps its height.
+  axe's `target-size` finds nothing in the editor.
+- **The name (`17decf5`).** The language buttons are named by what they
+  show: "Caption language: हिन्दी Hindi". axe's
+  `label-content-name-mismatch` finds nothing
+  (`checks.js editor-targets`).
+- The 11 px labels on a phone are unchanged.
 
 ## 7. Docs
 
@@ -412,8 +495,9 @@ in CI. v1.4.1's own Release is its first use.
 ### F9 · Low · Open items on no list
 
 Added to the ROADMAP (`f0cf359`): image patching with a Trivy gate (S6,
-D1), and a model mirror with pinned Whisper repositories (M1). D2, D3 and
-F10 follow once decided.
+D1), and a model mirror with pinned Whisper repositories (M1). After the
+decisions of 14 Nov the first became "a scan that stops a release, and the
+advisories v1.4.1 left", and F10 has its own entry.
 
 ### T1 · Medium · The weekly check has never run
 
@@ -425,6 +509,11 @@ inside the released image) or that a failure opens an issue.
 **For Tanush:** Actions → weekly-check → Run workflow, once. I'll read the
 result.
 
+**Done (14 Nov):** run 43488475910, started by hand, succeeded: all five
+steps passed against the released v1.4.0, and the job that opens an issue
+was skipped, as it should be when nothing fails. That job has still never
+run for real.
+
 ### T2 · Low · Settings only the owner can see
 
 - The repository has no topics (they help people find it).
@@ -434,11 +523,22 @@ result.
 - GitHub's community profile lists no CONTRIBUTING file or code of conduct.
   Optional for a one-maintainer project.
 
+**Done (Tanush, 14 Nov):** topics added and the security settings checked.
+
 ## 9. For v1.4.1
 
-- **In, all done and committed:** F1 to F9.
-- **Waiting on a decision:** D1, D2, D3, F10.
-- **For Tanush:** T1, T2, and the macOS rows in §2.3.
+- **In, all done and committed:** F1 to F9, D1 (scoped, with PyJWT in
+  place of python-jose), D2, D3.
+- **Checked on `2ff7ca7`:** backend 786 passed and 2 skipped, ruff clean;
+  frontend lint, types, 10 tests and the production build; installer tests
+  in bash and Windows PowerShell 5.1; screenshots at 375 and 1440 px in
+  both themes, axe 0 on the dashboard, search, settings and the editor;
+  `checks.js`, 176 checks passed; E2E on the GPU (Hindi, English, French,
+  with SRT, VTT and MP4) and on the CPU (4 cores): ALL PASSED.
+- **On the ROADMAP:** F10, and what D1 and D2 left.
+- **Done by Tanush:** T1, T2. **Open:** the macOS rows in §2.3.
+- **The update downloads the backend in full once** (0.8 GB CPU, 2.3 GB
+  CUDA); the CHANGELOG says so first.
 - **Before the tag:** the full release checks on the final commit, and
   1.4.1's date in the CHANGELOG (its Release notes are read from there).
 

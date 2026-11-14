@@ -22,7 +22,7 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 2c | Layout-shift (CLS) fix on dashboard and settings | 19 Nov | done 12 Nov: cold-load CLS 0.059-0.071 -> 0.000 (`checks.js cls`, <= 0.01) |
 | 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | done 12 Nov: least privilege, actions on Node 24, ubuntu-24.04 pinned, Dependabot, weekly-check.yml; ci, arm64 and the manual release run green |
 | 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | done 12 Nov: bash and PowerShell, redacted, tested in CI; bug and idea forms |
-| 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | started 13 Nov (Tanush: now, not 22 Nov); written 14 Nov, no blocker; F1-F9 fixed for v1.4.1; waiting on D1-D3, F10, the weekly check's first run and the Mac rows |
+| 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | started 13 Nov (Tanush: now, not 22 Nov); written 14 Nov, no blocker; F1-F9 fixed; decided 14 Nov: D1 (scoped), D2 and D3 in v1.4.1, F10 to the ROADMAP; weekly check run by hand, green; v1.4.1 in its release checks (section below); the Mac rows are open |
 | 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 25 Nov | |
 
 Deferred to the ROADMAP by this plan: the Improve review mode; caption-list
@@ -47,6 +47,10 @@ Daily check:
   `…-backup-1.3.1` kept until the audit is closed). The final audit done
   eight days early except the Mac rows: docs/FINAL_AUDIT.md. Nine fixes
   committed for v1.4.1; four decisions and one workflow run are Tanush's.
+- 14 Nov: ahead. Decisions made; D1-D3 built and committed the same day,
+  python-jose replaced with PyJWT. Two overnight builds were cut off:
+  the PC is shut down at night (about 1:30-3 am), so long runs are now
+  planned to finish by 1 am and this file is updated before each one.
 
 ## Decisions (Step 0, made by Tanush — 2026-10-07)
 
@@ -1998,6 +2002,96 @@ end.
 - Docker restarted once more during the audit (the session ended); with
   "Start Docker Desktop when you sign in" now on, both stacks came back by
   themselves.
+
+## v1.4.1 (in progress, 14 Nov 2026)
+Brief (Tanush, 2026-11-14): D1 scoped (all fixable Debian packages; Python
+packages only where the fix is a patch or minor version and the package is
+not ML core; record what's left and why; full E2E on GPU and CPU; the
+CHANGELOG says the backend downloads in full once). D2 Node 22 with `npm
+audit fix`. D3 the editor's layout shift on a phone (under 0.1), the 16 px
+time button (24 px), the label and name mismatch. F10 to the ROADMAP. Then:
+python-jose and ecdsa (no fix will come): remove if unused, PyJWT if only
+HS256, otherwise ROADMAP; the remaining 7 and chromadb recorded in
+FINAL_AUDIT.md with why they aren't reachable.
+
+**Second brief (Tanush, 2026-11-14, afternoon), in this order:**
+1. Mac results (M2 Air, 8 GB, macOS 27.0, v1.4.0) into FINAL_AUDIT 2.3,
+   the README and site macOS note and the CHANGELOG; "native macOS app
+   using Apple's GPU" on the ROADMAP.
+2. Speech lost under a sound effect (leo.mp4: 0:00.1-0:00.9, 0:27.8-0:29.7,
+   maybe 8:34-8:39): dump every stage, find the one that drops it, tell
+   him the cause in plain words before fixing, smallest fix, tests.
+3. Wrong words on leo.mp4: numbers (ours or Apex's?), custom vocabulary
+   not applied (Settings wording), a report on what Improve would fix.
+Then the release checks again on the final commit, the CHANGELOG dated,
+the push command. No push step before all of it is done.
+
+**Resume here after a shutdown** (kept current; the PC is shut down at
+night, about 1:30-3 am, so nothing long starts that can't finish by 1 am):
+- Commits on `main`, not pushed (origin/main = 59d714c):
+  - 5a72dba editor: no "No speech was found" while captions load (D3);
+  - 17decf5 24 px targets, the language button's name (D3);
+  - 7dd0fc0 Node 22.23.5, `npm audit fix` (D2);
+  - a64a57b Debian's fixes, Python patch and minor fixes (D1);
+  - e0a43d6 opentelemetry 1.45.2 (D1, found by the rescan);
+  - ba771e2 PyJWT instead of python-jose; ecdsa and rsa gone;
+  - 2ff7ca7 THIRD_PARTY_NOTICES.md regenerated;
+  - then the docs of this round.
+- Local backend builds use a copy of the Dockerfile with apt over HTTPS
+  (Quick Heal breaks plain-HTTP apt here), from the repo root:
+  `docker build -f test-assets/results/v1.4.1/localbuild/Dockerfile
+  --build-arg VARIANT=cuda --target runtime --build-arg VERSION=1.4.1
+  -t vcm-audit-backend:1.4.1-cuda .` and `--target dev
+  -t videocaptionmaker-backend:latest -t videocaptionmaker-worker:latest`.
+  The frontend runtime image: `docker build --build-context repo=.
+  -t vcm-audit-frontend:1.4.1 frontend`.
+- First brief, all done on 2ff7ca7 (14 Nov, 13:20):
+  1. [x] images rebuilt (CUDA, CPU, frontend) and scanned;
+  2. [x] ruff clean; backend suite 786 passed, 2 skipped (203 s);
+  3. [x] frontend lint, types, 10 tests, production build;
+  4. [x] UI checks on 3001: shoot 4 pages x 2 widths x 2 themes, axe 0
+     (dashboard, search, settings, editor), `checks.js` 176 passed (theme,
+     not-found, retry-small, editor-languages, language-step, hindi-script,
+     unsupported-speech, script-fonts, cls, pipeline-stages, favicon,
+     editor-cls, editor-targets);
+  5. [x] E2E GPU (large-v3, hinglish.mp4 same/en/hi/fr, SRT, VTT, MP4): ALL
+     PASSED (112, 42, 83, 521 s; fr fell back to local translation, Gemini
+     unreachable). E2E CPU (4 cores, large-v3-turbo, same/en): ALL PASSED
+     (149, 154 s). GPU worker restored;
+  6. [x] notices regenerated (2ff7ca7); `/licenses` in the CUDA, CPU and
+     frontend images has them (PyJWT in, python-jose out, Next 15.5.29);
+  7. [x] FINAL_AUDIT D1-D3, F10, T1, T2 and the leftover advisories;
+  8. [x] test videos deleted through the API: 7773 (editor checks),
+     7774-7777 (E2E GPU), 7778-7779 (E2E CPU); dev keeps 7426, the install
+     84, 220, 221. Both stacks healthy (3000: 1.4.0; 3001: dev).
+- Still to do after the second brief: all checks again on the final
+  commit; the CHANGELOG date; the audit images (`vcm-audit-backend:1.4.1-cuda`
+  and `-cpu`, `vcm-audit-frontend:1.4.1`, `aquasec/trivy:0.76.1`) and volume
+  `vcm-audit-trivy-cache` removed by name; push command; CI; tag command;
+  release checks, backup `…-backup-1.4.0`, update, after-release checklist.
+
+**Results:**
+- D3: editor layout shift on a phone 0.157 -> 0.005, desktop 0.085 ->
+  0.014 (`checks.js editor-cls`); time button 24 px, axe `target-size` and
+  `label-content-name-mismatch` clean (`checks.js editor-targets`).
+- D1, Trivy 0.76.1, fixable critical / high, CUDA and CPU the same:
+  Debian 4 / 69 -> 0 / 0; Python 2 / 21 -> 0 / 7. The 7: filelock 1,
+  oauthlib 2, and setuptools' own wheel and jaraco.context twice each, all
+  needing a major version. No fix exists: chromadb (2 critical, 2 high,
+  server-side). python-jose (1 critical) and ecdsa (1 high) are removed:
+  the app used python-jose in one file for HS256, now PyJWT 2.15.1, tokens
+  unchanged (`tests/test_security_tokens.py`, 13 tests; the one that
+  checks python-jose isn't loaded failed before).
+- D2: frontend image Alpine 7 high -> 0; left 12 high in npm packages (10
+  npm's own, never run; 2 postcss inside Next, needs Next 16).
+- Shutdowns: two overnight builds were cut off on 13-14 Nov (PC shut
+  down). A build with the wrong context (`backend` instead of the repo
+  root) failed once; rerun.
+- A stray `backend/C:` folder (two wheels from a `pip download` whose
+  path Git Bash rewrote) was mine and is removed; never tracked.
+- Outputs: `test-assets/results/v1.4.1/` (build logs, Trivy JSON for the
+  three images, `backend_suite.log`, `checks_a.log`, `e2e_gpu.log`,
+  `e2e_cpu.log`, `shots/`).
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
