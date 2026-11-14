@@ -4,6 +4,10 @@ Password hashing and JWT issuing/verification.
 bcrypt is used directly rather than through passlib: passlib 1.7.4 (its last
 release, 2020) probes its backend with an over-length test password, which
 bcrypt >= 5 rejects instead of truncating, breaking every hash call.
+
+Tokens are signed with PyJWT (v1.4.1). python-jose, used until then, is
+unmaintained and has an advisory with no fix; the tokens are the same HS256
+ones, so those issued before an update stay valid.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -11,7 +15,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
 
 from app.config import get_settings
 
@@ -146,7 +150,7 @@ def decode_token(token: str, expected_type: TokenType) -> dict[str, Any]:
     """
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise TokenError(str(exc)) from exc
 
     if payload.get("type") != expected_type:

@@ -38,7 +38,6 @@ cuda-toolkit==13.0.3.0
 distro==1.9.0
 dnspython==2.9.0
 durationpy==0.10
-ecdsa==0.19.2
 email-validator==2.3.0
 fastapi==0.141.1
 faster-whisper==1.2.1
@@ -92,6 +91,7 @@ packaging==26.3
 prompt_toolkit==3.0.53
 propcache==0.5.2
 protobuf==7.35.1
+PyJWT==2.15.1
 pyasn1==0.6.5
 pyasn1_modules==0.4.2
 pybase64==1.4.3
@@ -104,7 +104,6 @@ PyPika==0.51.1
 pyproject_hooks==1.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-python-jose==3.5.0
 python-multipart==0.0.32
 PyYAML==6.0.3
 redis==6.4.0
@@ -114,7 +113,6 @@ requests==2.34.2
 requests-oauthlib==2.0.0
 rich==15.0.0
 rpds-py==2026.6.3
-rsa==4.9.1
 safetensors==0.8.0
 scikit-learn==1.9.0
 scipy==1.17.1
