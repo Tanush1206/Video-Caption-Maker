@@ -2064,11 +2064,36 @@ night, about 1:30-3 am, so nothing long starts that can't finish by 1 am):
   8. [x] test videos deleted through the API: 7773 (editor checks),
      7774-7777 (E2E GPU), 7778-7779 (E2E CPU); dev keeps 7426, the install
      84, 220, 221. Both stacks healthy (3000: 1.4.0; 3001: dev).
-- Still to do after the second brief: all checks again on the final
-  commit; the CHANGELOG date; the audit images (`vcm-audit-backend:1.4.1-cuda`
-  and `-cpu`, `vcm-audit-frontend:1.4.1`, `aquasec/trivy:0.76.1`) and volume
-  `vcm-audit-trivy-cache` removed by name; push command; CI; tag command;
-  release checks, backup `…-backup-1.4.0`, update, after-release checklist.
+- Second brief, done and committed (14 Nov, 13:55):
+  1. [x] Mac results: FINAL_AUDIT 2.3, README, site, PRD, CHANGELOG, and
+     "a native macOS app using Apple's GPU" on the ROADMAP (4d8aa19,
+     941f7ee). Five rows he didn't run are marked "not run".
+  2. [x] Speech lost on leo.mp4: cause found per stretch (FINAL_AUDIT 10);
+     0:27 fixed (019d95f, loops collapsed before the re-check); the start
+     of the video and 8:34 are the model's and are on the ROADMAP.
+  3. [x] Wrong words: the numbers are Apex's own (ROADMAP); the install's
+     vocabulary is empty, Redo applies a list (checked on dev); Settings
+     wording (47a70f9); Improve report in FINAL_AUDIT 10.
+  4. [x] Docs and the CHANGELOG, dated 2026-11-14 (575d45c, da6b250).
+- **Next, in order:**
+  1. [ ] the release checks on the final commit:
+     `bash <scratchpad>/final_checks.sh` (ruff, backend suite, frontend
+     lint, types, tests and production build, installer tests, E2E GPU, UI
+     checks, E2E CPU; about 25 min; results in
+     `test-assets/results/v1.4.1/final/status.txt`). If it was cut off:
+     delete the videos it made (ids above 7783 on dev, never 7426), put the
+     GPU worker back (`VCM_VARIANT=cuda docker compose -f docker-compose.yml
+     -f docker-compose.gpu.yml -f test-assets/compose/dev-3001.yml up -d
+     backend worker`) and run it again;
+  2. [ ] delete the videos the checks made; remove by name the images
+     `vcm-audit-backend:1.4.1-cuda` and `-cpu`, `vcm-audit-frontend:1.4.1`,
+     `aquasec/trivy:0.76.1` and the volume `vcm-audit-trivy-cache`;
+  3. [ ] PROGRESS with the results; the push command to Tanush (trailer
+     check first); CI and arm64 green; the tag command on that hash;
+  4. [ ] after his tag: release checks, backup `…-backup-1.4.0`, update
+     (the backend downloads in full once), after-release checklist.
+- The PC was restarted between 13:55 and 17:49 on 14 Nov; nothing was
+  running and everything was committed.
 
 **Results:**
 - D3: editor layout shift on a phone 0.157 -> 0.005, desktop 0.085 ->
@@ -2091,7 +2116,27 @@ night, about 1:30-3 am, so nothing long starts that can't finish by 1 am):
   path Git Bash rewrote) was mine and is removed; never tracked.
 - Outputs: `test-assets/results/v1.4.1/` (build logs, Trivy JSON for the
   three images, `backend_suite.log`, `checks_a.log`, `e2e_gpu.log`,
-  `e2e_cpu.log`, `shots/`).
+  `e2e_cpu.log`, `shots/`); `leo/` (the stage dump `diag_before.txt`, the
+  targeted decodes `exp_apex.txt` and `exp_ref.txt`, before and after runs
+  of leo, new and hinglish, `before_after.md`); `runs/` (the real pipeline
+  after the fix, the Redo with a vocabulary, the Improve run); `final/`
+  (the release checks).
+- leo.mp4, measured 14 Nov:
+  - 0:27: "aaj" x25 collapsed after the re-check had run -> a 2.5 s hole.
+    After the fix 466 -> 468 captions, only 0:25-0:30 differs from the
+    install: "Jahan par main studio banata hoon." / "Yeh aaj Supprise tum
+    log de raha hoon main." / "Aaj uska tour kara.";
+  - hinglish.mp4 identical; truth scores unchanged (16.7% and 14.0%
+    strict); new.mp4 has no caption in 0:14-0:27 or 10:30-10:41;
+  - new.mp4's 8:07-9:45 differs from run to run with the old code too (3
+    runs each), so it measures nothing here;
+  - vocabulary on Redo: block -> vlog x3, Ladakh x7, Hyderabad x2,
+    Akrapovic x3, S 1000 RR; Improve (21 fixes, 31 refused, 6 batches on
+    Flash-Lite): 6 more of the 14 examples; 6 left.
+- Test videos, all deleted through the API: 7780-7783 (leo, new, new-5min,
+  hinglish; 7780 was also redone and improved). Dev keeps 7426; the dev
+  vocabulary is empty again, as it was. The install was only read
+  (`/api/system`, video 221's captions).
 
 ## v1.3.0 (planned)
 Added by Tanush, 2026-10-30. Not started.
