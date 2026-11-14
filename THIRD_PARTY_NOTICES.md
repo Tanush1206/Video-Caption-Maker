@@ -27,7 +27,7 @@ docker run --rm --entrypoint cat ghcr.io/tanush1206/video-caption-maker-backend:
 
 ## Source code for GPL and LGPL components (written offer)
 
-The backend images are built on Debian 13.6 and contain
+The backend images are built on Debian 13.7 and contain
 219 Debian source packages, several of them under the GPL or
 LGPL (FFmpeg among them, below). The frontend image is built on Alpine Linux,
 whose BusyBox and GCC runtime libraries are GPL or LGPL.
@@ -96,21 +96,22 @@ runtime libraries; the terms are in `/licenses/python/nvidia_*`.
 
 ## Python packages (backend images)
 
-142 packages in the CUDA image; the CPU image has the same list
+141 packages in the CUDA image; the CPU image has the same list
 without the NVIDIA ones. Python itself: PSF-2.0.
 
 | Package | Version | Licence |
 |---|---|---|
-| Authlib | 1.7.2 | BSD License |
+| Authlib | 1.9.1 | BSD License |
 | Jinja2 | 3.1.6 | BSD License |
-| Mako | 1.4.1 | MIT |
+| Mako | 1.4.2 | MIT |
 | MarkupSafe | 3.0.3 | BSD-3-Clause |
+| PyJWT | 2.15.1 | MIT |
 | PyPika | 0.51.1 | Apache Software License |
 | PyYAML | 6.0.3 | MIT License |
 | Pygments | 2.20.0 | BSD-2-Clause |
 | SQLAlchemy | 2.0.51 | MIT |
 | aiohappyeyeballs | 2.7.1 | Python Software Foundation License |
-| aiohttp | 3.14.3 | Apache-2.0 AND MIT |
+| aiohttp | 3.14.4 | Apache-2.0 AND MIT |
 | aiosignal | 1.4.0 | Apache Software License |
 | alembic | 1.19.0 | MIT |
 | amqp | 5.3.1 | BSD License |
@@ -124,7 +125,7 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | billiard | 4.2.4 | BSD License |
 | build | 1.5.0 | MIT |
 | celery | 5.6.3 | BSD-3-Clause |
-| certifi | 2026.7.22 | Mozilla Public License 2.0 (MPL 2.0) |
+| certifi | 2026.10.18 | Mozilla Public License 2.0 (MPL 2.0) |
 | cffi | 2.1.1 | MIT-0 |
 | charset-normalizer | 3.4.9 | MIT |
 | chromadb | 1.5.9 | Apache Software License |
@@ -135,9 +136,8 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | cryptography | 50.0.0 | Apache-2.0 OR BSD-3-Clause |
 | ctranslate2 | 4.8.1 | MIT |
 | distro | 1.9.0 | Apache Software License |
-| dnspython | 2.8.0 | ISC License (ISCL) |
+| dnspython | 2.9.0 | ISC |
 | durationpy | 0.10 | MIT |
-| ecdsa | 0.19.2 | MIT |
 | email-validator | 2.3.0 | The Unlicense (Unlicense) |
 | fastapi | 0.141.1 | MIT |
 | faster-whisper | 1.2.1 | MIT License |
@@ -160,7 +160,7 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | idna | 3.18 | BSD-3-Clause |
 | importlib_resources | 7.1.0 | Apache-2.0 |
 | joblib | 1.5.3 | BSD-3-Clause |
-| joserfc | 1.7.4 | BSD License |
+| joserfc | 1.7.6 | BSD License |
 | jsonschema | 4.26.0 | MIT |
 | jsonschema-specifications | 2025.9.1 | MIT |
 | kombu | 5.6.2 | BSD-3-Clause |
@@ -169,7 +169,7 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | mdurl | 0.1.2 | MIT License |
 | mmh3 | 5.2.1 | MIT License |
 | mpmath | 1.3.0 | BSD License |
-| multidict | 6.7.1 | Apache License 2.0 |
+| multidict | 6.9.1 | Apache License 2.0 |
 | narwhals | 2.24.0 | MIT |
 | networkx | 3.6.1 | BSD-3-Clause |
 | numpy | 2.4.6 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
@@ -178,12 +178,13 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | nvidia-cudnn-cu12 | 9.24.0.43 | LicenseRef-NVIDIA-Proprietary |
 | oauthlib | 3.3.1 | BSD-3-Clause |
 | onnxruntime | 1.28.0 | MIT License |
-| opentelemetry-api | 1.44.0 | Apache-2.0 |
-| opentelemetry-exporter-otlp-proto-common | 1.44.0 | Apache-2.0 |
-| opentelemetry-exporter-otlp-proto-grpc | 1.44.0 | Apache-2.0 |
-| opentelemetry-proto | 1.44.0 | Apache-2.0 |
-| opentelemetry-sdk | 1.44.0 | Apache-2.0 |
-| opentelemetry-semantic-conventions | 0.65b0 | Apache-2.0 |
+| opentelemetry-api | 1.45.2 | Apache-2.0 |
+| opentelemetry-exporter-otlp-common | 0.66b2 | Apache-2.0 |
+| opentelemetry-exporter-otlp-proto-common | 1.45.2 | Apache-2.0 |
+| opentelemetry-exporter-otlp-proto-grpc | 1.45.2 | Apache-2.0 |
+| opentelemetry-proto | 1.45.2 | Apache-2.0 |
+| opentelemetry-sdk | 1.45.2 | Apache-2.0 |
+| opentelemetry-semantic-conventions | 0.66b2 | Apache-2.0 |
 | orjson | 3.11.9 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | overrides | 7.7.0 | Apache License, Version 2.0 |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
@@ -191,7 +192,7 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | prompt_toolkit | 3.0.53 | BSD License |
 | propcache | 0.5.2 | Apache Software License |
 | protobuf | 7.35.1 | 3-Clause BSD License |
-| pyasn1 | 0.6.4 | BSD-2-Clause |
+| pyasn1 | 0.6.5 | BSD-2-Clause |
 | pyasn1_modules | 0.4.2 | BSD License |
 | pybase64 | 1.4.3 | BSD License |
 | pycparser | 3.0 | BSD-3-Clause |
@@ -201,7 +202,6 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | pyproject_hooks | 1.2.0 | MIT License |
 | python-dateutil | 2.9.0.post0 | BSD License; Apache Software License |
 | python-dotenv | 1.2.2 | BSD-3-Clause |
-| python-jose | 3.5.0 | MIT License |
 | python-multipart | 0.0.32 | Apache-2.0 |
 | redis | 6.4.0 | MIT |
 | referencing | 0.37.0 | MIT |
@@ -210,7 +210,6 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | requests-oauthlib | 2.0.0 | BSD License |
 | rich | 15.0.0 | MIT License |
 | rpds-py | 2026.6.3 | MIT |
-| rsa | 4.9.1 | Apache Software License |
 | safetensors | 0.8.0 | Apache Software License |
 | scikit-learn | 1.9.0 | BSD-3-Clause |
 | scipy | 1.17.1 | BSD License |
@@ -234,7 +233,7 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | tzdata | 2026.3 | Apache-2.0 |
 | tzlocal | 5.4.4 | MIT |
 | uharfbuzz | 0.56.3 | Apache License 2.0 |
-| urllib3 | 2.7.0 | MIT |
+| urllib3 | 2.8.0 | MIT |
 | uvicorn | 0.52.1 | BSD-3-Clause |
 | uvloop | 0.22.1 | Apache Software License; MIT License |
 | vine | 5.1.0 | BSD License |
@@ -242,7 +241,7 @@ without the NVIDIA ones. Python itself: PSF-2.0.
 | wcwidth | 0.8.2 | MIT |
 | websocket-client | 1.9.0 | Apache Software License |
 | websockets | 16.1.1 | BSD-3-Clause |
-| yarl | 1.24.5 | Apache-2.0 |
+| yarl | 1.25.1 | Apache-2.0 |
 
 Packages under the Mozilla Public License 2.0 (certifi, orjson, tqdm) are
 distributed unmodified; their source is on PyPI (`https://pypi.org/project/<name>/`).
@@ -254,7 +253,7 @@ the app's pages load.
 
 | Package | Version | Licence |
 |---|---|---|
-| @next/env | 15.5.28 | MIT |
+| @next/env | 15.5.29 | MIT |
 | @next/swc-linux-* (the image's Linux builds) | as installed | MIT |
 | @swc/helpers | 0.5.15 | Apache-2.0 |
 | @tanstack/query-core | 5.101.4 | MIT |
@@ -271,15 +270,15 @@ the app's pages load.
 | lucide-react | 0.408.0 | ISC |
 | motion-dom | 11.18.1 | MIT |
 | motion-utils | 11.18.1 | MIT |
-| nanoid | 3.3.17 | MIT |
-| next | 15.5.28 | MIT |
+| nanoid | 3.3.20 | MIT |
+| next | 15.5.29 | MIT |
 | picocolors | 1.1.1 | ISC |
 | postcss | 8.4.31 | MIT |
 | react | 19.2.9 | MIT |
 | react-dom | 19.2.9 | MIT |
 | scheduler | 0.27.0 | MIT |
 | semver | 7.8.5 | ISC |
-| source-map-js | 1.2.1 | BSD-3-Clause |
+| source-map-js | 1.2.2 | BSD-3-Clause |
 | styled-jsx | 5.1.6 | MIT |
 | tailwind-merge | 2.6.1 | MIT |
 | tslib | 2.8.1 | 0BSD |
