@@ -30,13 +30,20 @@ irm https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/i
 curl -fsSL https://github.com/Tanush1206/Video-Caption-Maker/releases/latest/download/install.sh | bash
 ```
 
-macOS hasn't been fully tested yet. It needs
-[Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)
-and runs on the CPU (no NVIDIA GPU on Macs). Since v1.4.0 the app's images
-are built for Apple silicon (M1–M4) too, so they run natively: no emulation,
-and no Rosetta setting to turn on. Updating an install made before v1.4.0
-on Apple silicon downloads the native images in full once (about 1 GB);
-updates after that are small again.
+macOS needs
+[Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/).
+Since v1.4.0 the app's images are built for Apple silicon (M1–M4) too, so
+they run natively: no emulation, and no Rosetta setting to turn on.
+Updating an install made before v1.4.0 on Apple silicon downloads the
+native images in full once (about 1 GB); updates after that are small
+again.
+
+**On a Mac everything runs on the CPU.** Docker can't use Apple's GPU, so
+a Mac is much slower than a PC with an NVIDIA GPU. Measured with v1.4.0 on
+a MacBook Air M2 with 8 GB of RAM, for a video of 3 minutes 48 seconds:
+about 7 minutes from upload to captions, and 2 to 2.5 minutes to export
+the MP4 (12–13 and about 7 minutes before v1.4.0, under emulation). The
+same transcription takes under a minute on a PC with an RTX 5080.
 
 **Linux**
 
@@ -223,11 +230,15 @@ instead.
 
 ## Known limitations
 
-- **macOS isn't fully tested.** On a Mac everything runs on the CPU;
-  NVIDIA GPUs are Windows and Linux only. Since v1.4.0 the images are built
-  for Intel/AMD and ARM, so Apple silicon (M1–M4) and ARM Linux run them
-  natively. The ARM build is installed and run in CI on GitHub's ARM Linux
-  machines, not yet on a Mac.
+- **A Mac is slow, and tested on one machine.** On a Mac everything runs
+  on the CPU: Docker can't use Apple's GPU, and NVIDIA GPUs are Windows
+  and Linux only. A MacBook Air M2 (8 GB) takes about 7 minutes to caption
+  a video of 3 minutes 48 seconds; a PC with an NVIDIA GPU does it in
+  under a minute. Since v1.4.0 the images are built for Intel/AMD and ARM,
+  so Apple silicon (M1–M4) and ARM Linux run them natively. Installing,
+  captioning and exporting are tested by hand on that MacBook Air; the ARM
+  build is installed and run in CI on GitHub's ARM Linux machines, not on
+  a Mac.
 - **Languages:** English, Hindi (as Hinglish in Roman letters or in
   Devanagari), Spanish, Portuguese, Italian, Russian, French, German and
   Dutch, spoken and as captions. Measured on Google's FLEURS speech set,

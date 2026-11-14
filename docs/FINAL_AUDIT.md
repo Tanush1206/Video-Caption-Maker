@@ -31,8 +31,8 @@ Playwright with axe-core, `scripts/e2e.py`, `scripts/ui-check`. The scanners
 ran from their Docker images. Outputs are in
 `test-assets/results/v1.4.0/audit/` and `…/release/` (not in git).
 
-**Not covered here:** macOS. Tanush tests v1.4.0 on an M2 MacBook Air; its
-rows in §2.3 are open.
+**macOS:** tested by Tanush on an M2 MacBook Air (§2.3); the rows he
+didn't note stay open.
 
 ## Summary
 
@@ -132,18 +132,32 @@ The three test videos were deleted through the API before the uninstalls;
 the machine, the scanners' images and the pulled CPU image were removed by
 name afterwards.
 
-### 2.3 macOS (Apple silicon): open, for Tanush's M2 MacBook Air
+### 2.3 macOS (Apple silicon)
+
+Tested by Tanush (reported 14 Nov) on a MacBook Air M2 with 8 GB of RAM,
+macOS 27.0, v1.4.0. "Not noted" is a row he ran without writing the detail
+down; "not run" was not part of his test.
 
 | Check | Result |
 |---|---|
-| The README's macOS command installs with no emulation note and no Rosetta question | |
-| `docker exec vcm-backend-1 uname -m` says `aarch64` (and the worker and frontend) | |
-| A short video is captioned and exported (SRT and MP4) | |
-| Time for a 4-minute video, against the amd64 CPU figures | |
-| `vcm doctor` writes its report; the version line is right | |
-| `docker exec vcm-backend-1 ls /licenses` lists the notices (the ARM image) | |
-| If the Mac had v1.3.1 or older: `vcm update` downloads the images in full once, then runs natively | |
-| `vcm uninstall`, keeping the data | |
+| The README's macOS command installs without `DOCKER_DEFAULT_PLATFORM` | worked. What the installer printed about running natively: not noted |
+| `docker exec vcm-backend-1 uname -m` says `aarch64` (and the worker and frontend) | not run |
+| A video is captioned and exported | yes: hinglish.mp4 (3:48), captions and an MP4 |
+| Speech model in use | not noted (a machine under 12 GB of RAM gets `small`) |
+| Time from upload to captions, hinglish.mp4 (3:48) | **about 7 min** (12-13 min under emulation on v1.2.x) |
+| MP4 export of the same video | **2-2.5 min** (about 7 min under emulation); file size not noted |
+| The same transcription on the PC with the RTX 5080 | under a minute |
+| `vcm doctor` writes its report; the version line is right | not run |
+| `docker exec vcm-backend-1 ls /licenses` lists the notices (the ARM image) | not run |
+| If the Mac had v1.3.1 or older: `vcm update` downloads the images in full once, then runs natively | not run |
+| `vcm uninstall`, keeping the data | not run |
+
+**Reading:** running natively is a little under twice as fast for
+captions and about three times as fast for the export. It is still the
+CPU: Docker on a Mac can't use Apple's GPU, so a PC with an NVIDIA GPU is
+many times faster. The README, the site and the CHANGELOG now say so with
+these numbers, and "a native macOS app using Apple's GPU" is on the
+ROADMAP.
 
 ### F1 · Low · `vcm doctor` didn't say which version was running
 
@@ -536,7 +550,8 @@ run for real.
   `checks.js`, 176 checks passed; E2E on the GPU (Hindi, English, French,
   with SRT, VTT and MP4) and on the CPU (4 cores): ALL PASSED.
 - **On the ROADMAP:** F10, and what D1 and D2 left.
-- **Done by Tanush:** T1, T2. **Open:** the macOS rows in §2.3.
+- **Done by Tanush:** T1, T2, and the macOS test (§2.3; five rows not
+  run).
 - **The update downloads the backend in full once** (0.8 GB CPU, 2.3 GB
   CUDA); the CHANGELOG says so first.
 - **Before the tag:** the full release checks on the final commit, and

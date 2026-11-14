@@ -97,7 +97,7 @@
         </div>
 
         <p class="note os-windows">Paste it into PowerShell. You need <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>, which is free, running first.</p>
-        <p class="note os-macos">Paste it into Terminal. macOS hasn't been fully tested yet. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a> and runs on the CPU (no NVIDIA GPU on Macs). On Apple silicon (M1–M4) the app runs natively: its images are built for ARM too, so there's no emulation and no Rosetta setting to turn on.</p>
+        <p class="note os-macos">Paste it into Terminal. It needs <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop for Mac</a>. On Apple silicon (M1–M4) the app runs natively: no emulation and no Rosetta setting to turn on. On a Mac everything runs on the CPU, because Docker can't use Apple's GPU: a MacBook Air M2 (8 GB) takes about 7 minutes to caption a video of 3 minutes 48 seconds and 2 to 2.5 minutes to export it. A PC with an NVIDIA GPU is many times faster (under a minute for the same captions).</p>
         <p class="note os-linux">Paste it into a terminal. You need <a href="https://docs.docker.com/get-docker/">Docker Engine</a>, which is free, running first.</p>
         <p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
       </div>
@@ -202,7 +202,7 @@
     <section class="wrap section" id="limitations" aria-labelledby="lim-title">
       <h2 id="lim-title">Known limitations</h2>
       <ul class="limits">
-        <li><strong>macOS isn't fully tested.</strong> The installer and images are built for Docker Desktop for Mac, natively for Apple silicon too, and the ARM build runs in our tests on ARM Linux, but not yet on a Mac. On a Mac everything runs on the CPU.</li>
+        <li><strong>A Mac is slow, and tested on one machine.</strong> On a Mac everything runs on the CPU, because Docker can't use Apple's GPU: about 7 minutes for a video of 3 minutes 48 seconds on a MacBook Air M2 (8 GB), against under a minute on a PC with an NVIDIA GPU. Installing, captioning and exporting are tested by hand on that MacBook Air; the ARM build also runs in our tests on ARM Linux.</li>
         <li><strong>Nine languages.</strong> Measured on Google's FLEURS speech set, the European languages are heard almost word for word (3–7% of words wrong on the large model), Hindi with more misspellings (26%). Speech in any other language gets a warning before anything is made.</li>
         <li><strong>Translation into Hindi</strong> is weaker than into the European languages with the local model; a Gemini key does much better.</li>
         <li><strong>The small speech model</strong>, chosen on machines under 12 GB of RAM, is rough on fast speech outside English. A larger model in Settings is much better, if the machine has the memory.</li>

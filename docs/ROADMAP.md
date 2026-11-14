@@ -258,6 +258,16 @@ The original 10-milestone build plan is historical and lives in
 - **Hosted (accounts) mode.** The code is kept and tested (`AUTH_MODE=accounts`
   with `NEXT_PUBLIC_AUTH_MODE=accounts`), but it is not an active direction and
   is not shipped. See [DECISIONS.md D2](DECISIONS.md#d2-local-mode-without-login).
-- **macOS testing.** macOS stays "untested" until a Mac is available.
+- **A native macOS app using Apple's GPU (outside Docker).** Docker on a
+  Mac runs Linux containers, which can't reach Apple's GPU, so on a Mac
+  every model runs on the CPU: about 7 minutes for a 3:48 video on a
+  MacBook Air M2 (8 GB) with v1.4.0, against under a minute on an RTX 5080
+  ([FINAL_AUDIT.md](FINAL_AUDIT.md) §2.3). Using the GPU means running the
+  speech and translation models outside Docker (Metal, through MLX, Core ML
+  or whisper.cpp), which is a second way to install, package and update
+  the app, and its own model formats. A project of its own, not a setting.
+  Tanush, 2026-11-14: ROADMAP.
+- **macOS in CI.** No Mac runs the installer in CI (GitHub's Apple silicon
+  runners can't run Docker); it is tested by hand on one MacBook Air.
 - **Prettier.** Not now: adopting it would reformat the whole frontend in one
   change.

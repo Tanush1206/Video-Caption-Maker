@@ -39,7 +39,7 @@ captions and translation on their own computer, **especially Hindi ↔ English**
 In practice that means:
 
 - **A single person on their own computer**: Windows 10/11 with WSL 2, Linux,
-  or (untested) macOS, with Docker installed. Local mode has exactly one user
+  or macOS (tested by hand on one MacBook Air), with Docker installed. Local mode has exactly one user
   (`get_or_create_local_user`, `backend/app/services/auth.py`).
 - **People who speak, and need captions in, English, Hindi, French, German, Dutch, Spanish, Portuguese, Italian or Russian**: the nine languages in
   `backend/app/services/languages.py` (v1.0.11; thirteen from v1.0.7, five
@@ -617,13 +617,17 @@ What the code deliberately does not do:
 
 From the README "Known limitations" and PROGRESS.md:
 
-- **macOS isn't fully tested.** It is installed by hand on an M2 MacBook Air
-  (v1.2.1, and each release that changes it); there is no Mac in CI, which
-  installs and runs the ARM build on ARM Linux. On a Mac everything
-  runs on the CPU. Since v1.4.0 Apple silicon runs the app natively (ARM
-  images); before, it ran the amd64 images emulated, which was slow. An
-  install from before v1.4.0 downloads the images in full once on its first
-  update.
+- **A Mac is slow, and tested on one machine.** It is installed by hand on
+  an M2 MacBook Air (v1.2.1, and each release that changes it); there is no
+  Mac in CI, which installs and runs the ARM build on ARM Linux. On a Mac
+  everything runs on the CPU: Docker can't use Apple's GPU. Since v1.4.0
+  Apple silicon runs the app natively (ARM images); before, it ran the
+  amd64 images emulated. Measured on that MacBook Air (8 GB, macOS 27.0,
+  v1.4.0, a video of 3:48): about 7 min to captions and 2-2.5 min to export
+  the MP4, against 12-13 and about 7 min emulated, and under a minute for
+  the same transcription on an RTX 5080
+  ([FINAL_AUDIT.md](FINAL_AUDIT.md) §2.3). An install from before v1.4.0
+  downloads the images in full once on its first update.
 - **How well speech is heard depends on the language** (large-v3, FLEURS,
   [LANGUAGE_QUALITY.md](LANGUAGE_QUALITY.md)): Spanish, Portuguese, Italian,
   Russian, French, German and Dutch 3-7% word error; English 6% (59% before
@@ -723,5 +727,5 @@ to list:
 | Who is the product for? | Individual creators, students and small teams who want private, offline captions and translation, especially Hindi ↔ English (§3). |
 | More caption languages? | Out of scope for now; possible in future ([ROADMAP.md](ROADMAP.md)). |
 | Hindi/French/German/Dutch disabled in the editor's Redo without an env key | A bug, fixed in v1.0.5: all five are offered offline, as on the language step. `translation_available` is always true. |
-| macOS | Stays "untested" (no Mac available). |
+| macOS | Tested by hand on an M2 MacBook Air (v1.4.0, FINAL_AUDIT §2.3); no Mac in CI. |
 | Accounts mode | Not an active direction; kept and documented as an optional future hosted mode. |
