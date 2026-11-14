@@ -29,6 +29,14 @@ again.
   with Next.js 15.5.29 and the other fixes `npm audit` offers.
 
 ### Changed
+- **macOS, measured.** v1.4.0's native Apple silicon images were tested on
+  a MacBook Air M2 (8 GB): a video of 3 minutes 48 seconds takes about 7
+  minutes from upload to captions and 2 to 2.5 minutes to export as MP4
+  (12–13 and about 7 minutes before, under emulation). The README and the
+  site now say this plainly, and that on a Mac everything runs on the CPU:
+  Docker can't use Apple's GPU, so a PC with an NVIDIA GPU is still many
+  times faster (under a minute for the same transcription). Nothing in the
+  app changed for this.
 - A release's page on GitHub now shows what changed, taken from this file,
   above the link that compares it with the previous release.
 

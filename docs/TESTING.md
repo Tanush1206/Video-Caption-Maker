@@ -708,4 +708,4 @@ questions:
 | Backend suite in CI | Done in v1.0.5, with ruff. |
 | Tests shared the dev database | Fixed in v1.0.5: isolated `_test` database, Redis db, collection and storage. |
 | Low-RAM recipe | Recorded (§4). |
-| macOS | Stays untested until a Mac is available. |
+| macOS | Tested by hand on an M2 MacBook Air (v1.4.0, FINAL_AUDIT §2.3); no Mac in CI. |
