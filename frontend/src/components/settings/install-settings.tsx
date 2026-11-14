@@ -367,10 +367,17 @@ function VocabularySection({ info }: { info: SystemInfo }) {
       title="Custom vocabulary"
       footnote={
         <>
-          <p>
-            Names, brands and words like &ldquo;vlog&rdquo;, spelled the way you want them. When captions are made, a
-            word that sounds like one of these takes its spelling: &ldquo;laddaakh&rdquo; becomes &ldquo;Ladakh&rdquo;.
-            Captions already made change only when you redo them.
+          <p id="vocabulary-applies">
+            Names, brands and words like &ldquo;vlog&rdquo;, spelled the way you want them. The list is used on new
+            videos and when you redo a video&rsquo;s captions. Captions already made stay as they are until you redo
+            them.
+          </p>
+          {/* v1.4.1: what it can't do, said where the list is kept. */}
+          <p id="vocabulary-limits" className="mt-1">
+            It corrects spelling in the caption text: a word that sounds like one of these takes its spelling, so
+            &ldquo;laddaakh&rdquo; becomes &ldquo;Ladakh&rdquo;. It doesn&rsquo;t change what the speech model hears. A
+            word heard as a different one (&ldquo;wife&rdquo; for &ldquo;vibe&rdquo;) stays, and you fix it in the
+            editor.
           </p>
           {update.isSuccess && !changed && (
             <div className="mt-1 flex min-h-5 items-center">
@@ -399,7 +406,7 @@ function VocabularySection({ info }: { info: SystemInfo }) {
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder={"vlog\nAkrapovic\nLadakh…"}
-          aria-describedby="vocabulary-count"
+          aria-describedby="vocabulary-count vocabulary-applies vocabulary-limits"
           aria-invalid={tooMany || undefined}
           className={cn(inputClasses, "h-auto resize-y py-2 leading-6 sm:h-auto")}
         />

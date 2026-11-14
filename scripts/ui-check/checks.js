@@ -850,8 +850,10 @@ const CHECKS = {
   // Settings' custom vocabulary (v1.3.1): the count follows the text; a
   // repeat is dropped on save and the list survives a reload; a word with
   // characters a word can't have shows the server's reason; over the limit
-  // Save is disabled; fits at 375; axe 0, light and dark. Changes the
-  // install's word list and puts back what was there.
+  // Save is disabled; fits at 375; axe 0, light and dark. The note says
+  // where the list is used (new videos and Redo) and what it can't do (change
+  // what the model hears), and the box is described by it (v1.4.1). Changes
+  // the install's word list and puts back what was there.
   async vocabulary(browser, base) {
     const { AxeBuilder } = require("@axe-core/playwright");
     const api = await browser.newPage();
@@ -870,6 +872,12 @@ const CHECKS = {
         const save = page.getByRole("button", { name: "Save words" });
         await box.scrollIntoViewIfNeeded();
         ok(`${at}: empty, nothing to save`, (await box.inputValue()) === "" && (await save.isDisabled()));
+        const described = await box.evaluate((el) =>
+          (el.getAttribute("aria-describedby") || "").split(" ").map((id) => document.getElementById(id)?.textContent || "").join(" ").replace(/\s+/g, " "));
+        ok(`${at}: says it is used on new videos and on Redo`,
+          described.includes("used on new videos and when you redo a video’s captions"), described.slice(0, 200));
+        ok(`${at}: says it fixes spelling, not what the model hears`,
+          described.includes("corrects spelling in the caption text") && described.includes("doesn’t change what the speech model hears"), described.slice(0, 400));
         // Five lines tall at every width: the shared input height once held it to one from sm up.
         ok(`${at}: shows several lines`, (await box.boundingBox()).height >= 100, `${(await box.boundingBox()).height}px`);
         await box.fill(lines("vlog", "Akrapovic", "VLOG", "Ladakh"));
