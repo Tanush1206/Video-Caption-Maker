@@ -3,7 +3,32 @@
 Resume rule: re-read this file, take the first open item in the backlog
 (MAJOR → UI → MINOR), and continue the loop described in the task brief.
 
+## SCHEDULE AND HOW TO WORK (Tanush, 2026-11-14; scope frozen)
+
+| What | By | Status |
+|---|---|---|
+| v1.4.1 items done and checked | Mon 16 Nov | done 14 Nov: release checks on 1586b66, one UI failure fixed in 68ea10d (results in "v1.4.1" below) |
+| v1.4.1 released (his push and tag; then release checks, backup, update, after-release checklist) | Tue 17 Nov | waiting for his push |
+| Project close: docs/PROJECT_SUMMARY.md, final ROADMAP and PROGRESS, cleanup of the dev stack and test files | Fri 20 Nov | |
+| Hard end | 25 Nov | |
+
+- **Resume from here:** the "Resume here after a shutdown" block in the
+  "v1.4.1" section below says what is committed, what is running and the
+  next command.
+- **Chunks.** His Claude usage can run out after 1-2 hours and resets
+  after about 5; the PC is shut down at night (about 1:30-3 am). Before
+  anything long, this file gets the current state and the next step.
+  Nothing long starts that can't finish by 1 am.
+- **Full checks once.** The full suites, E2E on GPU and CPU and the UI
+  checks run once, on the final commit before the tag. While fixing, only
+  the tests for what changed.
+- **Speech lost under a sound effect:** if a fix isn't small and safe by
+  Mon 16 Nov evening, record the cause and move it to the ROADMAP. Status:
+  the 0:27 case is fixed (small: loops collapsed before the re-check); the
+  start-of-video and 8:34 cases are the model's and are on the ROADMAP.
+
 ## PLAN TO FINISH — deadline 25 November 2026 (set by Tanush, 2026-11-12)
+Superseded for the dates by the schedule above (14 Nov); kept for the record.
 Scope is frozen: nothing beyond this list. Checked against every working day;
 a date that slips is reported as soon as it is seen, not on the day.
 
@@ -23,7 +48,7 @@ a date that slips is reported as soon as it is seen, not on the day.
 | 2d | S7 workflow permissions and the weekly health-check workflow | 20 Nov | done 12 Nov: least privilege, actions on Node 24, ubuntu-24.04 pinned, Dependabot, weekly-check.yml; ci, arm64 and the manual release run green |
 | 2e | `vcm doctor` and a GitHub issue template asking for its output | 20 Nov | done 12 Nov: bash and PowerShell, redacted, tested in CI; bug and idea forms |
 | 3 | **Final deployment audit** on released v1.4.0 as a fresh user: docs/FINAL_AUDIT.md (install, core flows, security, legal, quality, docs, release hygiene); blockers and clear bugs only, as v1.4.1 if needed | 22-24 Nov | started 13 Nov (Tanush: now, not 22 Nov); written 14 Nov, no blocker; F1-F9 fixed; decided 14 Nov: D1 (scoped), D2 and D3 in v1.4.1, F10 to the ROADMAP; weekly check run by hand, green; v1.4.1 in its release checks (section below); the Mac rows are open |
-| 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 25 Nov | |
+| 4 | **Project close:** final PROGRESS and ROADMAP, docs/PROJECT_SUMMARY.md, dev stack and test files cleaned up | 20 Nov (was 25 Nov) | |
 
 Deferred to the ROADMAP by this plan: the Improve review mode; caption-list
 virtualisation and long-video phrasing speed (unless time is left after 2e).
@@ -2075,23 +2100,47 @@ night, about 1:30-3 am, so nothing long starts that can't finish by 1 am):
      vocabulary is empty, Redo applies a list (checked on dev); Settings
      wording (47a70f9); Improve report in FINAL_AUDIT 10.
   4. [x] Docs and the CHANGELOG, dated 2026-11-14 (575d45c, da6b250).
+- **Release checks** (14 Nov, 17:50-18:21, on 1586b66, once, as Tanush
+  asked; `test-assets/results/v1.4.1/final/`):
+  - ruff clean; backend 788 passed, 2 skipped (220 s);
+  - frontend lint, types, 10 tests, production build;
+  - installer tests ALL PASSED: doctor, pull, update in bash and Windows
+    PowerShell 5.1, install stop;
+  - E2E GPU (large-v3, hinglish.mp4 same/en/hi/fr, SRT, VTT, MP4): ALL
+    PASSED (100, 46, 100, 219 s; fr fell back to local translation, Gemini
+    unreachable);
+  - UI: shoot 4 pages x 2 widths x 2 themes; axe 0 (dashboard, search,
+    settings, editor); `checks.js` 203 passed, **3 failed**: `editor-cls`
+    at 375 light and dark (0.122) and its empty-captions case;
+  - E2E CPU (4 cores, large-v3-turbo, same/en): ALL PASSED (136, 198 s);
+    GPU worker restored.
+- **The failure, fixed in 68ea10d:** the editor-cls check ran on 7787,
+  the French E2E video, which has the translation-fallback notice. My D3
+  fix (5a72dba) held every note back until the captions loaded; on a
+  loaded machine the captions came late and the notice then came in above
+  a drawn workspace. The empty-captions case failed because a notice
+  stands in for "No speech was found" (by design). Now only "No speech was
+  found" waits. The check covers it (the real notice, captions 1.2 s
+  late): 0.121 -> 0.000 phone, 0.058 -> 0.000 desktop; failed before the
+  fix. After it: lint, types, production build, `checks.js` editor-cls,
+  editor-targets, unsupported-speech, hindi-script (93 of 93 on 7786 and
+  7787), axe 0 on both editors. Not run again: the backend suite, E2E and
+  the installer tests (nothing they test changed since 1586b66).
+- Test videos, deleted through the API: 7784-7787 (E2E GPU), 7788-7789
+  (E2E CPU). Dev keeps 7426; the install 84, 220, 221. Removed by name:
+  images `vcm-audit-backend:1.4.1-cuda` and `-cpu`,
+  `vcm-audit-frontend:1.4.1`, `aquasec/trivy:0.76.1`; volume
+  `vcm-audit-trivy-cache`. Both stacks healthy (3000: 1.4.0; 3001: dev).
 - **Next, in order:**
-  1. [ ] the release checks on the final commit:
-     `bash <scratchpad>/final_checks.sh` (ruff, backend suite, frontend
-     lint, types, tests and production build, installer tests, E2E GPU, UI
-     checks, E2E CPU; about 25 min; results in
-     `test-assets/results/v1.4.1/final/status.txt`). If it was cut off:
-     delete the videos it made (ids above 7783 on dev, never 7426), put the
-     GPU worker back (`VCM_VARIANT=cuda docker compose -f docker-compose.yml
-     -f docker-compose.gpu.yml -f test-assets/compose/dev-3001.yml up -d
-     backend worker`) and run it again;
-  2. [ ] delete the videos the checks made; remove by name the images
-     `vcm-audit-backend:1.4.1-cuda` and `-cpu`, `vcm-audit-frontend:1.4.1`,
-     `aquasec/trivy:0.76.1` and the volume `vcm-audit-trivy-cache`;
-  3. [ ] PROGRESS with the results; the push command to Tanush (trailer
-     check first); CI and arm64 green; the tag command on that hash;
-  4. [ ] after his tag: release checks, backup `…-backup-1.4.0`, update
-     (the backend downloads in full once), after-release checklist.
+  1. [ ] Tanush pushes `main` (the trailer check and the push command are
+     in my message of 14 Nov, 18:40);
+  2. [ ] ci and arm64 green on the pushed head; then the tag command on
+     that hash;
+  3. [ ] after his tag: release checks (8 assets, SHA256SUMS, multi-arch
+     tags, the Release notes from the CHANGELOG), backup
+     `…-backup-1.4.0`, `vcm update` on the install (the backend downloads
+     in full once, ~2.3 GB CUDA; the first update where the installed
+     1.4.0 `vcm` hands over), the after-release checklist.
 - The PC was restarted between 13:55 and 17:49 on 14 Nov; nothing was
   running and everything was committed.
 
