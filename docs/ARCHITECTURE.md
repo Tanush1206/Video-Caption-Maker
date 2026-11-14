@@ -26,7 +26,7 @@ request, and the API's partial file goes with it.
 
 | Service | Image (prod) | Role |
 |---|---|---|
-| `frontend` | `ghcr.io/tanush1206/video-caption-maker-frontend:<ver>` (Node 20 Alpine, Next standalone) | UI and same-origin `/api` proxy |
+| `frontend` | `ghcr.io/tanush1206/video-caption-maker-frontend:<ver>` (Node 22 Alpine since v1.4.1, Next standalone) | UI and same-origin `/api` proxy |
 | `backend` | `…-backend:<ver>-<cpu\|cuda>`, command `api` | runs `alembic upgrade head`, then uvicorn on :8000 |
 | `worker` | same image, command `worker` | Celery, `--pool=solo`: transcription, translation, embedding, rendering |
 | `postgres` | `postgres:16.14-alpine` | relational data |

@@ -241,6 +241,10 @@ video", unsupported speech, translation fallbacks, upload and load errors.
 - `Stepper`: Upload → Language → Export as an `<ol>` (`aria-current="step"`):
   a check for done, an accent dot and semibold for the active step, a grey
   dot ahead; hairline connectors. No box around it.
+- **Targets** (v1.4.1): anything clickable is at least 24 px each way
+  with nothing over it (WCAG 2.2, 2.5.8), 44 px on a phone. In the caption
+  list the time button and the tools overhang their 16 px row to get
+  there. A control's accessible name contains the text it shows.
 - `Skeleton`: a pulse on the grouped tone, shaped like the content. A page
   that loads keeps its layout (v1.4.0, CLS <= 0.01): the parts that don't
   wait for data (the dashboard's header and upload) are drawn once for both

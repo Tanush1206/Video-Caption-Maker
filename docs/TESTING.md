@@ -208,7 +208,7 @@ or a dev server. On Windows Git Bash, set `MSYS_NO_PATHCONV=1` first.
 cd scripts/ui-check && npm ci && npx playwright install chromium
 node shoot.js  http://localhost:3000 out /dashboard /search /settings   # 375/1440 × light/dark
 node axe.js    http://localhost:3000 /dashboard /search /settings      # WCAG 2 A/AA
-node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script unsupported-speech script-fonts cls pipeline-stages
+node checks.js http://localhost:3000 theme not-found retry-small editor-languages language-step hindi-script unsupported-speech script-fonts cls pipeline-stages favicon editor-cls editor-targets
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 style-sliders caption-drag caption-handle caption-keyboard caption-size caption-wrap caption-width caption-snap   # change that video's style
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 caption-timing   # read-only; VCM_CHECK_SECONDS (default 20) of playback
 VCM_CHECK_VIDEO=<id> node checks.js http://localhost:3000 redo-script retired-language   # read-only
@@ -232,6 +232,8 @@ what the 9:16 run is for.
 | `checks.js upload-proxy` | an upload over 10 MB (`VCM_LARGE_VIDEO`, or 14.5 MB made by the dev stack's FFmpeg) doesn't reach the API whole through the server under test; on `/api/videos` through the proxy, another origin, another localhost port, a rebinding Host or a forged `X-Forwarded-Host` with a matching Origin isn't refused (403), or the app's own request is. Uploads one held video and deletes it by id (v1.2.0) |
 | `checks.js csp` | the dashboard, search, settings or editor log a Content-Security-Policy violation. Read-only (v1.1.1) |
 | `checks.js theme` | Settings lacks Light/Dark/System; System isn't the default, doesn't clear the stored choice, or doesn't follow an OS change live; an explicit choice doesn't stick |
+| `checks.js editor-cls` | the editor of a video with captions shifts 0.1 or more while it loads (375 and 1440 px, every API answer 600 ms late), or shows "No speech was found" before its captions arrive; or a video whose captions come back empty doesn't say it. Read-only (v1.4.1; 0.157 on a phone in 1.4.0, 0.005 after) |
+| `checks.js editor-targets` | at 1440 light and 375 dark: a caption's time button is under 24 px either way, the row above the text changes height, the caption-language button's name doesn't contain the text it shows, or axe's `target-size` or `label-content-name-mismatch` finds anything in the editor. Read-only (v1.4.1) |
 | `checks.js favicon` | the dashboard or settings names no icon, or the icon isn't served as an SVG image. Read-only (v1.4.1) |
 | `checks.js not-found` | an unknown address isn't a 404 with the app's own page and a working way back |
 | `checks.js retry-small` | the failed screen lacks "Retry with small model", or it doesn't send `PATCH settings {"whisper_model":"small"}` and then `POST …/transcribe`. Read-only: it shows a real video as failed and answers both writes itself |
