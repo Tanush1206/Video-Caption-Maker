@@ -6,7 +6,7 @@ commits between tags; hashes are given for reference.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.4.1] - unreleased
+## [1.4.1] - 2026-11-14
 
 Fixes and security updates from the final audit of v1.4.0. No migration.
 **This update downloads the backend image in full once** (about 0.8 GB, or
@@ -54,6 +54,18 @@ again.
   adds a red error block under it.
 - The app has its icon in the browser tab, and no longer logs a missing
   "favicon.ico" on every page.
+- **Speech that the model stumbled over is captioned.** Now and then the
+  speech model gets stuck and writes one word many times over a few seconds
+  of speech ("aaj" 25 times). The app already cut that down to the word
+  once, but the speech under it was left without a caption: in one bike
+  vlog, 2.5 seconds at 0:27 ("…surprise tum log de raha hoon main. Aaj uska
+  tour kara"). That stretch is now listened to again on its own and
+  captioned. Videos already captioned change only with Redo.
+- Settings says plainly what the custom vocabulary does: it is used on new
+  videos and when you redo a video's captions, and it corrects spelling in
+  the caption text ("laddaakh" → "Ladakh"), not what the speech model
+  hears, so a word heard as a different one ("wife" for "vibe") stays for
+  you to fix in the editor.
 - Opening a video no longer shows "No speech was found in this video" for a
   moment before its captions appear, which also made the page jump (most
   on a phone).

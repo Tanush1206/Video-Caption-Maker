@@ -557,6 +557,61 @@ run for real.
 - **Before the tag:** the full release checks on the final commit, and
   1.4.1's date in the CHANGELOG (its Release notes are read from there).
 
+## 10. Added to v1.4.1 after the audit (Tanush, 14 Nov)
+
+Two reports from using v1.4.0 on leo.mp4 (a 12-minute bike vlog, Hinglish
+with Everyday spelling). Outputs: `test-assets/results/v1.4.1/leo/` and
+`…/runs/`.
+
+### Speech with no caption
+
+Every stage was dumped for each stretch (the model's raw output on each
+pass, the silence check, the non-speech split, the re-check of uncaptioned
+stretches, the loop collapse, the Roman-script filter, phrasing).
+
+| Stretch | What drops it | Outcome |
+|---|---|---|
+| 0:27.8-0:29.7 | **Ours.** The model looped ("aaj" ×25) over the speech. The re-check of uncaptioned stretches ran while the loop still covered them; the loop was collapsed afterwards and nothing looked at the hole | **fixed** (`019d95f`): loops are collapsed in each decode pass, before the re-check. The stretch now reads "Yeh aaj Supprise tum log de raha hoon main. / Aaj uska tour kara." |
+| 0:00.1-0:00.9, under a click | **The model.** Decoded alone it answers with its no-speech marker; no padding, clip length or option changed that without inventing text. large-v3 hears non-words | ROADMAP, "Speech under a sound at the very start of a video" |
+| 8:34-8:39, people in a shop | **The model**, the same way | no change |
+
+Checked after the fix, through the real pipeline:
+- leo.mp4: 466 → 468 captions; the three lines at 0:25-0:30 are the only
+  difference from the install's captions;
+- hinglish.mp4: identical, 156 captions;
+- Tanush's truth for new.mp4 0:00-1:31 and `truth-hi.txt`: 16.7% and 14.0%
+  strict word error, 13.5% and 13.3% loose, as in v1.3.1;
+- new.mp4: no caption starts in 0:14-0:27 or 10:30-10:41; "Hey guys,
+  what's up?" from 0:27.5; "khelta jaoon" ×4 kept. Its noisy passage at
+  8:07-9:45 comes out differently on every run, with the old code too
+  (three runs each: 12 to 126 lines apart), so it is no measure of this
+  change. `music_check.py` flags "nahi. Nahi. Nahi." there (said, and kept
+  on purpose) and, in some runs, "Hello. Hello. Hello.".
+
+### Wrong words (about 45-50 of 466 lines)
+
+- **Numbers** ("04.50 GS", "04 50", "4 50 G S", "20 27", "7001. 26
+  rupees"): the model's own text, unchanged by the app. ROADMAP.
+- **The custom vocabulary "didn't apply":** the install's list is empty
+  (`/api/system`: `vocabulary: []`); the earlier test was on the dev stack.
+  With a list set, Redo applies it: on leo.mp4 "block" → "vlog" ×3,
+  "ladakh" → "Ladakh" ×7, "hyderabad" → "Hyderabad" ×2, "acropovic" →
+  "Akrapovic" ×3, "S 1000 aaraar" → "S 1000 RR". Settings now says where
+  the list is used and what it can't do (`47a70f9`).
+- **What Improve with Gemini fixes, with that vocabulary set** (one run;
+  21 fixes kept, 31 refused by the app's checks, 6 of the requests answered
+  by Flash-Lite because Flash was busy). Of the 14 examples:
+
+  | Fixed by the vocabulary (2) | Fixed by Improve (6) | Left (6) |
+  |---|---|---|
+  | S 1000 aaraar → RR; acropovic → Akrapovic | must cricket → mast; van jaayega → ban; sofa kam baith → sofa cum bed (×2); thread mil → treadmill; motor add → motorrad; Raveling → travelling | room ki wife (vibe); veg and brown (beige); black doubt (blackout); bikeing collar (corner); attack karna (tag); exos guys (exhaust) |
+
+  The six left are real words in a wrong place: nothing in the text says
+  they are wrong, and the vocabulary only matches by sound ("blackout" and
+  "beige" were in the list). Of Improve's other 13 fixes most are right
+  ("tost" → "toast", "modes" → "mods"); two look doubtful ("cooking" →
+  "booking", "potar" → "photar").
+
 ## Test data
 
 Recorded in PROGRESS.md with each run. Videos created for this audit are

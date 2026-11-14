@@ -282,7 +282,11 @@ Rules the code enforces:
   up to 8 words said 5+ times in a row, across caption boundaries, keeps its
   first saying. Three or four times is left: "khelta jaoon" ×4 and "nahin.
   Nahin. Nahin." look the same as a loop by words, timings and
-  probabilities.
+  probabilities. Collapsed at the end of each decode pass (v1.4.1), so the
+  re-check of uncaptioned stretches sees the hole a loop leaves and decodes
+  it again; done only at the end, the loop still covered the speech it was
+  written over while that re-check ran ("aaj" ×25 over 2.5 s of a bike
+  vlog). The model's non-speech runs are never collapsed.
 - **Silence that would swallow the speech is re-measured** (v1.0.11,
   `silence_for`): FFmpeg's `silencedetect` under -40 dB as before, unless
   more than half of the file's voiced envelope windows (speech band within

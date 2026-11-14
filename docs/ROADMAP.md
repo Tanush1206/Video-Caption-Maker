@@ -160,6 +160,44 @@ The original 10-milestone build plan is historical and lives in
   `coverage_check.py` and `timing_check.py` on those clips
   (`scripts/language_eval.py pipeline --langs de,en,pt`).
 
+### Speech under a sound at the very start of a video
+- **What:** words spoken over a click or a sound effect in a video's first
+  second get a caption.
+- **Why:** leo.mp4 (a bike vlog, Hinglish) has a voice at 0:00.1-0:00.9
+  under a click; the first caption starts at 0:01.2 and its first words are
+  garbled ("Raanaam sallaam public welcome", for what large-v3 hears as
+  "राम/रामानाम सलाम पब्लिक").
+- **Measured for v1.4.1 (2026-11-14), every stage dumped:** no stage of the
+  app drops it. The Hinglish model skips the opening on the first pass; the
+  re-check decodes 0:00-0:09 again and the model starts at 1.2 s; the
+  re-check then decodes 0:00-0:01.2 alone and the model answers with its
+  no-speech marker ("nan"). Tried on that stretch: a second of silence put
+  in front, shorter and longer clips, decoding without timestamps. Each
+  gave "nan" again or invented a sentence ("Ek jo kar sakte hain, soo
+  chaar rahe hain"). large-v3 hears only non-words there ("केट जो कसा
+  काई"). The same at 8:34-8:39 of that video, where people talk in the
+  background of a shop: "nan" throughout from the Hinglish model, music
+  filler from large-v3.
+- **Why not in v1.4.1:** it is what the model hears, not a threshold of
+  ours, and nothing tried improved it without inventing text. It needs
+  either a second model's opinion on such stretches (with a rule for which
+  to believe) or sound separation before the model, both more than a small
+  fix. Tanush's by-ear text for 0:00-0:02 would be the test.
+
+### Numbers and model names the Hinglish model writes in pieces
+- **What:** "F 450 GS" comes out as "era 04.50 GS", "04 50", "4 50 G S"
+  and "04 50 g. GS"; "2027" as "20 27"; a price as "7001. 26
+  rupees" (leo.mp4, six places and more).
+- **Measured for v1.4.1:** these are the model's own text, word for word,
+  before any step of the app touches it; the spelling map, the vocabulary
+  and the phrasing leave digits as they are. The custom vocabulary can't
+  help: it matches words by sound, and "04.50" has none.
+- **How, if done:** a rule that joins digit groups the model split
+  ("04.50" or "4 50" before "GS" or "CC" → "450") is a guess about what was
+  said: "20 27" is 2027 here and could be "20, 27" elsewhere. Safer as a
+  suggestion in Improve with Gemini, which sees the sentence, than as a
+  rule on every video. Tanush, 2026-11-14: ROADMAP if it is the model's.
+
 ### Forced alignment of word timings
 - **What:** after Whisper, force its own text onto the audio with a CTC
   aligner (a wav2vec2/MMS model) and time captions to those word starts
@@ -195,6 +233,8 @@ The original 10-milestone build plan is historical and lives in
   fix has to tell a loop from repetition that was said, for example from the
   word timings or the audio, and keep both of those examples.
 - **Tanush, 2026-10-30:** leave for now.
+- **v1.4.1:** the speech under a collapsed loop is now decoded again, so a
+  loop no longer costs the words it was written over (leo.mp4, 0:27).
 - **v1.3.0, partly done:** a phrase said 5+ times in a row is now said once
   (any model; services/transcription.py `_collapse_loops`). Loops of 3-4,
   like the "सब्सक्राइब" ×3 above, are left: nothing in the words, timings or
