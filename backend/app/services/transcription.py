@@ -896,11 +896,13 @@ def _collapse_loops(segments: list[Segment]) -> list[Segment]:
 
     Looked for across segments, in order: a loop runs on over caption
     boundaries. The first saying keeps its words and timings; the rest go,
-    and a segment left with no words goes with them.
+    and a segment left with no words goes with them. The model's non-speech
+    runs are passed through whole: they are a marker repeated, on purpose.
     """
     stream = [
         (index, position, _bare(word))
         for index, segment in enumerate(segments)
+        if not segment.non_speech
         for position, word in enumerate(segment.text.split())
         if _bare(word)
     ]
@@ -1155,7 +1157,12 @@ def _decode(model, audio_path, language, task, spans, levels, on_progress, offse
     if dropped:
         logger.info("Dropped %d segment(s) that fell in silence", dropped)
 
-    return segments, info
+    # Loops go here, before anyone looks for uncaptioned stretches (v1.4.1).
+    # Collapsed only at the end of transcribe(), a loop still covered what
+    # it was written over while `_fill_skipped` ran, and that speech was
+    # never decoded again: on a bike vlog "aaj" x25 over 0:27.5-0:30.0, where
+    # "surprise tum log de raha hoon main. Aaj uska tour kara" is said.
+    return _collapse_loops(segments), info
 
 
 def _iter(segments, markers: frozenset[str] = frozenset(), phrases: tuple[tuple[str, ...], ...] = ()) -> Iterator:

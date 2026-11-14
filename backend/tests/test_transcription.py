@@ -1419,3 +1419,64 @@ def test_the_second_pass_reports_its_share_of_stretches(stretches):
     # Four stretches of 4 s or more (0-5, 6-12, 13-20, 21-30): 25% each, then done.
     assert len(stretches.asked) == 4
     assert seen == [25, 50, 75, 100, 100]
+
+
+# ── A loop over real speech leaves a hole to decode again (v1.4.1) ─────────
+
+
+def test_speech_under_a_collapsed_loop_is_decoded_again(tmp_path, monkeypatch):
+    """
+    leo.mp4 at 0:27: the Hinglish model wrote "aaj" 25 times over "…surprise
+    tum logon ko de raha hoon main. Aaj uska tour kara…". The re-check of
+    uncaptioned stretches ran while the loop still covered them, the loop
+    was collapsed afterwards, and 2.5 s of speech had no caption. Decoded
+    alone the stretch gives its words.
+    """
+    before = [(" Jahaan", 25.38, 25.9), (" par", 25.9, 26.1), (" hoon.", 26.5, 26.72),
+              (" Yah", 27.06, 27.12), (" aaj", 27.12, 27.46)]
+    loop = [(" aaj", 27.5 + i * 0.1, 27.5 + i * 0.1 + 0.09) for i in range(24)]
+    after = [(" Maala", 29.98, 30.22), (" hoon", 30.22, 30.34), (" main.", 30.34, 30.44)]
+
+    class Model:
+        def transcribe(self, path, **options):
+            return iter([_segment(before + loop), _segment(after)]), SimpleNamespace(duration=60.0, language="en")
+
+    asked = []
+
+    def decode_stretch(model, audio_path, start, end, *rest):
+        asked.append((round(start, 2), round(end, 2)))
+        if (round(start, 2), round(end, 2)) == (27.46, 29.98):
+            return [_seg(27.5, 29.9, ["Surprise", "tum", "log", "de", "raha", "hoon", "main."])]
+        return []
+
+    monkeypatch.setattr(transcription, "get_model", lambda: Model())
+    monkeypatch.setattr(transcription, "_model_key", (transcription.HINGLISH, "cuda", "float16"))
+    monkeypatch.setattr(transcription, "silent_spans", lambda path, *_: [])
+    # Voiced throughout at the 250 ms resolution; no finer envelope, so the words stay put.
+    monkeypatch.setattr(transcription, "vocal_envelope", lambda path, *window: [] if window else _levels(60, voiced=[(0, 60)]))
+    monkeypatch.setattr(transcription, "_snap_to_onset", lambda start, end, levels, floor: start)
+    monkeypatch.setattr(transcription, "_duration", lambda path: 60.0)
+    monkeypatch.setattr(transcription, "_decode_stretch", decode_stretch)
+
+    found, _ = transcription.transcribe(tmp_path / "a.wav", language="en")
+
+    assert (27.46, 29.98) in asked
+    assert " ".join(c.text for c in found) == (
+        "Jahaan par hoon. Yah aaj Surprise tum log de raha hoon main. Maala hoon main."
+    )
+
+
+def test_a_loop_is_collapsed_around_music_not_through_it():
+    """The model's non-speech runs are left whole: they split music for the re-check."""
+    from app.services.transcription import Segment, _collapse_loops
+
+    def segment(text, at, non_speech=False):
+        words = text.split()
+        return Segment(at, at + len(words) * 100, text, -0.2,
+                       [(at + i * 100, at + i * 100 + 90, w) for i, w in enumerate(words)], non_speech)
+
+    found = _collapse_loops([
+        segment("nan nan nan nan nan nan", 0, non_speech=True),
+        segment("go go go go go", 1000),
+    ])
+    assert [(s.text, s.non_speech) for s in found] == [("nan nan nan nan nan nan", True), ("go", False)]
